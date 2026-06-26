@@ -1,8 +1,8 @@
 import { WebSocket } from 'ws';
 import { IncomingMessage } from 'http';
 import jwt from 'jsonwebtoken';
-import { prisma } from '@xianqu/db-schema';
-import { WsEvent } from '@xianqu/shared-types';
+import { prisma } from '../db';
+import { WsEvent } from '../shared-types';
 
 export const onlineUsers = new Map<string, WebSocket>();
 
