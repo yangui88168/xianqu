@@ -28,21 +28,16 @@ export default function CallModal({
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const durationRef = useRef<NodeJS.Timeout | null>(null);
 
-  // 停止所有轨道
-  const stopTracks = useCallback(() => {
-    localStream?.getTracks().forEach((t) => t.stop());
-    remoteStream?.getTracks().forEach((t) => t.stop());
-  }, [localStream, remoteStream]);
-
   // 挂断
   const hangup = useCallback(() => {
     setCallStatus('ended');
-    stopTracks();
+    localStream?.getTracks().forEach((t) => t.stop());
+    remoteStream?.getTracks().forEach((t) => t.stop());
     pcRef.current?.close();
     if (durationRef.current) clearInterval(durationRef.current);
     ws.send(JSON.stringify({ event: 'call-hangup', data: { targetId: friendId } }));
     onHangup();
-  }, [ws, friendId, onHangup, stopTracks]);
+  }, [ws, friendId, localStream, remoteStream, onHangup]);
 
   // 切换摄像头
   const switchCamera = useCallback(async () => {
@@ -57,14 +52,10 @@ export default function CallModal({
         });
         const videoTrack = newStream.getVideoTracks()[0];
         const sender = pcRef.current?.getSenders().find((s) => s.track?.kind === 'video');
-        if (sender) {
-          sender.replaceTrack(videoTrack);
-        }
-        // 更新本地预览
+        if (sender) sender.replaceTrack(videoTrack);
         if (localVideoRef.current) localVideoRef.current.srcObject = newStream;
-        // 更新本地流引用
         setLocalStream((prev) => {
-          if (prev) prev.getTracks().forEach((t) => t.stop());
+          prev?.getTracks().forEach((t) => t.stop());
           return newStream;
         });
       } catch (e) {
@@ -73,23 +64,18 @@ export default function CallModal({
     }
   }, [facingMode, localStream]);
 
-  // 切换静音
   const toggleMute = () => {
     localStream?.getAudioTracks().forEach((t) => (t.enabled = isMuted));
     setIsMuted(!isMuted);
   };
 
-  // 切换摄像头开关
   const toggleCamera = () => {
     localStream?.getVideoTracks().forEach((t) => (t.enabled = isCameraOff));
     setIsCameraOff(!isCameraOff);
   };
 
-  // 切换扬声器
   const toggleSpeaker = () => {
     setIsSpeakerOn(!isSpeakerOn);
-    // 扬声器切换需在音频元素上设置，或者使用 setSinkId（兼容性有限）
-    // 简单实现：切换 audio 元素的 muted 属性？不，我们使用 audio 元素控制
   };
 
   // 信令处理
@@ -97,8 +83,10 @@ export default function CallModal({
     (e: MessageEvent) => {
       const msg = JSON.parse(e.data);
       if (msg.event === 'call-answer' && msg.data.from === friendId) {
+        console.log('收到 answer', msg.data.sdp);
         pcRef.current?.setRemoteDescription(new RTCSessionDescription(msg.data.sdp));
       } else if (msg.event === 'ice-candidate' && msg.data.from === friendId) {
+        console.log('收到 ICE candidate', msg.data.candidate);
         pcRef.current?.addIceCandidate(new RTCIceCandidate(msg.data.candidate));
       } else if (msg.event === 'call-hangup' && msg.data.from === friendId) {
         hangup();
@@ -125,12 +113,20 @@ export default function CallModal({
         stream.getTracks().forEach((track) => pc.addTrack(track, stream));
 
         pc.ontrack = (event) => {
+          console.log('收到远程轨道', event.streams);
           const [remote] = event.streams;
-          setRemoteStream(remote);
-          if (remoteVideoRef.current) remoteVideoRef.current.srcObject = remote;
-          setCallStatus('connected');
-          // 开始计时
-          durationRef.current = setInterval(() => setDuration((prev) => prev + 1), 1000);
+          if (remote) {
+            setRemoteStream(remote);
+            if (remoteVideoRef.current) {
+              remoteVideoRef.current.srcObject = remote;
+              // 强制播放（移动端需要用户交互后播放，但这里已经通过 ontrack 自动触发）
+              remoteVideoRef.current.play().catch(console.error);
+            }
+            setCallStatus('connected');
+            if (!durationRef.current) {
+              durationRef.current = setInterval(() => setDuration((prev) => prev + 1), 1000);
+            }
+          }
         };
 
         pc.onicecandidate = (event) => {
@@ -147,6 +143,7 @@ export default function CallModal({
         ws.addEventListener('message', handleSignal);
 
         if (incoming && offerSdp) {
+          console.log('被叫方设置远程 offer');
           await pc.setRemoteDescription(new RTCSessionDescription(offerSdp));
           const answer = await pc.createAnswer();
           await pc.setLocalDescription(answer);
@@ -157,6 +154,7 @@ export default function CallModal({
             })
           );
         } else {
+          console.log('主叫方创建 offer');
           const offer = await pc.createOffer();
           await pc.setLocalDescription(offer);
           ws.send(
@@ -167,7 +165,7 @@ export default function CallModal({
           );
         }
       } catch (err) {
-        console.error(err);
+        console.error('初始化通话失败', err);
         alert('无法访问摄像头/麦克风，请检查权限');
         onHangup();
       }
@@ -177,7 +175,8 @@ export default function CallModal({
 
     return () => {
       ws.removeEventListener('message', handleSignal);
-      stopTracks();
+      localStream?.getTracks().forEach((t) => t.stop());
+      remoteStream?.getTracks().forEach((t) => t.stop());
       pcRef.current?.close();
       if (durationRef.current) clearInterval(durationRef.current);
     };
@@ -190,10 +189,10 @@ export default function CallModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80">
-      <div className="relative flex flex-col items-center w-full max-w-sm mx-auto">
-        {/* 对方视频/头像 */}
-        <div className="w-full aspect-video bg-gray-900 rounded-2xl overflow-hidden mb-4 relative">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90">
+      <div className="relative flex flex-col items-center w-full max-w-sm mx-auto h-full max-h-screen py-4">
+        {/* 远程视频或头像占位 */}
+        <div className="relative w-full aspect-video bg-gray-900 rounded-2xl overflow-hidden mb-4 flex items-center justify-center">
           {remoteStream && type === 'video' ? (
             <video
               ref={remoteVideoRef}
@@ -202,8 +201,11 @@ export default function CallModal({
               className="w-full h-full object-cover"
             />
           ) : (
-            <div className="flex items-center justify-center h-full text-white text-6xl">
-              {type === 'video' ? '📷' : '🎤'}
+            <div className="flex flex-col items-center justify-center h-full text-white">
+              <div className="text-6xl mb-2">
+                {type === 'video' ? '📷' : '🎤'}
+              </div>
+              <p className="text-lg font-medium">{friendName}</p>
             </div>
           )}
           {/* 自己的小窗（视频通话时） */}
@@ -218,13 +220,12 @@ export default function CallModal({
               />
             </div>
           )}
-          {/* 通话时长 */}
+          {/* 通话时长或状态 */}
           {callStatus === 'connected' && (
             <div className="absolute top-4 left-4 bg-black/50 text-white text-sm px-3 py-1 rounded-full">
               {formatTime(duration)}
             </div>
           )}
-          {/* 状态提示 */}
           {callStatus === 'calling' && (
             <div className="absolute top-4 left-4 bg-black/50 text-white text-sm px-3 py-1 rounded-full">
               {incoming ? '邀请你进行通话...' : '呼叫中...'}
@@ -232,54 +233,30 @@ export default function CallModal({
           )}
         </div>
 
-        {/* 对方昵称 */}
-        <h3 className="text-white text-lg font-medium mb-6">{friendName}</h3>
-
-        {/* 控制按钮 */}
-        <div className="flex items-center gap-4 bg-gray-800/80 px-6 py-4 rounded-full">
+        {/* 控制按钮（固定在底部） */}
+        <div className="flex items-center gap-3 bg-gray-800/80 px-5 py-3 rounded-full mt-auto mb-6">
           {/* 静音 */}
-          <button
-            onClick={toggleMute}
-            className={`w-12 h-12 rounded-full flex items-center justify-center text-white text-xl ${
-              isMuted ? 'bg-red-500' : 'bg-gray-600 hover:bg-gray-500'
-            }`}
-          >
+          <button onClick={toggleMute} className={`w-10 h-10 rounded-full flex items-center justify-center text-white ${isMuted ? 'bg-red-500' : 'bg-gray-600 hover:bg-gray-500'}`}>
             {isMuted ? '🔇' : '🎙️'}
           </button>
 
           {/* 挂断 */}
-          <button
-            onClick={hangup}
-            className="w-16 h-16 rounded-full bg-red-600 hover:bg-red-700 flex items-center justify-center text-white text-2xl shadow-lg"
-          >
+          <button onClick={hangup} className="w-14 h-14 rounded-full bg-red-600 hover:bg-red-700 flex items-center justify-center text-white text-2xl shadow-lg">
             📞
           </button>
 
           {/* 扬声器 */}
-          <button
-            onClick={toggleSpeaker}
-            className={`w-12 h-12 rounded-full flex items-center justify-center text-white text-xl ${
-              isSpeakerOn ? 'bg-gray-600 hover:bg-gray-500' : 'bg-blue-500'
-            }`}
-          >
+          <button onClick={toggleSpeaker} className={`w-10 h-10 rounded-full flex items-center justify-center text-white ${isSpeakerOn ? 'bg-gray-600 hover:bg-gray-500' : 'bg-blue-500'}`}>
             {isSpeakerOn ? '🔊' : '🔈'}
           </button>
 
-          {/* 视频通话时才显示摄像头开关和翻转 */}
+          {/* 摄像头控制（仅视频） */}
           {type === 'video' && (
             <>
-              <button
-                onClick={toggleCamera}
-                className={`w-12 h-12 rounded-full flex items-center justify-center text-white text-xl ${
-                  isCameraOff ? 'bg-red-500' : 'bg-gray-600 hover:bg-gray-500'
-                }`}
-              >
+              <button onClick={toggleCamera} className={`w-10 h-10 rounded-full flex items-center justify-center text-white ${isCameraOff ? 'bg-red-500' : 'bg-gray-600 hover:bg-gray-500'}`}>
                 {isCameraOff ? '📷❌' : '📷'}
               </button>
-              <button
-                onClick={switchCamera}
-                className="w-12 h-12 rounded-full flex items-center justify-center text-white text-xl bg-gray-600 hover:bg-gray-500"
-              >
+              <button onClick={switchCamera} className="w-10 h-10 rounded-full flex items-center justify-center text-white bg-gray-600 hover:bg-gray-500">
                 🔄
               </button>
             </>
