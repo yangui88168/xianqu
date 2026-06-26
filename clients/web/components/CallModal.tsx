@@ -22,14 +22,12 @@ export default function CallModal({
   const [isCameraOff, setIsCameraOff] = useState(false);
   const [isSpeakerOn, setIsSpeakerOn] = useState(true);
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user');
-  const [audioBlocked, setAudioBlocked] = useState(false);
 
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
   const remoteAudioRef = useRef<HTMLAudioElement>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const durationRef = useRef<NodeJS.Timeout | null>(null);
-  const interactionRef = useRef(false);
 
   // 挂断
   const hangup = useCallback(() => {
@@ -42,37 +40,17 @@ export default function CallModal({
     onHangup();
   }, [ws, friendId, localStream, remoteStream, onHangup]);
 
-  // 尝试解锁音频
-  const unlockAudio = useCallback(() => {
-    if (remoteAudioRef.current) {
-      remoteAudioRef.current.muted = true;
-      remoteAudioRef.current.play().then(() => {
-        remoteAudioRef.current!.muted = false;
-        interactionRef.current = true;
-        if (remoteStream && remoteAudioRef.current) {
-          remoteAudioRef.current.srcObject = remoteStream;
-          remoteAudioRef.current.play().catch(() => setAudioBlocked(true));
-        }
-      }).catch(() => {});
-    }
-  }, [remoteStream]);
-
   const toggleMute = () => {
     localStream?.getAudioTracks().forEach((t) => (t.enabled = !isMuted));
     setIsMuted(!isMuted);
-    unlockAudio();
   };
 
   const toggleCamera = () => {
     localStream?.getVideoTracks().forEach((t) => (t.enabled = !isCameraOff));
     setIsCameraOff(!isCameraOff);
-    unlockAudio();
   };
 
-  const toggleSpeaker = () => {
-    setIsSpeakerOn(!isSpeakerOn);
-    unlockAudio();
-  };
+  const toggleSpeaker = () => setIsSpeakerOn(!isSpeakerOn);
 
   const switchCamera = useCallback(async () => {
     const newMode = facingMode === 'user' ? 'environment' : 'user';
@@ -156,17 +134,15 @@ export default function CallModal({
           const [remote] = event.streams;
           if (remote) {
             setRemoteStream(remote);
-            if (remoteAudioRef.current) {
-              remoteAudioRef.current.srcObject = remote;
-              if (interactionRef.current || document.visibilityState === 'visible') {
-                remoteAudioRef.current.play().catch(() => setAudioBlocked(true));
-              } else {
-                setAudioBlocked(true);
-              }
-            }
+            // 视频模式下绑定到 video 元素
             if (type === 'video' && remoteVideoRef.current) {
               remoteVideoRef.current.srcObject = remote;
               remoteVideoRef.current.play().catch(console.error);
+            }
+            // 音频模式：绑定到隐藏的 audio 元素
+            if (type === 'audio' && remoteAudioRef.current) {
+              remoteAudioRef.current.srcObject = remote;
+              remoteAudioRef.current.play().catch(console.error);
             }
             setCallStatus('connected');
             if (!durationRef.current) {
@@ -229,6 +205,7 @@ export default function CallModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90">
       <div className="relative flex flex-col items-center w-full max-w-sm mx-auto h-full max-h-screen py-4">
+        {/* 隐藏的音频播放器（用于音频通话） */}
         <audio ref={remoteAudioRef} autoPlay playsInline className="hidden" />
 
         <div className="relative w-full aspect-video bg-gray-900 rounded-2xl overflow-hidden mb-4 flex items-center justify-center">
@@ -256,20 +233,6 @@ export default function CallModal({
             </div>
           )}
         </div>
-
-        {audioBlocked && (
-          <button
-            onClick={() => {
-              if (remoteAudioRef.current) {
-                remoteAudioRef.current.play().catch(console.error);
-                setAudioBlocked(false);
-              }
-            }}
-            className="mb-4 bg-blue-500 text-white px-4 py-2 rounded-full text-sm"
-          >
-            点击播放声音
-          </button>
-        )}
 
         <div className="flex items-center gap-3 bg-gray-800/80 px-5 py-3 rounded-full mt-auto mb-6">
           <button onClick={toggleMute} className={`w-10 h-10 rounded-full flex items-center justify-center text-white ${isMuted ? 'bg-red-500' : 'bg-gray-600'}`}>
