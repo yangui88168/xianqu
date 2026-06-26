@@ -27,7 +27,7 @@ model User {
   friendships      Friendship[]     @relation("UserFriendships")
   friendOf         Friendship[]     @relation("FriendRelation")
 
-  // ✅ 已为您合并补齐的群组系统反向关系字段
+  // 群组系统反向关系字段
   ownedGroups      GroupChat[]
   groupMemberships GroupMember[]
   groupMessages    GroupMessage[]
@@ -36,11 +36,14 @@ model User {
 model Message {
   id          String   @id @default(cuid())
   content     String
-  type        String   @default("text")   // text, image, file
+  type        String   @default("text")
   senderId    String
   receiverId  String
-  status      String   @default("sent")   // sent, delivered, read
+  status      String   @default("sent")
+  replyToId   String?                     // ✅ 已为您精准补齐
+  deleted     Boolean  @default(false)     // ✅ 已为您精准补齐
   readAt      DateTime?                   
+  updatedAt   DateTime?                   // ✅ 已为您精准补齐
   createdAt   DateTime @default(now())
 
   sender      User     @relation("SentMessages", fields: [senderId], references: [id])
@@ -79,7 +82,6 @@ model FriendRequest {
   @@unique([senderId, receiverId])
 }
 
-// ✅ 已为您在文件末尾追加的完整群组模型
 model GroupChat {
   id           String        @id @default(cuid())
   name         String
