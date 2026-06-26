@@ -25,7 +25,7 @@ export const wsHandler = (connection: SocketStream, req: FastifyRequest) => {
   onlineUsers.set(userId, connection.socket);
   console.log(`User ${userId} online`);
 
-  // 推送离线消息
+  // 推送离线私聊消息
   prisma.offlineQueue.findMany({
     where: { userId },
     include: { message: true },
@@ -42,44 +42,96 @@ export const wsHandler = (connection: SocketStream, req: FastifyRequest) => {
       const parsed = JSON.parse(data.toString());
       switch (parsed.event) {
         case WsEvent.MESSAGE_SEND: {
-          const { receiverId, content, type = 'text', replyToId } = parsed.data;
+          const { receiverId, content, type = 'text', replyToId, chatType, groupId } = parsed.data;
           const senderId = userId;
-          const msg = await prisma.message.create({
-            data: { senderId, receiverId, content, type, replyToId },
-          });
-          const receiverWs = onlineUsers.get(receiverId);
-          if (receiverWs) {
-            receiverWs.send(JSON.stringify({ event: WsEvent.MESSAGE_RECEIVE, data: msg }));
-            // 送达回执
-            if (onlineUsers.has(senderId)) {
-              onlineUsers.get(senderId)!.send(JSON.stringify({
-                event: 'message:delivered',
-                data: { messageId: msg.id },
-              }));
+
+          // 1. 群聊消息处理分支
+          if (chatType === 'group' && groupId) {
+            // 检查成员身份及禁言状态
+            const membership = await prisma.groupMember.findUnique({
+              where: { groupId_userId: { groupId, userId: senderId } },
+            });
+            if (!membership) {
+              connection.socket.send(JSON.stringify({ event: WsEvent.ERROR, data: 'Not a member' }));
+              return;
             }
-          } else {
-            await prisma.offlineQueue.create({ data: { userId: receiverId, messageId: msg.id } });
+            if (membership.mutedUntil && membership.mutedUntil > new Date()) {
+              connection.socket.send(JSON.stringify({ event: WsEvent.ERROR, data: 'You are muted' }));
+              return;
+            }
+
+            // 创建群聊消息
+            const msg = await prisma.groupMessage.create({
+              data: {
+                groupId,
+                senderId,
+                content,
+                type,
+                replyToId,
+              },
+              include: {
+                sender: { select: { id: true, username: true, nickname: true, avatar: true } },
+                replyTo: { select: { id: true, content: true, sender: { select: { username: true } } } },
+              },
+            });
+
+            // 广播给所有在线的群成员（包括自己）
+            const group = await prisma.groupChat.findUnique({
+              where: { id: groupId },
+              include: { members: true },
+            });
+            if (group) {
+              group.members.forEach(member => {
+                const memberWs = onlineUsers.get(member.userId);
+                if (memberWs) {
+                  memberWs.send(
+                    JSON.stringify({
+                      event: WsEvent.GROUP_MESSAGE_RECEIVE,
+                      data: msg,
+                    })
+                  );
+                }
+              });
+            }
+          } 
+          // 2. 私聊消息处理分支
+          else {
+            const msg = await prisma.message.create({
+              data: { senderId, receiverId, content, type, replyToId },
+            });
+            const receiverWs = onlineUsers.get(receiverId);
+            if (receiverWs) {
+              receiverWs.send(JSON.stringify({ event: WsEvent.MESSAGE_RECEIVE, data: msg }));
+              // 送达回执
+              const senderWs = onlineUsers.get(senderId);
+              if (senderWs) {
+                senderWs.send(JSON.stringify({
+                  event: 'message:delivered',
+                  data: { messageId: msg.id },
+                }));
+              }
+            } else {
+              await prisma.offlineQueue.create({ data: { userId: receiverId, messageId: msg.id } });
+            }
           }
           break;
         }
 
-        // ✅ 已为您精准追加：处理已读事件并推送给发送方
+        // 处理私聊已读回执
         case 'message:read': {
-          const { messageId, senderId } = parsed.data;
-          // 更新数据库已读状态
+          const { messageId, senderId: originalSenderId } = parsed.data;
           await prisma.message.updateMany({
             where: { id: messageId },
             data: { status: 'read', readAt: new Date() },
           });
-          // 推送给原发送方
-          const targetWs = onlineUsers.get(senderId);
+          const targetWs = onlineUsers.get(originalSenderId);
           if (targetWs) {
             targetWs.send(JSON.stringify({ event: 'message:read', data: { messageId } }));
           }
           break;
         }
 
-        // 信令转发：call-offer / call-answer / ice-candidate / call-hangup
+        // WebRTC 信令转发保持不变
         case 'call-offer':
         case 'call-answer':
         case 'ice-candidate':
