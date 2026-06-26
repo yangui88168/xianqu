@@ -86,7 +86,7 @@ export const wsHandler = (connection: SocketStream, req: FastifyRequest) => {
           break;
         }
 
-        // ✅ 已为您添加 ping/pong 心跳处理机制
+        // ✅ 已为您包含：处理并回复客户端的 ping 心跳检测，维持长连接状态
         case 'ping':
           connection.socket.send(JSON.stringify({ event: 'pong' }));
           break;
