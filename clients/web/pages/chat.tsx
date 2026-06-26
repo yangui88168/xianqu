@@ -22,10 +22,16 @@ export default function Chat() {
   const [replyingTo, setReplyingTo] = useState<any>(null);
   const [showGroupModal, setShowGroupModal] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
+
+  // 录音相关
+  const [inputMode, setInputMode] = useState<'text' | 'voice'>('text');   // 文字/语音切换
   const [isRecording, setIsRecording] = useState(false);
+  const [recordingCancel, setRecordingCancel] = useState(false);          // 是否进入取消状态
   const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
-  const [callState, setCallState] = useState<{ type: 'audio' | 'video'; friendId: string; friendName: string; incoming?: boolean; offerSdp?: any } | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
+  const recordStartY = useRef<number>(0);                                // 记录按下时的Y坐标，用于判断上滑
+
+  const [callState, setCallState] = useState<{ type: 'audio' | 'video'; friendId: string; friendName: string; incoming?: boolean; offerSdp?: any } | null>(null);
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -33,7 +39,6 @@ export default function Chat() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // 移动端控制：默认显示侧边栏，点击会话后切换到聊天
   const [mobileView, setMobileView] = useState<'sidebar' | 'chat'>('sidebar');
 
   // 初始化用户ID
@@ -103,7 +108,6 @@ export default function Chat() {
         } else if (msg.event === 'message:delivered') {
           setMessages(prev => prev.map(m => m.id === msg.data.messageId ? { ...m, status: 'delivered' } : m));
         } else if (msg.event === 'call-offer') {
-          // 自动弹出接听界面
           setCallState({
             type: msg.data.type || 'audio',
             friendId: msg.data.from,
@@ -112,7 +116,6 @@ export default function Chat() {
             offerSdp: msg.data.sdp,
           });
         }
-        // 其他信令（answer/ice/hangup）由 CallModal 内部处理
       };
       socket.onclose = () => {
         clearInterval(heartbeatTimer);
@@ -146,7 +149,6 @@ export default function Chat() {
       setMessages(msgs);
       if (msgs.length < PAGE_SIZE) setHasMore(false);
     }
-    // 移动端自动切换到聊天窗口
     setMobileView('chat');
   };
 
@@ -177,7 +179,7 @@ export default function Chat() {
     }
   };
 
-  // 发送文字
+  // 发送文字消息
   const sendMessage = () => {
     if (!input.trim() && !replyingTo) return;
     if (!selectedChat || !ws) return;
@@ -213,8 +215,10 @@ export default function Chat() {
     setReplyingTo(null);
   };
 
-  // 语音录制
-  const startRecording = async () => {
+  // 语音录制核心逻辑
+  const startRecording = async (clientY: number) => {
+    recordStartY.current = clientY;
+    setRecordingCancel(false);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const recorder = new MediaRecorder(stream);
@@ -223,6 +227,8 @@ export default function Chat() {
         audioChunksRef.current.push(e.data);
       };
       recorder.onstop = () => {
+        // 只有在非取消状态下才发送
+        if (recordingCancel) return;
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
         const reader = new FileReader();
         reader.onload = () => {
@@ -272,6 +278,25 @@ export default function Chat() {
       mediaRecorder.stop();
       setIsRecording(false);
     }
+  };
+
+  // 鼠标/触摸事件处理
+  const handleRecordStart = (e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault();
+    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+    startRecording(clientY);
+  };
+
+  const handleRecordMove = (e: React.MouseEvent | React.TouchEvent) => {
+    if (!isRecording) return;
+    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+    // 上滑超过50px视为取消
+    setRecordingCancel(recordStartY.current - clientY > 50);
+  };
+
+  const handleRecordEnd = (e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault();
+    stopRecording();
   };
 
   // 图片发送
@@ -393,12 +418,11 @@ export default function Chat() {
 
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
-  // 移动端返回侧边栏
   const goBack = () => setMobileView('sidebar');
 
   return (
     <div className="flex h-screen bg-gray-100 relative">
-      {/* 左侧栏：移动端全屏，PC端固定宽度 */}
+      {/* 左侧栏 */}
       <div className={`${mobileView === 'sidebar' ? 'block' : 'hidden'} md:block md:w-80 w-full bg-white border-r flex flex-col absolute md:relative z-10 h-full`}>
         <div className="p-3 border-b">
           <div className="flex gap-2 mb-2">
@@ -473,12 +497,11 @@ export default function Chat() {
         </div>
       </div>
 
-      {/* 右侧聊天窗：移动端全屏，PC端自适应 */}
+      {/* 右侧聊天窗 */}
       <div className={`${mobileView === 'chat' ? 'block' : 'hidden'} md:block flex-1 flex flex-col`}>
         {selectedChat ? (
           <>
             <div className="bg-white border-b px-4 py-3 flex items-center gap-3">
-              {/* 移动端返回按钮 */}
               <button onClick={goBack} className="md:hidden text-gray-500 mr-2">←</button>
               <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold">
                 {selectedChat.type === 'group' ? '#' : (selectedChat.data.nickname || selectedChat.data.username)[0]}
@@ -551,28 +574,65 @@ export default function Chat() {
               </div>
             )}
 
-            <div className="p-3 bg-white border-t flex items-center gap-2">
-              <button
-                onMouseDown={startRecording}
-                onMouseUp={stopRecording}
-                onMouseLeave={stopRecording}
-                className={`p-2 ${isRecording ? 'text-red-500' : 'text-gray-400'} hover:text-gray-600`}
-                title="按住说话"
-              >🎤</button>
-              <button onClick={() => fileInputRef.current?.click()} className="text-gray-400 hover:text-gray-600 p-2">📷</button>
-              <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
-              <div className="relative">
-                <button onClick={() => setShowEmoji(!showEmoji)} className="text-gray-400 hover:text-gray-600 p-2">😊</button>
-                {showEmoji && (
-                  <div className="absolute bottom-10 left-0 bg-white border rounded-lg shadow-lg p-2 grid grid-cols-6 gap-1 w-56">
-                    {EMOJIS.map(emoji => (
-                      <button key={emoji} onClick={() => { setInput(prev => prev + emoji); setShowEmoji(false); }} className="text-xl hover:bg-gray-100 p-1 rounded">{emoji}</button>
-                    ))}
+            {/* 输入区域 */}
+            <div className="p-3 bg-white border-t">
+              <div className="flex items-center gap-2">
+                {/* 输入方式切换按钮 */}
+                <button
+                  onClick={() => setInputMode(inputMode === 'text' ? 'voice' : 'text')}
+                  className="text-gray-400 hover:text-gray-600 p-2"
+                  title={inputMode === 'text' ? '切换到语音' : '切换到文字'}
+                >
+                  {inputMode === 'text' ? '🎤' : '⌨️'}
+                </button>
+
+                {inputMode === 'text' ? (
+                  <>
+                    <button onClick={() => fileInputRef.current?.click()} className="text-gray-400 hover:text-gray-600 p-2">📷</button>
+                    <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
+                    <div className="relative">
+                      <button onClick={() => setShowEmoji(!showEmoji)} className="text-gray-400 hover:text-gray-600 p-2">😊</button>
+                      {showEmoji && (
+                        <div className="absolute bottom-10 left-0 bg-white border rounded-lg shadow-lg p-2 grid grid-cols-6 gap-1 w-56">
+                          {EMOJIS.map(emoji => (
+                            <button key={emoji} onClick={() => { setInput(prev => prev + emoji); setShowEmoji(false); }} className="text-xl hover:bg-gray-100 p-1 rounded">{emoji}</button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <input className="flex-1 p-2 border rounded-full focus:outline-none focus:ring-2 focus:ring-blue-300 text-sm" value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && sendMessage()} placeholder="输入消息..." />
+                    <button onClick={sendMessage} className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-full text-sm">发送</button>
+                  </>
+                ) : (
+                  <div className="flex-1 flex justify-center">
+                    <button
+                      onMouseDown={handleRecordStart}
+                      onMouseMove={handleRecordMove}
+                      onMouseUp={handleRecordEnd}
+                      onMouseLeave={handleRecordEnd}
+                      onTouchStart={handleRecordStart}
+                      onTouchMove={handleRecordMove}
+                      onTouchEnd={handleRecordEnd}
+                      className={`w-full py-3 rounded-full text-center font-medium select-none ${
+                        isRecording
+                          ? recordingCancel
+                            ? 'bg-red-500 text-white'
+                            : 'bg-blue-600 text-white'
+                          : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
+                      }`}
+                    >
+                      {isRecording
+                        ? recordingCancel
+                          ? '松开取消'
+                          : '正在录音...'
+                        : '按住说话'}
+                    </button>
                   </div>
                 )}
               </div>
-              <input className="flex-1 p-2 border rounded-full focus:outline-none focus:ring-2 focus:ring-blue-300 text-sm" value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && sendMessage()} placeholder="输入消息..." />
-              <button onClick={sendMessage} className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-full text-sm">发送</button>
+              {isRecording && !recordingCancel && (
+                <div className="text-center text-xs text-gray-400 mt-1">上滑取消</div>
+              )}
             </div>
           </>
         ) : (
