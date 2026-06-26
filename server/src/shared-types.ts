@@ -11,5 +11,6 @@ export interface Message {
 export enum WsEvent {
   MESSAGE_SEND = 'message:send',
   MESSAGE_RECEIVE = 'message:receive',
+  GROUP_MESSAGE_RECEIVE = 'group-message:receive',   // ✅ 已成功添加
   ERROR = 'error',
 }
