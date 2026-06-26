@@ -3,7 +3,7 @@ import { useRouter } from 'next/router';
 import CallModal from '../components/CallModal';
 
 const API = 'https://xianqu-server.onrender.com';
-const PAGE_SIZE = 20; // 减小分页提升加载速度
+const PAGE_SIZE = 20;
 
 const EMOJIS = ['😀', '😂', '❤️', '👍', '😢', '😡', '🎉', '🔥', '💯', '✨', '👋', '🙏'];
 
@@ -23,7 +23,6 @@ export default function Chat() {
   const [showGroupModal, setShowGroupModal] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
 
-  // 输入模式切换
   const [inputMode, setInputMode] = useState<'text' | 'voice'>('text');
   const [isRecording, setIsRecording] = useState(false);
   const [recordingCancel, setRecordingCancel] = useState(false);
@@ -40,7 +39,7 @@ export default function Chat() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [mobileView, setMobileView] = useState<'sidebar' | 'chat'>('sidebar');
 
-  // 登录验证
+  // 初始化用户
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (!token) { router.push('/'); return; }
@@ -82,7 +81,7 @@ export default function Chat() {
     }
   }, [userId, loadSessions, loadGroups, loadFriendRequests]);
 
-  // WebSocket 连接、心跳、重连、信令处理
+  // WebSocket 连接、心跳、重连、信令
   useEffect(() => {
     if (!userId) return;
     let reconnectTimer: NodeJS.Timeout;
@@ -103,6 +102,17 @@ export default function Chat() {
             if (prev.find(m => m.id === newMsg.id)) return prev;
             return [...prev, newMsg];
           });
+          // 自动标记已读（如果当前选中该好友）
+          if (selectedChat?.type === 'friend' && selectedChat.data.id === newMsg.senderId) {
+            fetch(`${API}/messages/read`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${localStorage.getItem('token')}`
+              },
+              body: JSON.stringify({ senderId: newMsg.senderId })
+            });
+          }
           loadSessions();
         } else if (msg.event === 'message:delivered') {
           setMessages(prev => prev.map(m => m.id === msg.data.messageId ? { ...m, status: 'delivered' } : m));
@@ -129,7 +139,7 @@ export default function Chat() {
     };
   }, [userId, selectedChat?.data?.id, loadSessions]);
 
-  // 选择会话并加载历史（分页）
+  // 选择会话并加载历史、标记已读
   const selectChat = async (type: string, data: any) => {
     setSelectedChat({ type, data });
     setReplyingTo(null);
@@ -145,9 +155,23 @@ export default function Chat() {
       setMessages(msgs);
       if (msgs.length < PAGE_SIZE) setHasMore(false);
     }
+    // 标记私聊已读
+    if (type === 'friend') {
+      fetch(`${API}/messages/read`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ senderId: data.id })
+      }).catch(() => {});
+      // 更新未读计数为0
+      setSessions(prev => prev.map(s => s.friend.id === data.id ? { ...s, unreadCount: 0 } : s));
+    }
     setMobileView('chat');
   };
 
+  // 加载更早消息
   const loadMoreMessages = async () => {
     if (!selectedChat || loadingMore || !hasMore) return;
     setLoadingMore(true);
@@ -166,13 +190,12 @@ export default function Chat() {
   };
 
   const handleScroll = () => {
-    const container = scrollContainerRef.current;
-    if (container && container.scrollTop === 0 && hasMore && !loadingMore) {
+    if (scrollContainerRef.current?.scrollTop === 0 && hasMore && !loadingMore) {
       loadMoreMessages();
     }
   };
 
-  // 发送文字消息
+  // 发送文字消息（含乐观更新会话）
   const sendMessage = () => {
     if (!input.trim() && !replyingTo) return;
     if (!selectedChat || !ws) return;
@@ -182,10 +205,24 @@ export default function Chat() {
       replyToId: replyingTo?.id || null,
     };
     if (selectedChat.type === 'friend') {
+      const tempId = `temp-${Date.now()}`;
+      const newMsg = {
+        id: tempId,
+        senderId: userId,
+        content: input,
+        type: 'text',
+        status: 'sent',
+        createdAt: new Date().toISOString(),
+        replyToId: replyingTo?.id || null,
+        replyTo: replyingTo ? { content: replyingTo.content, sender: replyingTo.sender } : null,
+      };
+      setMessages(prev => [...prev, newMsg]);
       ws.send(JSON.stringify({
         event: 'message:send',
         data: { ...payload, receiverId: selectedChat.data.id }
       }));
+      // 乐观更新会话
+      updateSession(selectedChat.data.id, input, 'text');
     } else {
       fetch(`${API}/groups/message`, {
         method: 'POST',
@@ -205,7 +242,35 @@ export default function Chat() {
     setReplyingTo(null);
   };
 
-  // 语音录制（按住说话、上滑取消）
+  // 乐观更新会话列表
+  const updateSession = (friendId: string, content: string, type: string) => {
+    setSessions(prev => {
+      const updated = prev.map(s => {
+        if (s.friend.id === friendId) {
+          return {
+            ...s,
+            lastMessage: {
+              id: `temp-${Date.now()}`,
+              content,
+              type,
+              createdAt: new Date().toISOString(),
+              senderId: userId,
+            },
+            unreadCount: 0,
+          };
+        }
+        return s;
+      });
+      // 将会话移到最前面
+      const target = updated.find(s => s.friend.id === friendId);
+      if (target) {
+        return [target, ...updated.filter(s => s.friend.id !== friendId)];
+      }
+      return updated;
+    });
+  };
+
+  // 语音录制
   const startRecording = async (clientY: number) => {
     recordStartY.current = clientY;
     setRecordingCancel(false);
@@ -224,6 +289,7 @@ export default function Chat() {
             if (selectedChat.type === 'friend') {
               msgData.receiverId = selectedChat.data.id;
               ws.send(JSON.stringify({ event: 'message:send', data: msgData }));
+              updateSession(selectedChat.data.id, '[语音]', 'voice');
             } else {
               msgData.groupId = selectedChat.data.id;
               fetch(`${API}/groups/message`, {
@@ -258,49 +324,62 @@ export default function Chat() {
     }
   };
 
-  // 图片上传（本地预览 + base64 发送）
+  // 图片发送（压缩后 base64）
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !selectedChat || !ws) return;
-    const blobUrl = URL.createObjectURL(file);
-    const tempMsg = {
-      id: `temp-${Date.now()}`,
-      senderId: userId,
-      content: blobUrl,
-      type: 'image',
-      status: 'sending',
-      createdAt: new Date().toISOString(),
-    };
-    setMessages(prev => [...prev, tempMsg]);
-
+    const img = new Image();
     const reader = new FileReader();
     reader.onload = () => {
-      const base64 = reader.result as string;
-      const payload: any = {
-        content: base64,
-        type: 'image',
-        replyToId: replyingTo?.id || null,
+      img.src = reader.result as string;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const maxWidth = 800;
+        let width = img.width;
+        let height = img.height;
+        if (width > maxWidth) {
+          height = (height * maxWidth) / width;
+          width = maxWidth;
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx?.drawImage(img, 0, 0, width, height);
+        const compressedBase64 = canvas.toDataURL('image/jpeg', 0.7);
+        // 发送压缩后的图片
+        const tempId = `temp-${Date.now()}`;
+        setMessages(prev => [...prev, {
+          id: tempId, senderId: userId, content: compressedBase64, type: 'image',
+          status: 'sending', createdAt: new Date().toISOString(),
+        }]);
+        const payload: any = {
+          content: compressedBase64,
+          type: 'image',
+          replyToId: replyingTo?.id || null,
+        };
+        if (selectedChat.type === 'friend') {
+          payload.receiverId = selectedChat.data.id;
+          ws.send(JSON.stringify({ event: 'message:send', data: payload }));
+          updateSession(selectedChat.data.id, '[图片]', 'image');
+          // 替换临时消息的 id，避免后续重复
+          setMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: 'sent' } : m));
+        } else {
+          payload.groupId = selectedChat.data.id;
+          fetch(`${API}/groups/message`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}` },
+            body: JSON.stringify(payload)
+          }).then(async (res) => {
+            if (res.ok) {
+              const token = localStorage.getItem('token');
+              const fres = await fetch(`${API}/groups/${selectedChat.data.id}/messages?skip=0&take=${PAGE_SIZE}`, {
+                headers: { Authorization: `Bearer ${token}` }
+              });
+              if (fres.ok) setMessages(await fres.json());
+            }
+          });
+        }
       };
-      if (selectedChat.type === 'friend') {
-        payload.receiverId = selectedChat.data.id;
-        ws.send(JSON.stringify({ event: 'message:send', data: payload }));
-      } else {
-        payload.groupId = selectedChat.data.id;
-        fetch(`${API}/groups/message`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}` },
-          body: JSON.stringify(payload)
-        }).then(async (res) => {
-          if (res.ok) {
-            const token = localStorage.getItem('token');
-            const fres = await fetch(`${API}/groups/${selectedChat.data.id}/messages?skip=0&take=${PAGE_SIZE}`, {
-              headers: { Authorization: `Bearer ${token}` }
-            });
-            if (fres.ok) setMessages(await fres.json());
-          }
-        });
-      }
-      setMessages(prev => prev.map(m => m.id === tempMsg.id ? { ...m, status: 'sent', content: base64 } : m));
     };
     reader.readAsDataURL(file);
     e.target.value = '';
@@ -339,7 +418,7 @@ export default function Chat() {
     if (res.ok) setSearchResults(await res.json());
   };
 
-  // 发送好友请求
+  // 好友请求
   const sendFriendRequest = async (receiverId: string) => {
     const token = localStorage.getItem('token');
     await fetch(`${API}/contacts/request`, {
@@ -351,7 +430,6 @@ export default function Chat() {
     setSearchResults([]);
   };
 
-  // 接受请求
   const acceptRequest = async (reqId: string) => {
     const token = localStorage.getItem('token');
     await fetch(`${API}/contacts/request/accept`, {
@@ -362,7 +440,6 @@ export default function Chat() {
     loadSessions(); loadFriendRequests();
   };
 
-  // 拒绝请求
   const rejectRequest = async (reqId: string) => {
     const token = localStorage.getItem('token');
     await fetch(`${API}/contacts/request/reject`, {
@@ -373,7 +450,6 @@ export default function Chat() {
     loadFriendRequests();
   };
 
-  // 创建群聊
   const createGroup = async () => {
     if (!newGroupName.trim()) return;
     const token = localStorage.getItem('token');
@@ -389,27 +465,13 @@ export default function Chat() {
     }
   };
 
-  // 加入群聊
-  const joinGroup = async (groupId: string) => {
-    const token = localStorage.getItem('token');
-    await fetch(`${API}/groups/join`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ groupId })
-    });
-    loadGroups();
-  };
-
-  // 自动滚动到底部
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
   const goBack = () => setMobileView('sidebar');
 
   return (
     <div className="flex h-screen bg-gray-100 relative">
-      {/* ==================== 左侧栏 ==================== */}
+      {/* 左侧栏 */}
       <div className={`${mobileView === 'sidebar' ? 'block' : 'hidden'} md:block md:w-80 w-full bg-white border-r flex flex-col absolute md:relative z-10 h-full`}>
         <div className="p-3 border-b">
           <div className="flex gap-2 mb-2">
@@ -429,7 +491,6 @@ export default function Chat() {
           )}
         </div>
 
-        {/* 好友请求 */}
         {friendRequests.length > 0 && (
           <div className="border-b bg-yellow-50">
             <div className="p-2 text-sm font-bold">好友请求</div>
@@ -445,7 +506,6 @@ export default function Chat() {
           </div>
         )}
 
-        {/* 群聊和好友列表 */}
         <div className="flex-1 overflow-y-auto">
           <div className="p-2 bg-gray-100 text-sm font-bold">群聊</div>
           {groups.map((g: any) => (
@@ -471,17 +531,15 @@ export default function Chat() {
             </div>
           ))}
         </div>
-
         <div className="p-3 border-t">
           <button onClick={() => { localStorage.clear(); router.push('/'); }} className="w-full bg-gray-200 hover:bg-gray-300 text-sm py-2 rounded">退出登录</button>
         </div>
       </div>
 
-      {/* ==================== 右侧聊天窗 ==================== */}
+      {/* 右侧聊天窗 */}
       <div className={`${mobileView === 'chat' ? 'block' : 'hidden'} md:block flex-1 flex flex-col`}>
         {selectedChat ? (
           <>
-            {/* 聊天头部 */}
             <div className="bg-white border-b px-4 py-3 flex items-center gap-3">
               <button onClick={goBack} className="md:hidden text-gray-500 mr-2">←</button>
               <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold">
@@ -499,7 +557,6 @@ export default function Chat() {
               )}
             </div>
 
-            {/* 消息列表 */}
             <div className="flex-1 overflow-y-auto p-4 bg-gray-50" ref={scrollContainerRef} onScroll={handleScroll}>
               {loadingMore && <div className="text-center text-gray-400 text-xs py-2">加载中...</div>}
               {!hasMore && messages.length > 0 && <div className="text-center text-gray-400 text-xs py-2">没有更多消息了</div>}
@@ -535,6 +592,13 @@ export default function Chat() {
                         </div>
                         <div className={`flex items-center gap-1 mt-1 text-xs ${isMe ? 'justify-end' : 'justify-start'} text-gray-400`}>
                           {new Date(msg.createdAt).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' })}
+                          {isMe && (
+                            <span className="ml-1">
+                              {msg.status === 'sent' && <span className="text-gray-400">✓</span>}
+                              {msg.status === 'delivered' && <span className="text-gray-400">✓✓</span>}
+                              {msg.status === 'read' && <span className="text-blue-500">✓✓</span>}
+                            </span>
+                          )}
                           {isMe && msg.status !== 'sending' && <button onClick={() => recallMessage(msg)} className="text-red-400 hover:text-red-600 ml-1" title="撤回">↩</button>}
                           <button onClick={() => setReplyingTo(msg)} className="text-gray-400 hover:text-gray-600 ml-1" title="回复">↪</button>
                         </div>
@@ -546,7 +610,6 @@ export default function Chat() {
               <div ref={messagesEndRef} />
             </div>
 
-            {/* 引用回复预览 */}
             {replyingTo && (
               <div className="bg-gray-200 px-4 py-2 text-sm flex justify-between items-center">
                 <span>回复 {(replyingTo.sender?.nickname || replyingTo.sender?.username || '用户')}：{replyingTo.content?.substring(0, 50)}</span>
@@ -554,7 +617,6 @@ export default function Chat() {
               </div>
             )}
 
-            {/* 输入区域 */}
             <div className="p-3 bg-white border-t">
               <div className="flex items-center gap-2">
                 <button onClick={() => setInputMode(inputMode === 'text' ? 'voice' : 'text')} className="text-gray-400 hover:text-gray-600 p-2">
