@@ -12,52 +12,61 @@ interface CallModalProps {
 export default function CallModal({ ws, userId, friendId, friendName, type, onHangup }: CallModalProps) {
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
+  const [callStatus, setCallStatus] = useState<'calling' | 'connected' | 'ended'>('calling');
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
 
   useEffect(() => {
-    const init = async () => {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: true,
-        video: type === 'video',
-      });
-      setLocalStream(stream);
-      if (localVideoRef.current) localVideoRef.current.srcObject = stream;
+    let pc: RTCPeerConnection;
+    const initCall = async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: true,
+          video: type === 'video',
+        });
+        setLocalStream(stream);
+        if (localVideoRef.current) localVideoRef.current.srcObject = stream;
 
-      const pc = new RTCPeerConnection({
-        iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
-      });
-      pcRef.current = pc;
+        pc = new RTCPeerConnection({
+          iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+        });
+        pcRef.current = pc;
 
-      stream.getTracks().forEach(track => pc.addTrack(track, stream));
+        stream.getTracks().forEach(track => pc.addTrack(track, stream));
 
-      pc.ontrack = (event) => {
-        setRemoteStream(event.streams[0]);
-        if (remoteVideoRef.current) remoteVideoRef.current.srcObject = event.streams[0];
-      };
+        pc.ontrack = (event) => {
+          setRemoteStream(event.streams[0]);
+          if (remoteVideoRef.current) remoteVideoRef.current.srcObject = event.streams[0];
+          setCallStatus('connected');
+        };
 
-      pc.onicecandidate = (event) => {
-        if (event.candidate) {
-          ws.send(JSON.stringify({
-            event: 'ice-candidate',
-            data: { targetId: friendId, candidate: event.candidate },
-          }));
-        }
-      };
+        pc.onicecandidate = (event) => {
+          if (event.candidate) {
+            ws.send(JSON.stringify({
+              event: 'ice-candidate',
+              data: { targetId: friendId, candidate: event.candidate },
+            }));
+          }
+        };
 
-      // 创建 offer
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-      ws.send(JSON.stringify({
-        event: 'call-offer',
-        data: { targetId: friendId, sdp: offer },
-      }));
+        // 创建 offer 并发送
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        ws.send(JSON.stringify({
+          event: 'call-offer',
+          data: { targetId: friendId, sdp: offer, type },
+        }));
+      } catch (err) {
+        console.error('获取媒体设备失败', err);
+        alert('无法访问摄像头/麦克风，请检查权限');
+        onHangup();
+      }
     };
 
-    init();
+    initCall();
 
-    // 信令处理
+    // 处理信令
     const handleSignal = (e: MessageEvent) => {
       const msg = JSON.parse(e.data);
       if (msg.event === 'call-answer') {
@@ -70,6 +79,7 @@ export default function CallModal({ ws, userId, friendId, friendName, type, onHa
     };
 
     ws.addEventListener('message', handleSignal);
+
     return () => {
       ws.removeEventListener('message', handleSignal);
       hangup();
@@ -77,6 +87,7 @@ export default function CallModal({ ws, userId, friendId, friendName, type, onHa
   }, []);
 
   const hangup = () => {
+    setCallStatus('ended');
     localStream?.getTracks().forEach(track => track.stop());
     pcRef.current?.close();
     ws.send(JSON.stringify({ event: 'call-hangup', data: { targetId: friendId } }));
@@ -84,16 +95,39 @@ export default function CallModal({ ws, userId, friendId, friendName, type, onHa
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
-      <div className="bg-white p-4 rounded-lg w-80 text-center">
-        <h3 className="font-bold mb-2">与 {friendName} {type === 'video' ? '视频' : '语音'}通话</h3>
-        <div className="flex gap-4 justify-center mb-4">
-          {type === 'video' && (
-            <video ref={localVideoRef} autoPlay muted className="w-24 h-24 bg-gray-200 rounded" />
-          )}
-          <video ref={remoteVideoRef} autoPlay className="w-24 h-24 bg-gray-200 rounded" />
+    <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50">
+      <div className="bg-gray-900 p-6 rounded-xl w-96 text-center shadow-2xl">
+        <h3 className="text-white text-lg font-bold mb-2">
+          与 {friendName} {type === 'video' ? '视频通话' : '语音通话'}
+        </h3>
+        <div className="text-gray-400 text-sm mb-4">
+          {callStatus === 'calling' && '呼叫中...'}
+          {callStatus === 'connected' && '通话中'}
+          {callStatus === 'ended' && '已挂断'}
         </div>
-        <button onClick={hangup} className="bg-red-500 text-white px-6 py-2 rounded-full">挂断</button>
+
+        <div className="flex justify-center gap-4 mb-6">
+          {type === 'video' && localStream && (
+            <video ref={localVideoRef} autoPlay muted playsInline
+              className="w-24 h-24 bg-black rounded-lg object-cover border-2 border-blue-500" />
+          )}
+          {remoteStream && (
+            <video ref={remoteVideoRef} autoPlay playsInline
+              className="w-24 h-24 bg-black rounded-lg object-cover border-2 border-green-500" />
+          )}
+          {!remoteStream && type === 'audio' && (
+            <div className="w-24 h-24 bg-gray-800 rounded-full flex items-center justify-center">
+              <span className="text-4xl">🎤</span>
+            </div>
+          )}
+        </div>
+
+        <button
+          onClick={hangup}
+          className="bg-red-600 hover:bg-red-700 text-white px-8 py-3 rounded-full font-bold transition"
+        >
+          挂断
+        </button>
       </div>
     </div>
   );
