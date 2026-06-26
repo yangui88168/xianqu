@@ -1,0 +1,9 @@
+{
+  "name": "@xianqu/db-schema",
+  "version": "0.0.1",
+  "main": "./src/index.ts",
+  "scripts": {
+    "generate": "prisma generate",
+    "push": "prisma db push"
+  }
+}
