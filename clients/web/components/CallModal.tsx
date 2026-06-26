@@ -22,14 +22,14 @@ export default function CallModal({
   const [isCameraOff, setIsCameraOff] = useState(false);
   const [isSpeakerOn, setIsSpeakerOn] = useState(true);
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user');
-  const [audioBlocked, setAudioBlocked] = useState(false); // 音频被浏览器阻止
+  const [audioBlocked, setAudioBlocked] = useState(false);
 
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
   const remoteAudioRef = useRef<HTMLAudioElement>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const durationRef = useRef<NodeJS.Timeout | null>(null);
-  const interactionRef = useRef(false); // 记录用户是否交互过
+  const interactionRef = useRef(false);
 
   // 挂断
   const hangup = useCallback(() => {
@@ -42,14 +42,13 @@ export default function CallModal({
     onHangup();
   }, [ws, friendId, localStream, remoteStream, onHangup]);
 
-  // 尝试解锁音频（在用户交互时调用）
+  // 尝试解锁音频
   const unlockAudio = useCallback(() => {
     if (remoteAudioRef.current) {
       remoteAudioRef.current.muted = true;
       remoteAudioRef.current.play().then(() => {
         remoteAudioRef.current!.muted = false;
         interactionRef.current = true;
-        // 如果之前有远程流，重新绑定并播放
         if (remoteStream && remoteAudioRef.current) {
           remoteAudioRef.current.srcObject = remoteStream;
           remoteAudioRef.current.play().catch(() => setAudioBlocked(true));
@@ -61,7 +60,6 @@ export default function CallModal({
   const toggleMute = () => {
     localStream?.getAudioTracks().forEach((t) => (t.enabled = !isMuted));
     setIsMuted(!isMuted);
-    // 每次点击操作都视为用户交互，尝试解锁
     unlockAudio();
   };
 
@@ -124,7 +122,31 @@ export default function CallModal({
         if (localVideoRef.current) localVideoRef.current.srcObject = stream;
 
         const pc = new RTCPeerConnection({
-          iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+          iceServers: [
+            {
+              urls: "stun:stun.relay.metered.ca:80",
+            },
+            {
+              urls: "turn:global.relay.metered.ca:80",
+              username: "680a360a85d7aad8037a5be4",
+              credential: "Uz8+sEjedvuGre/9",
+            },
+            {
+              urls: "turn:global.relay.metered.ca:80?transport=tcp",
+              username: "680a360a85d7aad8037a5be4",
+              credential: "Uz8+sEjedvuGre/9",
+            },
+            {
+              urls: "turn:global.relay.metered.ca:443",
+              username: "680a360a85d7aad8037a5be4",
+              credential: "Uz8+sEjedvuGre/9",
+            },
+            {
+              urls: "turns:global.relay.metered.ca:443?transport=tcp",
+              username: "680a360a85d7aad8037a5be4",
+              credential: "Uz8+sEjedvuGre/9",
+            },
+          ],
         });
         pcRef.current = pc;
 
@@ -134,10 +156,8 @@ export default function CallModal({
           const [remote] = event.streams;
           if (remote) {
             setRemoteStream(remote);
-            // 绑定远程音频流到全局播放器
             if (remoteAudioRef.current) {
               remoteAudioRef.current.srcObject = remote;
-              // 如果已经交互过或当前有交互，尝试播放
               if (interactionRef.current || document.visibilityState === 'visible') {
                 remoteAudioRef.current.play().catch(() => setAudioBlocked(true));
               } else {
@@ -209,10 +229,8 @@ export default function CallModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90">
       <div className="relative flex flex-col items-center w-full max-w-sm mx-auto h-full max-h-screen py-4">
-        {/* 隐藏的全局音频播放器 */}
         <audio ref={remoteAudioRef} autoPlay playsInline className="hidden" />
 
-        {/* 远程画面 */}
         <div className="relative w-full aspect-video bg-gray-900 rounded-2xl overflow-hidden mb-4 flex items-center justify-center">
           {type === 'video' ? (
             <video ref={remoteVideoRef} autoPlay playsInline className="w-full h-full object-cover" />
@@ -239,7 +257,6 @@ export default function CallModal({
           )}
         </div>
 
-        {/* 音频被阻止时显示手动播放按钮 */}
         {audioBlocked && (
           <button
             onClick={() => {
@@ -254,7 +271,6 @@ export default function CallModal({
           </button>
         )}
 
-        {/* 控制按钮 */}
         <div className="flex items-center gap-3 bg-gray-800/80 px-5 py-3 rounded-full mt-auto mb-6">
           <button onClick={toggleMute} className={`w-10 h-10 rounded-full flex items-center justify-center text-white ${isMuted ? 'bg-red-500' : 'bg-gray-600'}`}>
             {isMuted ? '🔇' : '🎙️'}
