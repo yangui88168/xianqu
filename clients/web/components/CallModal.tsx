@@ -6,10 +6,12 @@ interface CallModalProps {
   friendId: string;
   friendName: string;
   type: 'audio' | 'video';
+  incoming?: boolean;        // 是否为被叫方
+  offerSdp?: any;            // 被叫方收到的 offer SDP
   onHangup: () => void;
 }
 
-export default function CallModal({ ws, userId, friendId, friendName, type, onHangup }: CallModalProps) {
+export default function CallModal({ ws, userId, friendId, friendName, type, incoming, offerSdp, onHangup }: CallModalProps) {
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   const [callStatus, setCallStatus] = useState<'calling' | 'connected' | 'ended'>('calling');
@@ -18,7 +20,6 @@ export default function CallModal({ ws, userId, friendId, friendName, type, onHa
   const pcRef = useRef<RTCPeerConnection | null>(null);
 
   useEffect(() => {
-    let pc: RTCPeerConnection;
     const initCall = async () => {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
@@ -28,12 +29,12 @@ export default function CallModal({ ws, userId, friendId, friendName, type, onHa
         setLocalStream(stream);
         if (localVideoRef.current) localVideoRef.current.srcObject = stream;
 
-        pc = new RTCPeerConnection({
+        const pc = new RTCPeerConnection({
           iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
         });
         pcRef.current = pc;
 
-        stream.getTracks().forEach(track => pc.addTrack(track, stream));
+        stream.getTracks().forEach((track) => pc.addTrack(track, stream));
 
         pc.ontrack = (event) => {
           setRemoteStream(event.streams[0]);
@@ -50,45 +51,55 @@ export default function CallModal({ ws, userId, friendId, friendName, type, onHa
           }
         };
 
-        // 创建 offer 并发送
-        const offer = await pc.createOffer();
-        await pc.setLocalDescription(offer);
-        ws.send(JSON.stringify({
-          event: 'call-offer',
-          data: { targetId: friendId, sdp: offer, type },
-        }));
+        // 信令监听
+        const handleSignal = (e: MessageEvent) => {
+          const msg = JSON.parse(e.data);
+          if (msg.event === 'call-answer' && msg.data.from === friendId) {
+            pc.setRemoteDescription(new RTCSessionDescription(msg.data.sdp));
+          } else if (msg.event === 'ice-candidate' && msg.data.from === friendId) {
+            pc.addIceCandidate(new RTCIceCandidate(msg.data.candidate));
+          } else if (msg.event === 'call-hangup' && msg.data.from === friendId) {
+            hangup();
+          }
+        };
+
+        ws.addEventListener('message', handleSignal);
+
+        if (incoming && offerSdp) {
+          // 被叫方：设置远程 offer，创建 answer
+          await pc.setRemoteDescription(new RTCSessionDescription(offerSdp));
+          const answer = await pc.createAnswer();
+          await pc.setLocalDescription(answer);
+          ws.send(JSON.stringify({
+            event: 'call-answer',
+            data: { targetId: friendId, sdp: answer },
+          }));
+        } else {
+          // 主叫方：创建 offer
+          const offer = await pc.createOffer();
+          await pc.setLocalDescription(offer);
+          ws.send(JSON.stringify({
+            event: 'call-offer',
+            data: { targetId: friendId, sdp: offer, type },
+          }));
+        }
+
+        return () => {
+          ws.removeEventListener('message', handleSignal);
+        };
       } catch (err) {
-        console.error('获取媒体设备失败', err);
+        console.error('无法获取媒体设备', err);
         alert('无法访问摄像头/麦克风，请检查权限');
         onHangup();
       }
     };
 
     initCall();
-
-    // 处理信令
-    const handleSignal = (e: MessageEvent) => {
-      const msg = JSON.parse(e.data);
-      if (msg.event === 'call-answer') {
-        pcRef.current?.setRemoteDescription(new RTCSessionDescription(msg.data.sdp));
-      } else if (msg.event === 'ice-candidate') {
-        pcRef.current?.addIceCandidate(new RTCIceCandidate(msg.data.candidate));
-      } else if (msg.event === 'call-hangup') {
-        hangup();
-      }
-    };
-
-    ws.addEventListener('message', handleSignal);
-
-    return () => {
-      ws.removeEventListener('message', handleSignal);
-      hangup();
-    };
   }, []);
 
   const hangup = () => {
     setCallStatus('ended');
-    localStream?.getTracks().forEach(track => track.stop());
+    localStream?.getTracks().forEach((track) => track.stop());
     pcRef.current?.close();
     ws.send(JSON.stringify({ event: 'call-hangup', data: { targetId: friendId } }));
     onHangup();
