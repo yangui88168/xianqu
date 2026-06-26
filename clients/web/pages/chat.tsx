@@ -43,6 +43,12 @@ export default function Chat() {
   const [contextMenu, setContextMenu] = useState<{ msg: any; x: number; y: number } | null>(null);
   const longPressTimer = useRef<NodeJS.Timeout | null>(null);
 
+  // 群信息面板相关状态
+  const [showGroupInfo, setShowGroupInfo] = useState(false);
+  const [groupInfo, setGroupInfo] = useState<any>(null);
+  const [groupAnnouncement, setGroupAnnouncement] = useState('');
+  const [showMentionList, setShowMentionList] = useState(false);
+
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (!token) { router.push('/'); return; }
@@ -104,14 +110,10 @@ export default function Chat() {
             if (prev.find(m => m.id === newMsg.id)) return prev;
             return [...prev, newMsg];
           });
-          // 自动已读回执
           if (selectedChat?.type === 'friend' && selectedChat.data.id === newMsg.senderId) {
             fetch(`${API}/messages/read`, {
               method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                Authorization: `Bearer ${token}`
-              },
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
               body: JSON.stringify({ senderId: newMsg.senderId })
             });
             ws?.send(JSON.stringify({ event: 'message:read', data: { messageId: newMsg.id, senderId: newMsg.senderId } }));
@@ -394,7 +396,6 @@ export default function Chat() {
     alert('已复制');
   };
 
-  // 右键/长按菜单处理
   const handleContextMenu = (e: React.MouseEvent, msg: any) => {
     e.preventDefault();
     setContextMenu({ msg, x: e.clientX, y: e.clientY });
@@ -402,12 +403,26 @@ export default function Chat() {
 
   const handleTouchStart = (msg: any) => {
     longPressTimer.current = setTimeout(() => {
-      setContextMenu({ msg, x: 0, y: 0 }); // 移动端使用固定位置或底部弹出
+      setContextMenu({ msg, x: 0, y: 0 });
     }, 500);
   };
 
   const handleTouchEnd = () => {
     if (longPressTimer.current) clearTimeout(longPressTimer.current);
+  };
+
+  // 群信息相关函数
+  const loadGroupInfo = async () => {
+    if (!selectedChat || selectedChat.type !== 'group') return;
+    const token = localStorage.getItem('token');
+    const res = await fetch(`${API}/groups/${selectedChat.data.id}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if (res.ok) {
+      const data = await res.json();
+      setGroupInfo(data);
+      setGroupAnnouncement(data.announcement || '');
+    }
   };
 
   const searchUsers = async () => {
@@ -470,7 +485,7 @@ export default function Chat() {
   const goBack = () => setMobileView('sidebar');
 
   return (
-    <div className="flex h-screen bg-gray-100 relative" onClick={() => setContextMenu(null)}>
+    <div className="flex h-screen bg-gray-100 relative" onClick={() => { setContextMenu(null); setShowMentionList(false); }}>
       {/* 左侧栏 */}
       <div className={`${mobileView === 'sidebar' ? 'block' : 'hidden'} md:block md:w-80 w-full bg-white border-r flex flex-col absolute md:relative z-10 h-full`}>
         <div className="p-3 border-b">
@@ -549,6 +564,9 @@ export default function Chat() {
                 <p className="font-bold">{selectedChat.type === 'group' ? selectedChat.data.name : (selectedChat.data.nickname || selectedChat.data.username)}</p>
                 {selectedChat.type === 'friend' && <p className="text-xs text-gray-500">{selectedChat.data.status === 'online' ? '在线' : '离线'}</p>}
               </div>
+              {selectedChat.type === 'group' && (
+                <button onClick={() => { loadGroupInfo(); setShowGroupInfo(true); }} className="text-gray-500 hover:text-gray-700 p-1" title="群信息">ℹ️</button>
+              )}
               {selectedChat.type === 'friend' && (
                 <div className="flex gap-1">
                   <button onClick={() => setCallState({ type: 'audio', friendId: selectedChat.data.id, friendName: selectedChat.data.nickname || selectedChat.data.username })} className="text-gray-500 hover:text-gray-700 p-1" title="语音通话">📞</button>
@@ -633,6 +651,23 @@ export default function Chat() {
                   <>
                     <button onClick={() => fileInputRef.current?.click()} className="text-gray-400 hover:text-gray-600 p-2">📷</button>
                     <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
+                    {selectedChat?.type === 'group' && (
+                      <button onClick={async () => {
+                        const token = localStorage.getItem('token');
+                        const res = await fetch(`${API}/groups/${selectedChat.data.id}`, {
+                          headers: { Authorization: `Bearer ${token}` }
+                        });
+                        if (res.ok) {
+                          const g = await res.json();
+                          const member = g.members?.find((m: any) => m.userId !== userId);
+                          if (member) {
+                            setInput(prev => prev + `@${member.user?.nickname || member.user?.username} `);
+                          } else {
+                            alert('没有其他成员可@');
+                          }
+                        }
+                      }} className="text-gray-400 hover:text-gray-600 p-2">@</button>
+                    )}
                     <div className="relative">
                       <button onClick={() => setShowEmoji(!showEmoji)} className="text-gray-400 hover:text-gray-600 p-2">😊</button>
                       {showEmoji && (
@@ -699,6 +734,87 @@ export default function Chat() {
               <button onClick={() => setShowGroupModal(false)} className="px-3 py-1 bg-gray-300 rounded text-sm">取消</button>
               <button onClick={createGroup} className="px-3 py-1 bg-green-500 text-white rounded text-sm">创建</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* 群信息面板 */}
+      {showGroupInfo && groupInfo && (
+        <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50" onClick={() => setShowGroupInfo(false)}>
+          <div className="bg-white rounded-xl shadow-xl w-96 max-h-[80vh] overflow-y-auto p-5" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-bold">群信息</h3>
+              <button onClick={() => setShowGroupInfo(false)} className="text-gray-500">✕</button>
+            </div>
+            <p className="font-medium">群名称：{groupInfo.name}</p>
+            <p className="text-sm text-gray-500 mt-1">成员 {groupInfo.members?.length} 人</p>
+            <div className="mt-3">
+              <label className="text-sm font-medium">群公告</label>
+              {(groupInfo.ownerId === userId || groupInfo.members?.find((m: any) => m.userId === userId && m.role === 'admin')) ? (
+                <div className="flex gap-2 mt-1">
+                  <input value={groupAnnouncement} onChange={e => setGroupAnnouncement(e.target.value)} className="flex-1 border p-1 rounded text-sm" placeholder="编辑公告" />
+                  <button onClick={async () => {
+                    const token = localStorage.getItem('token');
+                    await fetch(`${API}/groups/${groupInfo.id}/announcement`, {
+                      method: 'PUT',
+                      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                      body: JSON.stringify({ announcement: groupAnnouncement })
+                    });
+                    alert('公告已更新');
+                  }} className="bg-blue-500 text-white px-3 py-1 rounded text-sm">保存</button>
+                </div>
+              ) : (
+                <p className="text-sm text-gray-600 mt-1 bg-gray-50 p-2 rounded">{groupInfo.announcement || '暂无公告'}</p>
+              )}
+            </div>
+            <div className="mt-4">
+              <h4 className="font-medium text-sm mb-2">成员列表</h4>
+              {groupInfo.members?.map((m: any) => (
+                <div key={m.userId} className="flex justify-between items-center py-1 border-b text-sm">
+                  <span>{m.user?.nickname || m.user?.username} {m.role === 'owner' ? '👑' : m.role === 'admin' ? '⭐' : ''}</span>
+                  <div className="flex gap-1">
+                    {m.userId !== userId && groupInfo.ownerId === userId && (
+                      <>
+                        <button onClick={async () => {
+                          const token = localStorage.getItem('token');
+                          await fetch(`${API}/groups/${groupInfo.id}/admin`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                            body: JSON.stringify({ targetUserId: m.userId, role: m.role === 'admin' ? 'member' : 'admin' })
+                          });
+                          loadGroupInfo();
+                        }} className="text-xs text-blue-500">{m.role === 'admin' ? '取消管理' : '设为管理'}</button>
+                        <button onClick={async () => {
+                          const minutes = prompt('禁言分钟数：');
+                          if (!minutes) return;
+                          const token = localStorage.getItem('token');
+                          await fetch(`${API}/groups/${groupInfo.id}/mute`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                            body: JSON.stringify({ targetUserId: m.userId, minutes: parseInt(minutes) })
+                          });
+                          alert('已禁言');
+                        }} className="text-xs text-red-500">禁言</button>
+                      </>
+                    )}
+                    {m.userId !== userId && groupInfo.ownerId === userId && (
+                      <button onClick={async () => {
+                        if (confirm('转让群主给该成员？')) {
+                          const token = localStorage.getItem('token');
+                          await fetch(`${API}/groups/${groupInfo.id}/transfer`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                            body: JSON.stringify({ newOwnerId: m.userId })
+                          });
+                          loadGroupInfo();
+                        }
+                      }} className="text-xs text-orange-500">转让</button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <button onClick={() => setShowGroupInfo(false)} className="mt-4 w-full bg-gray-200 py-2 rounded">关闭</button>
           </div>
         </div>
       )}
