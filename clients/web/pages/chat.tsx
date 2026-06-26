@@ -128,7 +128,7 @@ export default function Chat() {
     };
   }, []);
 
-  // WebSocket 连接
+  // WebSocket 连接（心跳、重连、消息/信令处理）
   useEffect(() => {
     if (!userId) return;
     let reconnectTimer: NodeJS.Timeout;
@@ -400,6 +400,29 @@ export default function Chat() {
     }
   };
 
+  const deleteMessage = async (msg: any) => {
+    const token = localStorage.getItem('token');
+    if (selectedChat?.type === 'friend') {
+      await fetch(`${API}/messages/delete`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ messageId: msg.id })
+      });
+      // 从当前列表中移除
+      setMessages(prev => prev.filter(m => m.id !== msg.id));
+      const cacheKey = `friend-${selectedChat.data.id}`;
+      const cached = messageCache.current.get(cacheKey) || [];
+      messageCache.current.set(cacheKey, cached.filter(m => m.id !== msg.id));
+    } else {
+      await fetch(`${API}/groups/message/delete`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ messageId: msg.id })
+      });
+      setMessages(prev => prev.filter(m => m.id !== msg.id));
+    }
+  };
+
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
     alert('已复制');
@@ -601,7 +624,8 @@ export default function Chat() {
                   {!hasMore && messages.length > 0 && <div className="text-center text-gray-400 text-xs py-2">没有更多消息了</div>}
                   {messages.map((msg: any, i: number) => {
                     const isMe = msg.senderId === userId || msg.sender?.id === userId;
-                    if (msg.deleted) return (
+                    if (msg.deleted) return null;
+                    if (msg.recalled) return (
                       <div key={msg.id || i} className="text-center text-gray-400 text-xs py-1">
                         {isMe ? '你' : (msg.sender?.nickname || msg.sender?.username || '对方')} 撤回了一条消息
                       </div>
@@ -843,20 +867,32 @@ export default function Chat() {
         </div>
       )}
 
-      {/* 消息操作菜单 */}
+      {/* 消息操作菜单（右键/长按） */}
       {contextMenu && (
         <div className="fixed bg-white border rounded shadow-lg py-1 z-50" style={{ left: contextMenu.x, top: contextMenu.y }} onClick={() => setContextMenu(null)}>
           <button onClick={() => { copyToClipboard(contextMenu.msg.content); setContextMenu(null); }} className="block w-full text-left px-4 py-2 text-sm hover:bg-gray-100">复制</button>
           <button onClick={() => { setReplyingTo(contextMenu.msg); setContextMenu(null); }} className="block w-full text-left px-4 py-2 text-sm hover:bg-gray-100">引用回复</button>
           {contextMenu.msg.senderId === userId && (
-            <button onClick={() => { recallMessage(contextMenu.msg); setContextMenu(null); }} className="block w-full text-left px-4 py-2 text-sm hover:bg-gray-100 text-red-500">撤回</button>
+            <>
+              <button onClick={() => { recallMessage(contextMenu.msg); setContextMenu(null); }} className="block w-full text-left px-4 py-2 text-sm hover:bg-gray-100">撤回</button>
+              <button onClick={() => { deleteMessage(contextMenu.msg); setContextMenu(null); }} className="block w-full text-left px-4 py-2 text-sm hover:bg-gray-100 text-red-500">删除</button>
+            </>
           )}
         </div>
       )}
 
       {/* 通话弹窗 */}
       {callState && ws && (
-        <CallModal ws={ws} userId={userId} friendId={callState.friendId} friendName={callState.friendName} type={callState.type} incoming={callState.incoming} offerSdp={callState.offerSdp} onHangup={() => setCallState(null)} />
+        <CallModal
+          ws={ws}
+          userId={userId}
+          friendId={callState.friendId}
+          friendName={callState.friendName}
+          type={callState.type}
+          incoming={callState.incoming}
+          offerSdp={callState.offerSdp}
+          onHangup={() => setCallState(null)}
+        />
       )}
     </div>
   );
