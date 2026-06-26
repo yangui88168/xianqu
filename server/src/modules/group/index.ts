@@ -16,10 +16,9 @@ export async function groupRoutes(fastify: FastifyInstance) {
   // 创建群（支持邀请初始成员）
   fastify.post('/create', { preHandler: authMiddleware }, async (request, reply) => {
     const userId = (request as any).userId;
-    const { name, memberIds } = request.body as any; // memberIds 可选，好友ID数组
+    const { name, memberIds } = request.body as any;
     if (!name) return reply.status(400).send({ error: 'Name required' });
 
-    // 去重并排除创建者自己
     const initialMembers = memberIds
       ? [...new Set([userId, ...memberIds.filter((id: string) => id !== userId)])]
       : [userId];
@@ -43,9 +42,8 @@ export async function groupRoutes(fastify: FastifyInstance) {
   fastify.post('/:groupId/invite', { preHandler: authMiddleware }, async (request, reply) => {
     const userId = (request as any).userId;
     const { groupId } = request.params as any;
-    const { userIds } = request.body as any; // 要邀请的用户ID数组
+    const { userIds } = request.body as any;
 
-    // 检查操作者权限
     const membership = await prisma.groupMember.findUnique({
       where: { groupId_userId: { groupId, userId } },
     });
@@ -53,7 +51,6 @@ export async function groupRoutes(fastify: FastifyInstance) {
       return reply.status(403).send({ error: 'Permission denied' });
     }
 
-    // 过滤掉已存在的成员
     const existingMembers = await prisma.groupMember.findMany({
       where: { groupId, userId: { in: userIds } },
       select: { userId: true },
@@ -76,7 +73,7 @@ export async function groupRoutes(fastify: FastifyInstance) {
     reply.send({ success: true, invited: newMembers.length });
   });
 
-  // 加入群（公开加入，保留原逻辑）
+  // 加入群（公开加入）
   fastify.post('/join', { preHandler: authMiddleware }, async (request, reply) => {
     const userId = (request as any).userId;
     const { groupId } = request.body as any;
@@ -206,7 +203,7 @@ export async function groupRoutes(fastify: FastifyInstance) {
     reply.send(msg);
   });
 
-  // 获取群消息历史
+  // 获取群消息历史（过滤已删除消息）
   fastify.get('/:groupId/messages', { preHandler: authMiddleware }, async (request, reply) => {
     const { groupId } = request.params as any;
     const skip = parseInt((request.query as any).skip || '0', 10);
@@ -224,8 +221,24 @@ export async function groupRoutes(fastify: FastifyInstance) {
     reply.send(messages.reverse());
   });
 
-  // 撤回群消息
+  // 撤回群消息（设置 recalled = true）
   fastify.put('/message/recall', { preHandler: authMiddleware }, async (request, reply) => {
+    const userId = (request as any).userId;
+    const { messageId } = request.body as any;
+    const msg = await prisma.groupMessage.findUnique({ where: { id: messageId } });
+    if (!msg) return reply.status(404).send({ error: 'Not found' });
+    if (msg.senderId !== userId) {
+      const membership = await prisma.groupMember.findUnique({
+        where: { groupId_userId: { groupId: msg.groupId, userId } },
+      });
+      if (!membership || membership.role === 'member') return reply.status(403).send({ error: 'Permission denied' });
+    }
+    await prisma.groupMessage.update({ where: { id: messageId }, data: { recalled: true } });
+    reply.send({ success: true });
+  });
+
+  // 删除群消息（发送者或管理员可删除）
+  fastify.delete('/message/delete', { preHandler: authMiddleware }, async (request, reply) => {
     const userId = (request as any).userId;
     const { messageId } = request.body as any;
     const msg = await prisma.groupMessage.findUnique({ where: { id: messageId } });
