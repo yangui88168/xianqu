@@ -26,6 +26,11 @@ model User {
   receivedRequests FriendRequest[]  @relation("ReceivedRequests")
   friendships      Friendship[]     @relation("UserFriendships")
   friendOf         Friendship[]     @relation("FriendRelation")
+
+  // ✅ 已为您合并补齐的群组系统反向关系字段
+  ownedGroups      GroupChat[]
+  groupMemberships GroupMember[]
+  groupMessages    GroupMessage[]
 }
 
 model Message {
@@ -35,7 +40,7 @@ model Message {
   senderId    String
   receiverId  String
   status      String   @default("sent")   // sent, delivered, read
-  readAt      DateTime?                   // ✅ 已为您精准增加的已读时间字段
+  readAt      DateTime?                   
   createdAt   DateTime @default(now())
 
   sender      User     @relation("SentMessages", fields: [senderId], references: [id])
@@ -72,4 +77,44 @@ model FriendRequest {
   receiver   User     @relation("ReceivedRequests", fields: [receiverId], references: [id])
   
   @@unique([senderId, receiverId])
+}
+
+// ✅ 已为您在文件末尾追加的完整群组模型
+model GroupChat {
+  id           String        @id @default(cuid())
+  name         String
+  ownerId      String
+  avatar       String?
+  announcement String?
+  createdAt    DateTime      @default(now())
+  owner        User          @relation(fields: [ownerId], references: [id])
+  members      GroupMember[]
+  messages     GroupMessage[]
+}
+
+model GroupMember {
+  id       String   @id @default(cuid())
+  groupId  String
+  userId   String
+  role     String   @default("member")
+  joinedAt DateTime @default(now())
+  group    GroupChat @relation(fields: [groupId], references: [id])
+  user     User      @relation(fields: [userId], references: [id])
+
+  @@unique([groupId, userId])
+}
+
+model GroupMessage {
+  id        String   @id @default(cuid())
+  groupId   String
+  senderId  String
+  content   String
+  type      String   @default("text")
+  replyToId String?
+  deleted   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  group     GroupChat @relation(fields: [groupId], references: [id])
+  sender    User      @relation(fields: [senderId], references: [id])
+  replyTo   GroupMessage? @relation("Replies", fields: [replyToId], references: [id])
+  replies   GroupMessage[] @relation("Replies")
 }
