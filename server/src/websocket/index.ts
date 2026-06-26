@@ -62,6 +62,15 @@ export const wsHandler = (connection: SocketStream, req: FastifyRequest) => {
                 data: { userId: receiverId, messageId: msg.id },
               }).catch(console.error);
             }
+
+            // ✅ 已为您精准追加：发送已送达回执给发送方（如果在线）
+            const senderWs = onlineUsers.get(senderId);
+            if (senderWs) {
+              senderWs.send(JSON.stringify({
+                event: 'message:delivered',
+                data: { messageId: msg.id }
+              }));
+            }
           })
           .catch(console.error);
       }
