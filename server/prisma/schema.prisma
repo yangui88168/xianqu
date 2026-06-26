@@ -17,11 +17,11 @@ model User {
   status           String    @default("offline")
   createdAt        DateTime  @default(now())
 
-  // 与 Message 的关系字段（保持原样）
+  // 与 Message 的关系字段
   sentMessages     Message[] @relation("SentMessages")
   receivedMessages Message[] @relation("ReceivedMessages")
 
-  // ✅ 已为您合并补齐的好友系统反向关系字段
+  // 好友系统反向关系字段
   sentRequests     FriendRequest[]  @relation("SentRequests")
   receivedRequests FriendRequest[]  @relation("ReceivedRequests")
   friendships      Friendship[]     @relation("UserFriendships")
@@ -31,10 +31,11 @@ model User {
 model Message {
   id          String   @id @default(cuid())
   content     String
-  type        String   @default("text")
+  type        String   @default("text")   // text, image, file
   senderId    String
   receiverId  String
-  status      String   @default("sent")
+  status      String   @default("sent")   // sent, delivered, read
+  readAt      DateTime?                   // ✅ 已为您精准增加的已读时间字段
   createdAt   DateTime @default(now())
 
   sender      User     @relation("SentMessages", fields: [senderId], references: [id])
