@@ -3,6 +3,7 @@ import cors from '@fastify/cors';
 import fastifyWebsocket from '@fastify/websocket';
 import { authRoutes } from './modules/auth';
 import { messageRoutes } from './modules/message';
+import { contactRoutes } from './modules/contact';
 import { wsHandler } from './websocket';
 
 export const app = Fastify({ logger: true });
@@ -11,6 +12,7 @@ app.register(cors, { origin: true });
 app.register(fastifyWebsocket);
 app.register(authRoutes, { prefix: '/auth' });
 app.register(messageRoutes, { prefix: '/messages' });
+app.register(contactRoutes, { prefix: '/contacts' });
 
 app.register(async (fastify) => {
   fastify.get('/ws', { websocket: true }, wsHandler);
