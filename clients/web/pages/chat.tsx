@@ -214,7 +214,7 @@ export default function Chat() {
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ receiverId })
     });
-    alert('Request sent!');
+    alert('好友请求已发送！');
     setSearchResults([]);
   };
 
@@ -263,32 +263,32 @@ export default function Chat() {
           <div className="flex gap-2 mb-2">
             <input
               className="flex-1 p-2 border rounded text-sm"
-              placeholder="Search users..."
+              placeholder="搜索用户..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && searchUsers()}
             />
-            <button onClick={searchUsers} className="bg-blue-500 text-white px-3 py-1 rounded text-sm">Search</button>
+            <button onClick={searchUsers} className="bg-blue-500 text-white px-3 py-1 rounded text-sm">搜索</button>
           </div>
           <button
             onClick={() => setShowGroupModal(true)}
             className="w-full bg-green-500 text-white py-1 rounded text-sm"
           >
-            + Create Group
+            + 创建群聊
           </button>
           {showGroupModal && (
             <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
               <div className="bg-white p-5 rounded shadow-lg w-72">
-                <h3 className="font-bold mb-2">Create Group</h3>
+                <h3 className="font-bold mb-2">创建群聊</h3>
                 <input
                   className="w-full border p-2 rounded mb-3 text-sm"
-                  placeholder="Group name"
+                  placeholder="群名称"
                   value={newGroupName}
                   onChange={e => setNewGroupName(e.target.value)}
                 />
                 <div className="flex gap-2 justify-end">
-                  <button onClick={() => setShowGroupModal(false)} className="px-3 py-1 bg-gray-300 rounded text-sm">Cancel</button>
-                  <button onClick={createGroup} className="px-3 py-1 bg-green-500 text-white rounded text-sm">Create</button>
+                  <button onClick={() => setShowGroupModal(false)} className="px-3 py-1 bg-gray-300 rounded text-sm">取消</button>
+                  <button onClick={createGroup} className="px-3 py-1 bg-green-500 text-white rounded text-sm">创建</button>
                 </div>
               </div>
             </div>
@@ -298,7 +298,7 @@ export default function Chat() {
               {searchResults.map(user => (
                 <div key={user.id} className="flex justify-between items-center p-2 hover:bg-gray-100 rounded">
                   <span className="text-sm">{user.username}</span>
-                  <button onClick={() => sendFriendRequest(user.id)} className="text-xs bg-green-500 text-white px-2 py-1 rounded">Add</button>
+                  <button onClick={() => sendFriendRequest(user.id)} className="text-xs bg-green-500 text-white px-2 py-1 rounded">添加</button>
                 </div>
               ))}
             </div>
@@ -307,13 +307,13 @@ export default function Chat() {
 
         {friendRequests.length > 0 && (
           <div className="border-b bg-yellow-50">
-            <div className="p-2 text-sm font-bold">Requests</div>
+            <div className="p-2 text-sm font-bold">好友请求</div>
             {friendRequests.map(req => (
               <div key={req.id} className="flex justify-between items-center px-3 py-2">
                 <span className="text-sm">{req.sender?.username}</span>
                 <div className="flex gap-1">
-                  <button onClick={() => acceptRequest(req.id)} className="text-xs bg-green-500 text-white px-2 py-1 rounded">✓</button>
-                  <button onClick={() => rejectRequest(req.id)} className="text-xs bg-red-500 text-white px-2 py-1 rounded">✕</button>
+                  <button onClick={() => acceptRequest(req.id)} className="text-xs bg-green-500 text-white px-2 py-1 rounded">接受</button>
+                  <button onClick={() => rejectRequest(req.id)} className="text-xs bg-red-500 text-white px-2 py-1 rounded">拒绝</button>
                 </div>
               </div>
             ))}
@@ -321,7 +321,7 @@ export default function Chat() {
         )}
 
         <div className="flex-1 overflow-y-auto">
-          <div className="p-2 bg-gray-100 text-sm font-bold">Groups</div>
+          <div className="p-2 bg-gray-100 text-sm font-bold">群聊</div>
           {groups.map(g => (
             <div
               key={g.id}
@@ -331,7 +331,7 @@ export default function Chat() {
               <span className="font-medium text-sm"># {g.name}</span>
             </div>
           ))}
-          <div className="p-2 bg-gray-100 text-sm font-bold">Friends</div>
+          <div className="p-2 bg-gray-100 text-sm font-bold">好友</div>
           {sessions.map(s => (
             <div
               key={s.friend.id}
@@ -345,7 +345,7 @@ export default function Chat() {
                   {s.lastMessage && <span className="text-xs text-gray-400">{new Date(s.lastMessage.createdAt).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' })}</span>}
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-xs text-gray-500 truncate">{s.lastMessage?.type==='image'?'[Image]':s.lastMessage?.content||''}</span>
+                  <span className="text-xs text-gray-500 truncate">{s.lastMessage?.type==='image'?'[图片]':s.lastMessage?.content||''}</span>
                   {s.unreadCount>0 && <span className="bg-red-500 text-white text-xs rounded-full px-1.5 py-0.5">{s.unreadCount}</span>}
                 </div>
               </div>
@@ -354,7 +354,7 @@ export default function Chat() {
           ))}
         </div>
         <div className="p-3 border-t">
-          <button onClick={() => { localStorage.clear(); router.push('/'); }} className="w-full bg-gray-200 hover:bg-gray-300 text-sm py-2 rounded">Logout</button>
+          <button onClick={() => { localStorage.clear(); router.push('/'); }} className="w-full bg-gray-200 hover:bg-gray-300 text-sm py-2 rounded">退出登录</button>
         </div>
       </div>
 
@@ -368,7 +368,7 @@ export default function Chat() {
               </div>
               <div>
                 <p className="font-bold">{selectedChat.type === 'group' ? selectedChat.data.name : selectedChat.data.username}</p>
-                {selectedChat.type === 'friend' && <p className="text-xs text-gray-500">{selectedChat.data.status === 'online' ? 'Online' : 'Offline'}</p>}
+                {selectedChat.type === 'friend' && <p className="text-xs text-gray-500">{selectedChat.data.status === 'online' ? '在线' : '离线'}</p>}
               </div>
             </div>
 
@@ -377,28 +377,28 @@ export default function Chat() {
                 const isMe = msg.senderId === userId || msg.sender?.id === userId;
                 if (msg.deleted) return (
                   <div key={msg.id || i} className="text-center text-gray-400 text-xs py-1">
-                    {isMe ? 'You' : (msg.sender?.username || 'Someone')} recalled a message
+                    {isMe ? '你' : (msg.sender?.username || '对方')}撤回了一条消息
                   </div>
                 );
                 return (
                   <div key={msg.id || i} className={`mb-4 flex ${isMe ? 'justify-end' : 'justify-start'}`}>
                     <div className={`flex items-end gap-2 max-w-[75%] ${isMe ? 'flex-row-reverse' : ''}`}>
                       <div className="w-8 h-8 bg-gray-400 rounded-full flex items-center justify-center text-white text-xs">
-                        {isMe ? 'Me' : (msg.sender?.username?.[0] || selectedChat.data?.username?.[0] || '?')}
+                        {isMe ? '我' : (msg.sender?.username?.[0] || selectedChat.data?.username?.[0] || '?')}
                       </div>
                       <div className="flex flex-col">
                         {msg.replyToId && (
                           <div className="text-xs text-gray-400 bg-gray-100 rounded px-2 py-1 mb-1 border-l-2 border-blue-300">
-                            Replying to: {msg.replyTo?.content?.substring(0,30) || 'message'}
+                            回复：{msg.replyTo?.content?.substring(0,30) || '消息'}
                           </div>
                         )}
                         <div className={`px-3 py-2 rounded-2xl text-sm ${isMe ? 'bg-blue-500 text-white rounded-br-md' : 'bg-white text-gray-800 rounded-bl-md shadow'}`}>
-                          {msg.type === 'image' ? <img src={msg.content} alt="sent" className="max-w-60 rounded" /> : msg.content}
+                          {msg.type === 'image' ? <img src={msg.content} alt="图片" className="max-w-60 rounded" /> : msg.content}
                         </div>
                         <div className={`flex items-center gap-1 mt-1 text-xs ${isMe ? 'justify-end' : 'justify-start'} text-gray-400`}>
                           {new Date(msg.createdAt).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' })}
-                          {isMe && <button onClick={() => recallMessage(msg)} className="text-red-400 hover:text-red-600 ml-1" title="Recall">↩</button>}
-                          <button onClick={() => setReplyingTo(msg)} className="text-gray-400 hover:text-gray-600 ml-1" title="Reply">↪</button>
+                          {isMe && <button onClick={() => recallMessage(msg)} className="text-red-400 hover:text-red-600 ml-1" title="撤回">↩</button>}
+                          <button onClick={() => setReplyingTo(msg)} className="text-gray-400 hover:text-gray-600 ml-1" title="回复">↪</button>
                         </div>
                       </div>
                     </div>
@@ -410,7 +410,7 @@ export default function Chat() {
 
             {replyingTo && (
               <div className="bg-gray-200 px-4 py-2 text-sm flex justify-between items-center">
-                <span>Replying to {replyingTo.sender?.username || 'message'}: {replyingTo.content?.substring(0, 50)}</span>
+                <span>回复 {replyingTo.sender?.username || '用户'}：{replyingTo.content?.substring(0, 50)}</span>
                 <button onClick={() => setReplyingTo(null)} className="text-red-500">✕</button>
               </div>
             )}
@@ -433,16 +433,16 @@ export default function Chat() {
                 value={input}
                 onChange={e => setInput(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && sendMessage()}
-                placeholder="Type a message..."
+                placeholder="输入消息..."
               />
-              <button onClick={sendMessage} className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-full text-sm">Send</button>
+              <button onClick={sendMessage} className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-full text-sm">发送</button>
             </div>
           </>
         ) : (
           <div className="flex-1 flex items-center justify-center text-gray-400">
             <div className="text-center">
               <div className="text-6xl mb-4">💬</div>
-              <p className="text-lg">Select a conversation</p>
+              <p className="text-lg">选择一个会话开始聊天</p>
             </div>
           </div>
         )}
