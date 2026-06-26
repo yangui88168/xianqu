@@ -1,7 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import bcrypt from 'bcryptjs
   import jwt from 'jsonwebtoken';
-import { prisma } from '@xianqu/db-schema';
+import { prisma } from '../../db';
 
 export async function authRoutes(fastify: FastifyInstance) {
   fastify.post('/register', async (request, reply) => {
