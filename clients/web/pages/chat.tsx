@@ -54,7 +54,6 @@ export default function Chat() {
   const messageCache = useRef<Map<string, any[]>>(new Map());
   const loadingChatRef = useRef<Set<string>>(new Set());
 
-  // Cloudinary Widget 引用
   const cloudinaryRef = useRef<any>();
   const widgetRef = useRef<any>();
 
@@ -99,7 +98,7 @@ export default function Chat() {
     }
   }, [userId, loadSessions, loadGroups, loadFriendRequests]);
 
-  // 初始化 Cloudinary Widget（使用您的实际参数）
+  // 初始化 Cloudinary Widget
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const script = document.createElement('script');
@@ -109,11 +108,11 @@ export default function Chat() {
       cloudinaryRef.current = (window as any).cloudinary;
       widgetRef.current = cloudinaryRef.current.createUploadWidget(
         {
-          cloudName: 'dmfjdnn4f',                // 您的 Cloud name
-          uploadPreset: 'xianqu_preset',         // 您的 upload preset
+          cloudName: 'dmfjdnn4f',
+          uploadPreset: 'xianqu_preset',
           maxFiles: 1,
           clientAllowedFormats: ['image', 'video'],
-          maxFileSize: 5000000, // 5MB
+          maxFileSize: 5000000,
         },
         (error: any, result: any) => {
           if (!error && result && result.event === 'success') {
@@ -286,7 +285,6 @@ export default function Chat() {
     });
   };
 
-  // 通过 Cloudinary URL 发送图片
   const sendMessageWithUrl = (url: string, type: string) => {
     if (!selectedChat || !ws) return;
     const payload: any = {
@@ -304,7 +302,6 @@ export default function Chat() {
     ws.send(JSON.stringify({ event: 'message:send', data: payload }));
   };
 
-  // 发送文字消息
   const sendMessage = () => {
     if (!input.trim() && !replyingTo) return;
     if (!selectedChat || !ws) return;
@@ -336,7 +333,6 @@ export default function Chat() {
     setReplyingTo(null);
   };
 
-  // 语音录制（保持 base64）
   const startRecording = async (clientY: number) => {
     recordStartY.current = clientY;
     setRecordingCancel(false);
