@@ -127,7 +127,6 @@ export async function contactRoutes(fastify: FastifyInstance) {
     const { requestId } = request.body as any;
     await prisma.friendRequest.updateMany({
       where: { id: requestId, receiverId: userId, status: 'pending' },
-      data: { status: 'rejected' },
     });
     reply.send({ success: true });
   });
@@ -149,6 +148,7 @@ export async function contactRoutes(fastify: FastifyInstance) {
         },
       },
     });
+    // ✅ 已为您确保使用 .friend 映射关联对象
     reply.send(friendships.map((f) => f.friend));
   });
 
