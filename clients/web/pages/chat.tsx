@@ -39,7 +39,10 @@ export default function Chat() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [mobileView, setMobileView] = useState<'sidebar' | 'chat'>('sidebar');
 
-  // 初始化用户
+  // 右键/长按菜单状态
+  const [contextMenu, setContextMenu] = useState<{ msg: any; x: number; y: number } | null>(null);
+  const longPressTimer = useRef<NodeJS.Timeout | null>(null);
+
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (!token) { router.push('/'); return; }
@@ -81,7 +84,6 @@ export default function Chat() {
     }
   }, [userId, loadSessions, loadGroups, loadFriendRequests]);
 
-  // WebSocket 连接、心跳、重连、信令
   useEffect(() => {
     if (!userId) return;
     let reconnectTimer: NodeJS.Timeout;
@@ -102,20 +104,23 @@ export default function Chat() {
             if (prev.find(m => m.id === newMsg.id)) return prev;
             return [...prev, newMsg];
           });
-          // 自动标记已读（如果当前选中该好友）
+          // 自动已读回执
           if (selectedChat?.type === 'friend' && selectedChat.data.id === newMsg.senderId) {
             fetch(`${API}/messages/read`, {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
-                Authorization: `Bearer ${localStorage.getItem('token')}`
+                Authorization: `Bearer ${token}`
               },
               body: JSON.stringify({ senderId: newMsg.senderId })
             });
+            ws?.send(JSON.stringify({ event: 'message:read', data: { messageId: newMsg.id, senderId: newMsg.senderId } }));
           }
           loadSessions();
         } else if (msg.event === 'message:delivered') {
           setMessages(prev => prev.map(m => m.id === msg.data.messageId ? { ...m, status: 'delivered' } : m));
+        } else if (msg.event === 'message:read') {
+          setMessages(prev => prev.map(m => m.id === msg.data.messageId ? { ...m, status: 'read' } : m));
         } else if (msg.event === 'call-offer') {
           setCallState({
             type: msg.data.type || 'audio',
@@ -139,7 +144,6 @@ export default function Chat() {
     };
   }, [userId, selectedChat?.data?.id, loadSessions]);
 
-  // 选择会话并加载历史、标记已读
   const selectChat = async (type: string, data: any) => {
     setSelectedChat({ type, data });
     setReplyingTo(null);
@@ -155,23 +159,17 @@ export default function Chat() {
       setMessages(msgs);
       if (msgs.length < PAGE_SIZE) setHasMore(false);
     }
-    // 标记私聊已读
     if (type === 'friend') {
       fetch(`${API}/messages/read`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ senderId: data.id })
       }).catch(() => {});
-      // 更新未读计数为0
       setSessions(prev => prev.map(s => s.friend.id === data.id ? { ...s, unreadCount: 0 } : s));
     }
     setMobileView('chat');
   };
 
-  // 加载更早消息
   const loadMoreMessages = async () => {
     if (!selectedChat || loadingMore || !hasMore) return;
     setLoadingMore(true);
@@ -195,7 +193,30 @@ export default function Chat() {
     }
   };
 
-  // 发送文字消息（含乐观更新会话）
+  const updateSession = (friendId: string, content: string, type: string) => {
+    setSessions(prev => {
+      const updated = prev.map(s => {
+        if (s.friend.id === friendId) {
+          return {
+            ...s,
+            lastMessage: {
+              id: `temp-${Date.now()}`,
+              content,
+              type,
+              createdAt: new Date().toISOString(),
+              senderId: userId,
+            },
+            unreadCount: 0,
+          };
+        }
+        return s;
+      });
+      const target = updated.find(s => s.friend.id === friendId);
+      if (target) return [target, ...updated.filter(s => s.friend.id !== friendId)];
+      return updated;
+    });
+  };
+
   const sendMessage = () => {
     if (!input.trim() && !replyingTo) return;
     if (!selectedChat || !ws) return;
@@ -206,22 +227,13 @@ export default function Chat() {
     };
     if (selectedChat.type === 'friend') {
       const tempId = `temp-${Date.now()}`;
-      const newMsg = {
-        id: tempId,
-        senderId: userId,
-        content: input,
-        type: 'text',
-        status: 'sent',
-        createdAt: new Date().toISOString(),
+      setMessages(prev => [...prev, {
+        id: tempId, senderId: userId, content: input, type: 'text',
+        status: 'sent', createdAt: new Date().toISOString(),
         replyToId: replyingTo?.id || null,
         replyTo: replyingTo ? { content: replyingTo.content, sender: replyingTo.sender } : null,
-      };
-      setMessages(prev => [...prev, newMsg]);
-      ws.send(JSON.stringify({
-        event: 'message:send',
-        data: { ...payload, receiverId: selectedChat.data.id }
-      }));
-      // 乐观更新会话
+      }]);
+      ws.send(JSON.stringify({ event: 'message:send', data: { ...payload, receiverId: selectedChat.data.id } }));
       updateSession(selectedChat.data.id, input, 'text');
     } else {
       fetch(`${API}/groups/message`, {
@@ -242,35 +254,6 @@ export default function Chat() {
     setReplyingTo(null);
   };
 
-  // 乐观更新会话列表
-  const updateSession = (friendId: string, content: string, type: string) => {
-    setSessions(prev => {
-      const updated = prev.map(s => {
-        if (s.friend.id === friendId) {
-          return {
-            ...s,
-            lastMessage: {
-              id: `temp-${Date.now()}`,
-              content,
-              type,
-              createdAt: new Date().toISOString(),
-              senderId: userId,
-            },
-            unreadCount: 0,
-          };
-        }
-        return s;
-      });
-      // 将会话移到最前面
-      const target = updated.find(s => s.friend.id === friendId);
-      if (target) {
-        return [target, ...updated.filter(s => s.friend.id !== friendId)];
-      }
-      return updated;
-    });
-  };
-
-  // 语音录制
   const startRecording = async (clientY: number) => {
     recordStartY.current = clientY;
     setRecordingCancel(false);
@@ -324,68 +307,66 @@ export default function Chat() {
     }
   };
 
-  // 图片发送（压缩后 base64）
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !selectedChat || !ws) return;
+
     const img = new Image();
     const reader = new FileReader();
     reader.onload = () => {
       img.src = reader.result as string;
       img.onload = () => {
         const canvas = document.createElement('canvas');
-        const maxWidth = 800;
-        let width = img.width;
-        let height = img.height;
+        const maxWidth = 1200;
+        let { width, height } = img;
         if (width > maxWidth) {
           height = (height * maxWidth) / width;
           width = maxWidth;
         }
         canvas.width = width;
         canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        ctx?.drawImage(img, 0, 0, width, height);
-        const compressedBase64 = canvas.toDataURL('image/jpeg', 0.7);
-        // 发送压缩后的图片
-        const tempId = `temp-${Date.now()}`;
-        setMessages(prev => [...prev, {
-          id: tempId, senderId: userId, content: compressedBase64, type: 'image',
-          status: 'sending', createdAt: new Date().toISOString(),
-        }]);
-        const payload: any = {
-          content: compressedBase64,
-          type: 'image',
-          replyToId: replyingTo?.id || null,
-        };
-        if (selectedChat.type === 'friend') {
-          payload.receiverId = selectedChat.data.id;
-          ws.send(JSON.stringify({ event: 'message:send', data: payload }));
-          updateSession(selectedChat.data.id, '[图片]', 'image');
-          // 替换临时消息的 id，避免后续重复
-          setMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: 'sent' } : m));
-        } else {
-          payload.groupId = selectedChat.data.id;
-          fetch(`${API}/groups/message`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}` },
-            body: JSON.stringify(payload)
-          }).then(async (res) => {
-            if (res.ok) {
-              const token = localStorage.getItem('token');
-              const fres = await fetch(`${API}/groups/${selectedChat.data.id}/messages?skip=0&take=${PAGE_SIZE}`, {
-                headers: { Authorization: `Bearer ${token}` }
-              });
-              if (fres.ok) setMessages(await fres.json());
-            }
+        const ctx = canvas.getContext('2d')!;
+        ctx.drawImage(img, 0, 0, width, height);
+        canvas.toBlob(async (blob) => {
+          if (!blob) return;
+          const compressedBase64 = await new Promise<string>((res) => {
+            const r = new FileReader();
+            r.onloadend = () => res(r.result as string);
+            r.readAsDataURL(blob);
           });
-        }
+          const tempId = `temp-${Date.now()}`;
+          setMessages(prev => [...prev, {
+            id: tempId, senderId: userId, content: compressedBase64, type: 'image',
+            status: 'sending', createdAt: new Date().toISOString(),
+          }]);
+          const payload: any = { content: compressedBase64, type: 'image', replyToId: replyingTo?.id || null };
+          if (selectedChat.type === 'friend') {
+            ws.send(JSON.stringify({ event: 'message:send', data: { ...payload, receiverId: selectedChat.data.id } }));
+            updateSession(selectedChat.data.id, '[图片]', 'image');
+            setMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: 'sent' } : m));
+          } else {
+            payload.groupId = selectedChat.data.id;
+            fetch(`${API}/groups/message`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}` },
+              body: JSON.stringify(payload)
+            }).then(async (res) => {
+              if (res.ok) {
+                const token = localStorage.getItem('token');
+                const fres = await fetch(`${API}/groups/${selectedChat.data.id}/messages?skip=0&take=${PAGE_SIZE}`, {
+                  headers: { Authorization: `Bearer ${token}` }
+                });
+                if (fres.ok) setMessages(await fres.json());
+              }
+            });
+          }
+        }, 'image/jpeg', 0.8);
       };
     };
     reader.readAsDataURL(file);
     e.target.value = '';
   };
 
-  // 撤回消息
   const recallMessage = async (msg: any) => {
     const token = localStorage.getItem('token');
     if (selectedChat?.type === 'friend') {
@@ -408,7 +389,27 @@ export default function Chat() {
     }
   };
 
-  // 搜索用户
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    alert('已复制');
+  };
+
+  // 右键/长按菜单处理
+  const handleContextMenu = (e: React.MouseEvent, msg: any) => {
+    e.preventDefault();
+    setContextMenu({ msg, x: e.clientX, y: e.clientY });
+  };
+
+  const handleTouchStart = (msg: any) => {
+    longPressTimer.current = setTimeout(() => {
+      setContextMenu({ msg, x: 0, y: 0 }); // 移动端使用固定位置或底部弹出
+    }, 500);
+  };
+
+  const handleTouchEnd = () => {
+    if (longPressTimer.current) clearTimeout(longPressTimer.current);
+  };
+
   const searchUsers = async () => {
     if (!searchQuery.trim()) return;
     const token = localStorage.getItem('token');
@@ -418,7 +419,6 @@ export default function Chat() {
     if (res.ok) setSearchResults(await res.json());
   };
 
-  // 好友请求
   const sendFriendRequest = async (receiverId: string) => {
     const token = localStorage.getItem('token');
     await fetch(`${API}/contacts/request`, {
@@ -470,7 +470,7 @@ export default function Chat() {
   const goBack = () => setMobileView('sidebar');
 
   return (
-    <div className="flex h-screen bg-gray-100 relative">
+    <div className="flex h-screen bg-gray-100 relative" onClick={() => setContextMenu(null)}>
       {/* 左侧栏 */}
       <div className={`${mobileView === 'sidebar' ? 'block' : 'hidden'} md:block md:w-80 w-full bg-white border-r flex flex-col absolute md:relative z-10 h-full`}>
         <div className="p-3 border-b">
@@ -568,7 +568,14 @@ export default function Chat() {
                   </div>
                 );
                 return (
-                  <div key={msg.id || i} className={`mb-4 flex ${isMe ? 'justify-end' : 'justify-start'}`}>
+                  <div
+                    key={msg.id || i}
+                    className={`mb-4 flex ${isMe ? 'justify-end' : 'justify-start'}`}
+                    onContextMenu={(e) => handleContextMenu(e, msg)}
+                    onTouchStart={() => handleTouchStart(msg)}
+                    onTouchEnd={handleTouchEnd}
+                    onTouchMove={handleTouchEnd}
+                  >
                     <div className={`flex items-end gap-2 max-w-[75%] ${isMe ? 'flex-row-reverse' : ''}`}>
                       <div className="w-8 h-8 bg-gray-400 rounded-full flex items-center justify-center text-white text-xs">
                         {isMe ? '我' : ((msg.sender?.nickname || msg.sender?.username || selectedChat.data?.nickname || selectedChat.data?.username)?.[0] || '?')}
@@ -636,7 +643,18 @@ export default function Chat() {
                         </div>
                       )}
                     </div>
-                    <input className="flex-1 p-2 border rounded-full focus:outline-none focus:ring-2 focus:ring-blue-300 text-sm" value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && sendMessage()} placeholder="输入消息..." />
+                    <input
+                      className="flex-1 p-2 border rounded-full focus:outline-none focus:ring-2 focus:ring-blue-300 text-sm"
+                      value={input}
+                      onChange={e => setInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault();
+                          sendMessage();
+                        }
+                      }}
+                      placeholder="输入消息..."
+                    />
                     <button onClick={sendMessage} className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-full text-sm">发送</button>
                   </>
                 ) : (
@@ -682,6 +700,21 @@ export default function Chat() {
               <button onClick={createGroup} className="px-3 py-1 bg-green-500 text-white rounded text-sm">创建</button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* 消息操作菜单 */}
+      {contextMenu && (
+        <div
+          className="fixed bg-white border rounded shadow-lg py-1 z-50"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+          onClick={() => setContextMenu(null)}
+        >
+          <button onClick={() => { copyToClipboard(contextMenu.msg.content); setContextMenu(null); }} className="block w-full text-left px-4 py-2 text-sm hover:bg-gray-100">复制</button>
+          <button onClick={() => { setReplyingTo(contextMenu.msg); setContextMenu(null); }} className="block w-full text-left px-4 py-2 text-sm hover:bg-gray-100">引用回复</button>
+          {contextMenu.msg.senderId === userId && (
+            <button onClick={() => { recallMessage(contextMenu.msg); setContextMenu(null); }} className="block w-full text-left px-4 py-2 text-sm hover:bg-gray-100 text-red-500">撤回</button>
+          )}
         </div>
       )}
 
