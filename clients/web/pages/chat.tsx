@@ -10,7 +10,7 @@ export default function Chat() {
   const [userId, setUserId] = useState('');
   const [sessions, setSessions] = useState<any[]>([]);
   const [groups, setGroups] = useState<any[]>([]);
-  const [selectedChat, setSelectedChat] = useState<any>(null); // { type: 'friend' | 'group', data: ... }
+  const [selectedChat, setSelectedChat] = useState<any>(null);
   const [messages, setMessages] = useState<any[]>([]);
   const [input, setInput] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
@@ -24,7 +24,6 @@ export default function Chat() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // 初始化
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (!token) { router.push('/'); return; }
@@ -34,7 +33,6 @@ export default function Chat() {
     } catch { router.push('/'); }
   }, []);
 
-  // 加载单聊会话
   const loadSessions = useCallback(async () => {
     const token = localStorage.getItem('token');
     const res = await fetch(`${API}/messages/sessions`, {
@@ -43,7 +41,6 @@ export default function Chat() {
     if (res.ok) setSessions(await res.json());
   }, []);
 
-  // 加载群列表
   const loadGroups = useCallback(async () => {
     const token = localStorage.getItem('token');
     const res = await fetch(`${API}/groups/list`, {
@@ -52,7 +49,6 @@ export default function Chat() {
     if (res.ok) setGroups(await res.json());
   }, []);
 
-  // 加载好友请求
   const loadFriendRequests = useCallback(async () => {
     const token = localStorage.getItem('token');
     const res = await fetch(`${API}/contacts/requests/incoming`, {
@@ -69,7 +65,6 @@ export default function Chat() {
     }
   }, [userId, loadSessions, loadGroups, loadFriendRequests]);
 
-  // WebSocket（仅用于单聊实时推送，群聊暂时用轮询或手动刷新）
   useEffect(() => {
     if (!userId) return;
     const token = localStorage.getItem('token');
@@ -88,29 +83,26 @@ export default function Chat() {
     return () => socket.close();
   }, [userId, selectedChat, loadSessions]);
 
-  // 选择会话
   const selectChat = async (type: string, data: any) => {
     setSelectedChat({ type, data });
     setReplyingTo(null);
     const token = localStorage.getItem('token');
-    let res;
     if (type === 'friend') {
-      res = await fetch(`${API}/messages/history/${data.id}`, {
+      const res = await fetch(`${API}/messages/history/${data.id}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
+      if (res.ok) setMessages(await res.json());
     } else {
-      res = await fetch(`${API}/groups/${data.id}/messages`, {
+      const res = await fetch(`${API}/groups/${data.id}/messages`, {
         headers: { Authorization: `Bearer ${token}` }
       });
+      if (res.ok) setMessages(await res.json());
     }
-    if (res.ok) setMessages(await res.json());
   };
 
-  // 发送消息
   const sendMessage = () => {
     if (!input.trim() && !replyingTo) return;
     if (!selectedChat) return;
-
     const payload: any = {
       content: input,
       type: 'text',
@@ -133,7 +125,6 @@ export default function Chat() {
         body: JSON.stringify({ ...payload, groupId: selectedChat.data.id })
       }).then(async (res) => {
         if (res.ok) {
-          // 刷新群消息
           const token = localStorage.getItem('token');
           const fres = await fetch(`${API}/groups/${selectedChat.data.id}/messages`, {
             headers: { Authorization: `Bearer ${token}` }
@@ -146,7 +137,6 @@ export default function Chat() {
     setReplyingTo(null);
   };
 
-  // 图片发送
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !selectedChat) return;
@@ -186,7 +176,6 @@ export default function Chat() {
     e.target.value = '';
   };
 
-  // 撤回消息
   const recallMessage = async (msg: any) => {
     const token = localStorage.getItem('token');
     if (selectedChat?.type === 'friend') {
@@ -195,7 +184,6 @@ export default function Chat() {
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ messageId: msg.id })
       });
-      // 刷新消息
       selectChat('friend', selectedChat.data);
     } else {
       await fetch(`${API}/groups/message/recall`, {
@@ -210,7 +198,6 @@ export default function Chat() {
     }
   };
 
-  // 搜索用户
   const searchUsers = async () => {
     if (!searchQuery.trim()) return;
     const token = localStorage.getItem('token');
@@ -220,7 +207,6 @@ export default function Chat() {
     if (res.ok) setSearchResults(await res.json());
   };
 
-  // 发送好友请求
   const sendFriendRequest = async (receiverId: string) => {
     const token = localStorage.getItem('token');
     await fetch(`${API}/contacts/request`, {
@@ -252,7 +238,6 @@ export default function Chat() {
     loadFriendRequests();
   };
 
-  // 创建群聊
   const createGroup = async () => {
     if (!newGroupName.trim()) return;
     const token = localStorage.getItem('token');
@@ -268,21 +253,11 @@ export default function Chat() {
     }
   };
 
-  const joinGroup = async (groupId: string) => {
-    const token = localStorage.getItem('token');
-    await fetch(`${API}/groups/join`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ groupId })
-    });
-    loadGroups();
-  };
-
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
   return (
     <div className="flex h-screen bg-gray-100">
-      {/* 左侧 */}
+      {/* 左侧栏 */}
       <div className="w-80 bg-white border-r flex flex-col">
         <div className="p-3 border-b">
           <div className="flex gap-2 mb-2">
@@ -345,7 +320,6 @@ export default function Chat() {
           </div>
         )}
 
-        {/* 会话列表：群聊 + 单聊混合 */}
         <div className="flex-1 overflow-y-auto">
           <div className="p-2 bg-gray-100 text-sm font-bold">Groups</div>
           {groups.map(g => (
@@ -423,9 +397,7 @@ export default function Chat() {
                         </div>
                         <div className={`flex items-center gap-1 mt-1 text-xs ${isMe ? 'justify-end' : 'justify-start'} text-gray-400`}>
                           {new Date(msg.createdAt).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' })}
-                          {isMe && (
-                            <button onClick={() => recallMessage(msg)} className="text-red-400 hover:text-red-600 ml-1" title="Recall">↩</button>
-                          )}
+                          {isMe && <button onClick={() => recallMessage(msg)} className="text-red-400 hover:text-red-600 ml-1" title="Recall">↩</button>}
                           <button onClick={() => setReplyingTo(msg)} className="text-gray-400 hover:text-gray-600 ml-1" title="Reply">↪</button>
                         </div>
                       </div>
