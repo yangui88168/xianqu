@@ -101,28 +101,19 @@ export default function CallModal({
 
         const pc = new RTCPeerConnection({
           iceServers: [
+            // Google 免费 STUN（帮助尝试 P2P 直连）
+            { urls: 'stun:stun.l.google.com:19302' },
+            // Metered 公共免费 TURN（50 GB/月）
             {
-              urls: "stun:stun.relay.metered.ca:80",
+              urls: 'turn:openrelay.metered.ca:443',
+              username: 'openrelayproject',
+              credential: 'openrelayproject',
             },
+            // 你专属的 Metered TURN（500 MB/月，更稳定）
             {
-              urls: "turn:global.relay.metered.ca:80",
-              username: "680a360a85d7aad8037a5be4",
-              credential: "Uz8+sEjedvuGre/9",
-            },
-            {
-              urls: "turn:global.relay.metered.ca:80?transport=tcp",
-              username: "680a360a85d7aad8037a5be4",
-              credential: "Uz8+sEjedvuGre/9",
-            },
-            {
-              urls: "turn:global.relay.metered.ca:443",
-              username: "680a360a85d7aad8037a5be4",
-              credential: "Uz8+sEjedvuGre/9",
-            },
-            {
-              urls: "turns:global.relay.metered.ca:443?transport=tcp",
-              username: "680a360a85d7aad8037a5be4",
-              credential: "Uz8+sEjedvuGre/9",
+              urls: 'turn:global.relay.metered.ca:443',
+              username: '680a360a85d7aad8037a5be4',
+              credential: 'Uz8+sEjedvuGre/9',
             },
           ],
         });
