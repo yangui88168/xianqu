@@ -1,7 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import jwt from 'jsonwebtoken';
 import { prisma } from '../../db';
-import { WsEvent } from '../../shared-types'; // ✅ 已为您精准修正导入路径
+import { WsEvent } from '../../shared-types';
 import { onlineUsers } from '../../websocket';
 
 function authMiddleware(request: any, reply: any, done: any) {
@@ -44,10 +44,12 @@ export async function messageRoutes(fastify: FastifyInstance) {
     reply.send(msg);
   });
 
-  // 获取与某用户的聊天历史
+  // ✅ 已为您修改：获取与某用户的聊天历史（集成分页加载机制）
   fastify.get('/history/:userId', { preHandler: authMiddleware }, async (request, reply) => {
     const currentUserId = (request as any).userId;
     const otherUserId = (request.params as any).userId;
+    const skip = parseInt((request.query as any).skip || '0', 10);
+    const take = Math.min(parseInt((request.query as any).take || '50', 10), 50);
 
     const messages = await prisma.message.findMany({
       where: {
@@ -56,10 +58,13 @@ export async function messageRoutes(fastify: FastifyInstance) {
           { senderId: otherUserId, receiverId: currentUserId },
         ],
       },
-      orderBy: { createdAt: 'asc' },
-      take: 50,
+      orderBy: { createdAt: 'desc' }, // 先倒序取最新，再反转
+      skip,
+      take,
     });
-    reply.send(messages);
+
+    // 反转顺序为升序，符合显示习惯
+    reply.send(messages.reverse());
   });
 
   // 标记消息为已读
