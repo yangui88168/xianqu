@@ -17,9 +17,15 @@ model User {
   status           String    @default("offline")
   createdAt        DateTime  @default(now())
 
-  // ⬇️ 新增：与 Message 的关系字段，名字必须与 Message 中的 name 一致
+  // 与 Message 的关系字段（保持原样）
   sentMessages     Message[] @relation("SentMessages")
   receivedMessages Message[] @relation("ReceivedMessages")
+
+  // ✅ 已为您合并补齐的好友系统反向关系字段
+  sentRequests     FriendRequest[]  @relation("SentRequests")
+  receivedRequests FriendRequest[]  @relation("ReceivedRequests")
+  friendships      Friendship[]     @relation("UserFriendships")
+  friendOf         Friendship[]     @relation("FriendRelation")
 }
 
 model Message {
@@ -42,4 +48,27 @@ model OfflineQueue {
   userId    String
   messageId String
   message   Message @relation(fields: [messageId], references: [id])
+}
+
+model Friendship {
+  id        String   @id @default(cuid())
+  userId    String
+  friendId  String
+  createdAt DateTime @default(now())
+  user      User     @relation("UserFriendships", fields: [userId], references: [id])
+  friend    User     @relation("FriendRelation", fields: [friendId], references: [id])
+  
+  @@unique([userId, friendId])
+}
+
+model FriendRequest {
+  id         String   @id @default(cuid())
+  senderId   String
+  receiverId String
+  status     String   @default("pending")
+  createdAt  DateTime @default(now())
+  sender     User     @relation("SentRequests", fields: [senderId], references: [id])
+  receiver   User     @relation("ReceivedRequests", fields: [receiverId], references: [id])
+  
+  @@unique([senderId, receiverId])
 }
