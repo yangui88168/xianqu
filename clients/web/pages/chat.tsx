@@ -24,12 +24,12 @@ export default function Chat() {
   const [newGroupName, setNewGroupName] = useState('');
 
   // 录音相关
-  const [inputMode, setInputMode] = useState<'text' | 'voice'>('text');   // 文字/语音切换
+  const [inputMode, setInputMode] = useState<'text' | 'voice'>('text');
   const [isRecording, setIsRecording] = useState(false);
-  const [recordingCancel, setRecordingCancel] = useState(false);          // 是否进入取消状态
+  const [recordingCancel, setRecordingCancel] = useState(false);
   const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
-  const recordStartY = useRef<number>(0);                                // 记录按下时的Y坐标，用于判断上滑
+  const recordStartY = useRef<number>(0);
 
   const [callState, setCallState] = useState<{ type: 'audio' | 'video'; friendId: string; friendName: string; incoming?: boolean; offerSdp?: any } | null>(null);
   const [hasMore, setHasMore] = useState(true);
@@ -41,7 +41,6 @@ export default function Chat() {
 
   const [mobileView, setMobileView] = useState<'sidebar' | 'chat'>('sidebar');
 
-  // 初始化用户ID
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (!token) { router.push('/'); return; }
@@ -83,7 +82,6 @@ export default function Chat() {
     }
   }, [userId, loadSessions, loadGroups, loadFriendRequests]);
 
-  // WebSocket 连接 + 心跳 + 重连 + 信令
   useEffect(() => {
     if (!userId) return;
     let reconnectTimer: NodeJS.Timeout;
@@ -101,10 +99,13 @@ export default function Chat() {
         const msg = JSON.parse(event.data);
         if (msg.event === 'message:receive') {
           const newMsg = msg.data;
+          setMessages(prev => {
+            if (prev.find(m => m.id === newMsg.id)) return prev;
+            return [...prev, newMsg];
+          });
           if (selectedChat?.type === 'friend' && selectedChat.data.id === newMsg.senderId) {
-            setMessages(prev => [...prev, newMsg]);
+            loadSessions();
           }
-          loadSessions();
         } else if (msg.event === 'message:delivered') {
           setMessages(prev => prev.map(m => m.id === msg.data.messageId ? { ...m, status: 'delivered' } : m));
         } else if (msg.event === 'call-offer') {
@@ -130,7 +131,6 @@ export default function Chat() {
     };
   }, [userId, selectedChat?.data?.id]);
 
-  // 选择会话
   const selectChat = async (type: string, data: any) => {
     setSelectedChat({ type, data });
     setReplyingTo(null);
@@ -179,7 +179,6 @@ export default function Chat() {
     }
   };
 
-  // 发送文字消息
   const sendMessage = () => {
     if (!input.trim() && !replyingTo) return;
     if (!selectedChat || !ws) return;
@@ -215,7 +214,6 @@ export default function Chat() {
     setReplyingTo(null);
   };
 
-  // 语音录制核心逻辑
   const startRecording = async (clientY: number) => {
     recordStartY.current = clientY;
     setRecordingCancel(false);
@@ -227,7 +225,6 @@ export default function Chat() {
         audioChunksRef.current.push(e.data);
       };
       recorder.onstop = () => {
-        // 只有在非取消状态下才发送
         if (recordingCancel) return;
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
         const reader = new FileReader();
@@ -280,7 +277,6 @@ export default function Chat() {
     }
   };
 
-  // 鼠标/触摸事件处理
   const handleRecordStart = (e: React.MouseEvent | React.TouchEvent) => {
     e.preventDefault();
     const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
@@ -290,7 +286,6 @@ export default function Chat() {
   const handleRecordMove = (e: React.MouseEvent | React.TouchEvent) => {
     if (!isRecording) return;
     const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
-    // 上滑超过50px视为取消
     setRecordingCancel(recordStartY.current - clientY > 50);
   };
 
@@ -299,30 +294,41 @@ export default function Chat() {
     stopRecording();
   };
 
-  // 图片发送
+  // 修复图片上传发送
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !selectedChat || !ws) return;
     const reader = new FileReader();
     reader.onload = () => {
+      const content = reader.result as string;
       const payload: any = {
-        content: reader.result as string,
+        content: content,
         type: 'image',
         replyToId: replyingTo?.id || null,
       };
+
       if (selectedChat.type === 'friend') {
-        ws.send(JSON.stringify({
-          event: 'message:send',
-          data: { ...payload, receiverId: selectedChat.data.id }
-        }));
+        payload.receiverId = selectedChat.data.id;
+        ws.send(JSON.stringify({ event: 'message:send', data: payload }));
+        // 本地立即显示
+        const tempMsg = {
+          id: Date.now().toString(),
+          senderId: userId,
+          content: content,
+          type: 'image',
+          status: 'sent',
+          createdAt: new Date().toISOString(),
+        };
+        setMessages(prev => [...prev, tempMsg]);
       } else {
+        payload.groupId = selectedChat.data.id;
         fetch(`${API}/groups/message`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${localStorage.getItem('token')}`
           },
-          body: JSON.stringify({ ...payload, groupId: selectedChat.data.id })
+          body: JSON.stringify(payload)
         }).then(async (res) => {
           if (res.ok) {
             const token = localStorage.getItem('token');
@@ -338,7 +344,6 @@ export default function Chat() {
     e.target.value = '';
   };
 
-  // 撤回消息
   const recallMessage = async (msg: any) => {
     const token = localStorage.getItem('token');
     if (selectedChat?.type === 'friend') {
@@ -574,10 +579,8 @@ export default function Chat() {
               </div>
             )}
 
-            {/* 输入区域 */}
             <div className="p-3 bg-white border-t">
               <div className="flex items-center gap-2">
-                {/* 输入方式切换按钮 */}
                 <button
                   onClick={() => setInputMode(inputMode === 'text' ? 'voice' : 'text')}
                   className="text-gray-400 hover:text-gray-600 p-2"
