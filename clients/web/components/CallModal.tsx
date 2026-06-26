@@ -25,6 +25,7 @@ export default function CallModal({
 
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
+  const remoteAudioRef = useRef<HTMLAudioElement>(null);   // 音频模式专用
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const durationRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -65,28 +66,24 @@ export default function CallModal({
   }, [facingMode, localStream]);
 
   const toggleMute = () => {
-    localStream?.getAudioTracks().forEach((t) => (t.enabled = isMuted));
+    localStream?.getAudioTracks().forEach((t) => (t.enabled = !isMuted));
     setIsMuted(!isMuted);
   };
 
   const toggleCamera = () => {
-    localStream?.getVideoTracks().forEach((t) => (t.enabled = isCameraOff));
+    localStream?.getVideoTracks().forEach((t) => (t.enabled = !isCameraOff));
     setIsCameraOff(!isCameraOff);
   };
 
-  const toggleSpeaker = () => {
-    setIsSpeakerOn(!isSpeakerOn);
-  };
+  const toggleSpeaker = () => setIsSpeakerOn(!isSpeakerOn);
 
   // 信令处理
   const handleSignal = useCallback(
     (e: MessageEvent) => {
       const msg = JSON.parse(e.data);
       if (msg.event === 'call-answer' && msg.data.from === friendId) {
-        console.log('收到 answer', msg.data.sdp);
         pcRef.current?.setRemoteDescription(new RTCSessionDescription(msg.data.sdp));
       } else if (msg.event === 'ice-candidate' && msg.data.from === friendId) {
-        console.log('收到 ICE candidate', msg.data.candidate);
         pcRef.current?.addIceCandidate(new RTCIceCandidate(msg.data.candidate));
       } else if (msg.event === 'call-hangup' && msg.data.from === friendId) {
         hangup();
@@ -117,10 +114,15 @@ export default function CallModal({
           const [remote] = event.streams;
           if (remote) {
             setRemoteStream(remote);
-            if (remoteVideoRef.current) {
+            // 视频模式：设置 video 元素
+            if (type === 'video' && remoteVideoRef.current) {
               remoteVideoRef.current.srcObject = remote;
-              // 强制播放（移动端需要用户交互后播放，但这里已经通过 ontrack 自动触发）
               remoteVideoRef.current.play().catch(console.error);
+            }
+            // 音频模式：设置隐藏的 audio 元素（或 video，但用 audio 更合适）
+            if (type === 'audio' && remoteAudioRef.current) {
+              remoteAudioRef.current.srcObject = remote;
+              remoteAudioRef.current.play().catch(console.error);
             }
             setCallStatus('connected');
             if (!durationRef.current) {
@@ -143,7 +145,6 @@ export default function CallModal({
         ws.addEventListener('message', handleSignal);
 
         if (incoming && offerSdp) {
-          console.log('被叫方设置远程 offer');
           await pc.setRemoteDescription(new RTCSessionDescription(offerSdp));
           const answer = await pc.createAnswer();
           await pc.setLocalDescription(answer);
@@ -154,7 +155,6 @@ export default function CallModal({
             })
           );
         } else {
-          console.log('主叫方创建 offer');
           const offer = await pc.createOffer();
           await pc.setLocalDescription(offer);
           ws.send(
@@ -193,7 +193,7 @@ export default function CallModal({
       <div className="relative flex flex-col items-center w-full max-w-sm mx-auto h-full max-h-screen py-4">
         {/* 远程视频或头像占位 */}
         <div className="relative w-full aspect-video bg-gray-900 rounded-2xl overflow-hidden mb-4 flex items-center justify-center">
-          {remoteStream && type === 'video' ? (
+          {type === 'video' ? (
             <video
               ref={remoteVideoRef}
               autoPlay
@@ -201,12 +201,14 @@ export default function CallModal({
               className="w-full h-full object-cover"
             />
           ) : (
-            <div className="flex flex-col items-center justify-center h-full text-white">
-              <div className="text-6xl mb-2">
-                {type === 'video' ? '📷' : '🎤'}
+            <>
+              {/* 音频模式：隐藏的音频元素 */}
+              <audio ref={remoteAudioRef} autoPlay className="hidden" />
+              <div className="flex flex-col items-center justify-center h-full text-white">
+                <div className="text-6xl mb-2">🎤</div>
+                <p className="text-lg font-medium">{friendName}</p>
               </div>
-              <p className="text-lg font-medium">{friendName}</p>
-            </div>
+            </>
           )}
           {/* 自己的小窗（视频通话时） */}
           {type === 'video' && localStream && (
