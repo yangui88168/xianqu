@@ -123,6 +123,15 @@ export default function Chat() {
           setMessages(prev => prev.map(m => m.id === msg.data.messageId ? { ...m, status: 'delivered' } : m));
         } else if (msg.event === 'message:read') {
           setMessages(prev => prev.map(m => m.id === msg.data.messageId ? { ...m, status: 'read' } : m));
+        } else if (msg.event === 'group-message:receive') {
+          // 群聊消息实时推送
+          const newMsg = msg.data;
+          setMessages(prev => {
+            if (prev.find(m => m.id === newMsg.id)) return prev;
+            return [...prev, newMsg];
+          });
+          // 更新群聊列表（显示最后消息预览）
+          loadGroups();
         } else if (msg.event === 'call-offer') {
           setCallState({
             type: msg.data.type || 'audio',
@@ -219,15 +228,21 @@ export default function Chat() {
     });
   };
 
+  // ========== 核心修改：发送消息（群聊改用 WebSocket） ==========
   const sendMessage = () => {
     if (!input.trim() && !replyingTo) return;
     if (!selectedChat || !ws) return;
+
     const payload: any = {
       content: input,
       type: 'text',
       replyToId: replyingTo?.id || null,
+      chatType: selectedChat.type, // 新增字段，告知后端是群聊还是私聊
     };
+
     if (selectedChat.type === 'friend') {
+      payload.receiverId = selectedChat.data.id;
+      // 私聊乐观更新
       const tempId = `temp-${Date.now()}`;
       setMessages(prev => [...prev, {
         id: tempId, senderId: userId, content: input, type: 'text',
@@ -235,27 +250,18 @@ export default function Chat() {
         replyToId: replyingTo?.id || null,
         replyTo: replyingTo ? { content: replyingTo.content, sender: replyingTo.sender } : null,
       }]);
-      ws.send(JSON.stringify({ event: 'message:send', data: { ...payload, receiverId: selectedChat.data.id } }));
       updateSession(selectedChat.data.id, input, 'text');
     } else {
-      fetch(`${API}/groups/message`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}` },
-        body: JSON.stringify({ ...payload, groupId: selectedChat.data.id })
-      }).then(async (res) => {
-        if (res.ok) {
-          const token = localStorage.getItem('token');
-          const fres = await fetch(`${API}/groups/${selectedChat.data.id}/messages?skip=0&take=${PAGE_SIZE}`, {
-            headers: { Authorization: `Bearer ${token}` }
-          });
-          if (fres.ok) setMessages(await fres.json());
-        }
-      });
+      payload.groupId = selectedChat.data.id;
+      // 群聊不需要本地临时消息，广播后自己也会收到
     }
+
+    ws.send(JSON.stringify({ event: 'message:send', data: payload }));
     setInput('');
     setReplyingTo(null);
   };
 
+  // 语音录制（群聊同样改为 WebSocket）
   const startRecording = async (clientY: number) => {
     recordStartY.current = clientY;
     setRecordingCancel(false);
@@ -270,27 +276,19 @@ export default function Chat() {
         const reader = new FileReader();
         reader.onload = () => {
           if (ws && selectedChat) {
-            const msgData: any = { content: reader.result, type: 'voice', replyToId: replyingTo?.id || null };
+            const msgData: any = {
+              content: reader.result,
+              type: 'voice',
+              replyToId: replyingTo?.id || null,
+              chatType: selectedChat.type,
+            };
             if (selectedChat.type === 'friend') {
               msgData.receiverId = selectedChat.data.id;
-              ws.send(JSON.stringify({ event: 'message:send', data: msgData }));
               updateSession(selectedChat.data.id, '[语音]', 'voice');
             } else {
               msgData.groupId = selectedChat.data.id;
-              fetch(`${API}/groups/message`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}` },
-                body: JSON.stringify(msgData)
-              }).then(async (res) => {
-                if (res.ok) {
-                  const token = localStorage.getItem('token');
-                  const fres = await fetch(`${API}/groups/${selectedChat.data.id}/messages?skip=0&take=${PAGE_SIZE}`, {
-                    headers: { Authorization: `Bearer ${token}` }
-                  });
-                  if (fres.ok) setMessages(await fres.json());
-                }
-              });
             }
+            ws.send(JSON.stringify({ event: 'message:send', data: msgData }));
           }
         };
         reader.readAsDataURL(audioBlob);
@@ -309,6 +307,7 @@ export default function Chat() {
     }
   };
 
+  // 图片发送（群聊改用 WebSocket）
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !selectedChat || !ws) return;
@@ -336,31 +335,28 @@ export default function Chat() {
             r.onloadend = () => res(r.result as string);
             r.readAsDataURL(blob);
           });
-          const tempId = `temp-${Date.now()}`;
-          setMessages(prev => [...prev, {
-            id: tempId, senderId: userId, content: compressedBase64, type: 'image',
-            status: 'sending', createdAt: new Date().toISOString(),
-          }]);
-          const payload: any = { content: compressedBase64, type: 'image', replyToId: replyingTo?.id || null };
+
+          const payload: any = {
+            content: compressedBase64,
+            type: 'image',
+            replyToId: replyingTo?.id || null,
+            chatType: selectedChat.type,
+          };
+
           if (selectedChat.type === 'friend') {
-            ws.send(JSON.stringify({ event: 'message:send', data: { ...payload, receiverId: selectedChat.data.id } }));
+            payload.receiverId = selectedChat.data.id;
+            // 临时消息
+            const tempId = `temp-${Date.now()}`;
+            setMessages(prev => [...prev, {
+              id: tempId, senderId: userId, content: compressedBase64, type: 'image',
+              status: 'sending', createdAt: new Date().toISOString(),
+            }]);
+            ws.send(JSON.stringify({ event: 'message:send', data: payload }));
             updateSession(selectedChat.data.id, '[图片]', 'image');
             setMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: 'sent' } : m));
           } else {
             payload.groupId = selectedChat.data.id;
-            fetch(`${API}/groups/message`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}` },
-              body: JSON.stringify(payload)
-            }).then(async (res) => {
-              if (res.ok) {
-                const token = localStorage.getItem('token');
-                const fres = await fetch(`${API}/groups/${selectedChat.data.id}/messages?skip=0&take=${PAGE_SIZE}`, {
-                  headers: { Authorization: `Bearer ${token}` }
-                });
-                if (fres.ok) setMessages(await fres.json());
-              }
-            });
+            ws.send(JSON.stringify({ event: 'message:send', data: payload }));
           }
         }, 'image/jpeg', 0.8);
       };
@@ -411,7 +407,6 @@ export default function Chat() {
     if (longPressTimer.current) clearTimeout(longPressTimer.current);
   };
 
-  // 群信息相关函数
   const loadGroupInfo = async () => {
     if (!selectedChat || selectedChat.type !== 'group') return;
     const token = localStorage.getItem('token');
