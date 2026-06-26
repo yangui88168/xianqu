@@ -329,7 +329,7 @@ export default function Chat() {
     }
   };
 
-  // 搜索、好友请求等函数（保留原有逻辑，略作整合）
+  // 搜索、好友请求等函数
   const searchUsers = async () => {
     if (!searchQuery.trim()) return;
     const token = localStorage.getItem('token');
