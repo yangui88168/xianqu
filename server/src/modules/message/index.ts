@@ -16,10 +16,10 @@ function authMiddleware(request: any, reply: any, done: any) {
 
 export async function messageRoutes(fastify: FastifyInstance) {
   fastify.post('/send', { preHandler: authMiddleware }, async (request, reply) => {
-    const { receiverId, content, type = 'text' } = request.body as any;
+    const { receiverId, content, type = 'text', replyToId } = request.body as any;
     const senderId = (request as any).userId;
 
-    const msg = await prisma.message.create({ data: { senderId, receiverId, content, type } });
+    const msg = await prisma.message.create({ data: { senderId, receiverId, content, type, replyToId } });
 
     const receiverWs = onlineUsers.get(receiverId);
     if (receiverWs) {
@@ -113,5 +113,19 @@ export async function messageRoutes(fastify: FastifyInstance) {
     });
     
     reply.send(sessions);
+  });
+
+  // 撤回私聊消息
+  fastify.put('/recall', { preHandler: authMiddleware }, async (request, reply) => {
+    const userId = (request as any).userId;
+    const { messageId } = request.body as any;
+    const msg = await prisma.message.findUnique({ where: { id: messageId } });
+    if (!msg) return reply.status(404).send({ error: 'Not found' });
+    if (msg.senderId !== userId) return reply.status(403).send({ error: 'Permission denied' });
+    await prisma.message.update({
+      where: { id: messageId },
+      data: { deleted: true, updatedAt: new Date() }
+    });
+    reply.send({ success: true });
   });
 }
