@@ -13,6 +13,7 @@ model User {
   email            String    @unique
   username         String    @unique
   password         String
+  nickname         String?   // ✅ 已为您精准补充的昵称字段
   avatar           String?
   status           String    @default("offline")
   createdAt        DateTime  @default(now())
@@ -40,10 +41,10 @@ model Message {
   senderId    String
   receiverId  String
   status      String   @default("sent")
-  replyToId   String?                     // ✅ 已为您精准补齐
-  deleted     Boolean  @default(false)     // ✅ 已为您精准补齐
+  replyToId   String?                     
+  deleted     Boolean  @default(false)     
   readAt      DateTime?                   
-  updatedAt   DateTime?                   // ✅ 已为您精准补齐
+  updatedAt   DateTime?                   
   createdAt   DateTime @default(now())
 
   sender      User     @relation("SentMessages", fields: [senderId], references: [id])
