@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useRouter } from 'next/router';
 
-// 硬编码后端地址（解决环境变量读取失败的问题）
 const API = 'https://xianqu-server.onrender.com';
 
 export default function Home() {
@@ -17,7 +16,6 @@ export default function Home() {
     setErrorMsg('');
     setLoading(true);
 
-    // 构造请求地址和参数
     const url = isLogin ? `${API}/auth/login` : `${API}/auth/register`;
     const body = isLogin
       ? { email, password }
@@ -36,7 +34,6 @@ export default function Home() {
           localStorage.setItem('token', data.token);
           router.push('/chat');
         } else {
-          // 注册成功（没有 token）则切换到登录
           alert('Registration successful! Please login.');
           setIsLogin(true);
         }
@@ -52,13 +49,14 @@ export default function Home() {
     }
   };
 
-  // 仅登录时使用邮箱+密码，注册时额外需要用户名
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gray-100">
-      <div className="bg-white p-8 rounded shadow-md w-80">
-        <h1 className="text-2xl font-bold mb-4">
-          {isLogin ? 'Login to XianQu' : 'Register'}
-        </h1>
+    <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+      <div className="bg-white p-8 rounded-2xl shadow-xl w-80">
+        {/* 闲趣标题 */}
+        <div className="text-center mb-6">
+          <h1 className="text-3xl font-bold text-indigo-600">《闲趣》</h1>
+          <p className="text-gray-400 text-sm mt-1">XianQu Messenger</p>
+        </div>
 
         {errorMsg && (
           <div className="bg-red-100 border border-red-400 text-red-700 px-3 py-2 rounded mb-3 text-sm">
@@ -68,48 +66,48 @@ export default function Home() {
 
         {!isLogin && (
           <input
-            className="w-full p-2 mb-2 border rounded"
-            placeholder="Username"
+            className="w-full p-2 mb-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-300 text-sm"
+            placeholder="用户名"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
           />
         )}
 
         <input
-          className="w-full p-2 mb-2 border rounded"
-          placeholder="Email"
+          className="w-full p-2 mb-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-300 text-sm"
+          placeholder="账户（邮箱）"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
         />
 
         <input
-          className="w-full p-2 mb-4 border rounded"
+          className="w-full p-2 mb-4 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-300 text-sm"
           type="password"
-          placeholder="Password"
+          placeholder="密码"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
         />
 
         <button
-          className={`w-full text-white p-2 rounded ${
-            loading ? 'bg-gray-400' : 'bg-blue-500 hover:bg-blue-600'
+          className={`w-full text-white py-2 rounded-lg transition ${
+            loading ? 'bg-gray-400' : 'bg-indigo-500 hover:bg-indigo-600'
           }`}
           onClick={handleSubmit}
           disabled={loading}
         >
-          {loading ? 'Processing...' : isLogin ? 'Login' : 'Register'}
+          {loading ? '处理中...' : isLogin ? '登录' : '注册'}
         </button>
 
-        <p className="mt-2 text-center text-sm text-gray-600">
-          {isLogin ? "Don't have an account? " : 'Already have an account? '}
+        <p className="mt-3 text-center text-sm text-gray-500">
+          {isLogin ? '还没有账号？' : '已有账号？'}
           <button
-            className="text-blue-500 underline"
+            className="text-indigo-500 underline ml-1"
             onClick={() => {
               setIsLogin(!isLogin);
               setErrorMsg('');
             }}
           >
-            {isLogin ? 'Register' : 'Login'}
+            {isLogin ? '去注册' : '去登录'}
           </button>
         </p>
       </div>
