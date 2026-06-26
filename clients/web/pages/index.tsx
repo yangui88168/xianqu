@@ -4,9 +4,9 @@ import { useRouter } from 'next/router';
 const API = 'https://xianqu-server.onrender.com';
 
 export default function Home() {
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');     // 账号
   const [password, setPassword] = useState('');
-  const [username, setUsername] = useState('');
+  const [nickname, setNickname] = useState('');     // 昵称（仅注册时）
   const [isLogin, setIsLogin] = useState(true);
   const [errorMsg, setErrorMsg] = useState('');
   const [loading, setLoading] = useState(false);
@@ -18,8 +18,8 @@ export default function Home() {
 
     const url = isLogin ? `${API}/auth/login` : `${API}/auth/register`;
     const body = isLogin
-      ? { email, password }
-      : { email, username, password };
+      ? { username, password }
+      : { username, password, nickname };
 
     try {
       const res = await fetch(url, {
@@ -34,15 +34,16 @@ export default function Home() {
           localStorage.setItem('token', data.token);
           router.push('/chat');
         } else {
-          alert('Registration successful! Please login.');
+          // 注册成功，切换到登录
+          alert('注册成功！请登录');
           setIsLogin(true);
         }
       } else {
         const err = await res.json();
-        setErrorMsg(err.error || 'Request failed');
+        setErrorMsg(err.error || '请求失败');
       }
     } catch (e: any) {
-      setErrorMsg('Network error: could not connect to server');
+      setErrorMsg('网络错误，无法连接服务器');
       console.error(e);
     } finally {
       setLoading(false);
@@ -52,7 +53,6 @@ export default function Home() {
   return (
     <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
       <div className="bg-white p-8 rounded-2xl shadow-xl w-80">
-        {/* 闲趣标题 */}
         <div className="text-center mb-6">
           <h1 className="text-3xl font-bold text-indigo-600">《闲趣》</h1>
           <p className="text-gray-400 text-sm mt-1">XianQu Messenger</p>
@@ -64,20 +64,21 @@ export default function Home() {
           </div>
         )}
 
+        {/* 注册时显示昵称输入框 */}
         {!isLogin && (
           <input
             className="w-full p-2 mb-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-300 text-sm"
-            placeholder="用户名"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
+            placeholder="昵称"
+            value={nickname}
+            onChange={(e) => setNickname(e.target.value)}
           />
         )}
 
         <input
           className="w-full p-2 mb-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-300 text-sm"
-          placeholder="账户（邮箱）"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
+          placeholder="账号"
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
         />
 
         <input
