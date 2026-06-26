@@ -3,7 +3,7 @@ import { useRouter } from 'next/router';
 import CallModal from '../components/CallModal';
 
 const API = 'https://xianqu-server.onrender.com';
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 15; // 减小每页数量，提升加载速度
 
 const EMOJIS = ['😀', '😂', '❤️', '👍', '😢', '😡', '🎉', '🔥', '💯', '✨', '👋', '🙏'];
 
@@ -33,21 +33,27 @@ export default function Chat() {
   const [callState, setCallState] = useState<any>(null);
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [isLoadingChat, setIsLoadingChat] = useState(false); // 新增：聊天加载状态
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [mobileView, setMobileView] = useState<'sidebar' | 'chat'>('sidebar');
 
-  // 右键/长按菜单状态
+  // 右键/长按菜单
   const [contextMenu, setContextMenu] = useState<{ msg: any; x: number; y: number } | null>(null);
   const longPressTimer = useRef<NodeJS.Timeout | null>(null);
 
-  // 群信息面板相关状态
+  // 群信息面板
   const [showGroupInfo, setShowGroupInfo] = useState(false);
   const [groupInfo, setGroupInfo] = useState<any>(null);
   const [groupAnnouncement, setGroupAnnouncement] = useState('');
   const [showMentionList, setShowMentionList] = useState(false);
+
+  // 消息缓存：key 为 "friend-${id}" 或 "group-${id}"
+  const messageCache = useRef<Map<string, any[]>>(new Map());
+  // 请求锁，防止重复加载
+  const loadingChatRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -118,19 +124,29 @@ export default function Chat() {
             });
             ws?.send(JSON.stringify({ event: 'message:read', data: { messageId: newMsg.id, senderId: newMsg.senderId } }));
           }
+          // 更新缓存
+          const cacheKey = `friend-${newMsg.senderId}`;
+          const cached = messageCache.current.get(cacheKey) || [];
+          if (!cached.find(m => m.id === newMsg.id)) {
+            messageCache.current.set(cacheKey, [...cached, newMsg]);
+          }
           loadSessions();
         } else if (msg.event === 'message:delivered') {
           setMessages(prev => prev.map(m => m.id === msg.data.messageId ? { ...m, status: 'delivered' } : m));
         } else if (msg.event === 'message:read') {
           setMessages(prev => prev.map(m => m.id === msg.data.messageId ? { ...m, status: 'read' } : m));
         } else if (msg.event === 'group-message:receive') {
-          // 群聊消息实时推送
           const newMsg = msg.data;
           setMessages(prev => {
             if (prev.find(m => m.id === newMsg.id)) return prev;
             return [...prev, newMsg];
           });
-          // 更新群聊列表（显示最后消息预览）
+          // 更新缓存
+          const cacheKey = `group-${newMsg.groupId}`;
+          const cached = messageCache.current.get(cacheKey) || [];
+          if (!cached.find(m => m.id === newMsg.id)) {
+            messageCache.current.set(cacheKey, [...cached, newMsg]);
+          }
           loadGroups();
         } else if (msg.event === 'call-offer') {
           setCallState({
@@ -155,47 +171,82 @@ export default function Chat() {
     };
   }, [userId, selectedChat?.data?.id, loadSessions]);
 
+  // 优化后的选择会话：立即切换视图，使用缓存，避免重复加载
   const selectChat = async (type: string, data: any) => {
     setSelectedChat({ type, data });
     setReplyingTo(null);
-    setHasMore(true);
-    setMessages([]);
-    const token = localStorage.getItem('token');
-    let url = type === 'friend'
-      ? `${API}/messages/history/${data.id}?skip=0&take=${PAGE_SIZE}`
-      : `${API}/groups/${data.id}/messages?skip=0&take=${PAGE_SIZE}`;
-    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-    if (res.ok) {
-      const msgs = await res.json();
-      setMessages(msgs);
-      if (msgs.length < PAGE_SIZE) setHasMore(false);
+    setMobileView('chat'); // 立即切换，不等待请求
+
+    const cacheKey = `${type}-${data.id}`;
+    const cachedMessages = messageCache.current.get(cacheKey);
+
+    // 如果有缓存且不是首次加载，直接显示缓存
+    if (cachedMessages && cachedMessages.length > 0) {
+      setMessages(cachedMessages);
+      setHasMore(cachedMessages.length >= PAGE_SIZE);
+    } else {
+      // 没有缓存则清空消息，显示加载状态
+      setMessages([]);
+      setIsLoadingChat(true);
     }
+
+    // 如果正在加载同一会话，跳过
+    if (loadingChatRef.current.has(cacheKey)) return;
+    loadingChatRef.current.add(cacheKey);
+
+    try {
+      const token = localStorage.getItem('token');
+      let url = type === 'friend'
+        ? `${API}/messages/history/${data.id}?skip=0&take=${PAGE_SIZE}`
+        : `${API}/groups/${data.id}/messages?skip=0&take=${PAGE_SIZE}`;
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) {
+        const msgs = await res.json();
+        setMessages(msgs);
+        messageCache.current.set(cacheKey, msgs);
+        if (msgs.length < PAGE_SIZE) setHasMore(false);
+      }
+    } catch (err) {
+      console.error('加载消息失败', err);
+    } finally {
+      loadingChatRef.current.delete(cacheKey);
+      setIsLoadingChat(false);
+    }
+
+    // 标记已读（仅好友）
     if (type === 'friend') {
       fetch(`${API}/messages/read`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}` },
         body: JSON.stringify({ senderId: data.id })
       }).catch(() => {});
       setSessions(prev => prev.map(s => s.friend.id === data.id ? { ...s, unreadCount: 0 } : s));
     }
-    setMobileView('chat');
   };
 
   const loadMoreMessages = async () => {
     if (!selectedChat || loadingMore || !hasMore) return;
     setLoadingMore(true);
+    const cacheKey = `${selectedChat.type}-${selectedChat.data.id}`;
     const token = localStorage.getItem('token');
     const currentCount = messages.length;
     let url = selectedChat.type === 'friend'
       ? `${API}/messages/history/${selectedChat.data.id}?skip=${currentCount}&take=${PAGE_SIZE}`
       : `${API}/groups/${selectedChat.data.id}/messages?skip=${currentCount}&take=${PAGE_SIZE}`;
-    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-    if (res.ok) {
-      const older = await res.json();
-      if (older.length < PAGE_SIZE) setHasMore(false);
-      setMessages(prev => [...older, ...prev]);
+    try {
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) {
+        const older = await res.json();
+        if (older.length < PAGE_SIZE) setHasMore(false);
+        const updatedMessages = [...older, ...messages];
+        setMessages(updatedMessages);
+        messageCache.current.set(cacheKey, updatedMessages);
+      }
+    } catch (err) {
+      console.error('加载更多消息失败', err);
+    } finally {
+      setLoadingMore(false);
     }
-    setLoadingMore(false);
   };
 
   const handleScroll = () => {
@@ -228,7 +279,7 @@ export default function Chat() {
     });
   };
 
-  // ========== 核心修改：发送消息（群聊改用 WebSocket） ==========
+  // 发送消息（群聊已改为 WebSocket）
   const sendMessage = () => {
     if (!input.trim() && !replyingTo) return;
     if (!selectedChat || !ws) return;
@@ -237,31 +288,32 @@ export default function Chat() {
       content: input,
       type: 'text',
       replyToId: replyingTo?.id || null,
-      chatType: selectedChat.type, // 新增字段，告知后端是群聊还是私聊
+      chatType: selectedChat.type,
     };
-
     if (selectedChat.type === 'friend') {
       payload.receiverId = selectedChat.data.id;
-      // 私聊乐观更新
       const tempId = `temp-${Date.now()}`;
-      setMessages(prev => [...prev, {
+      const tempMsg = {
         id: tempId, senderId: userId, content: input, type: 'text',
         status: 'sent', createdAt: new Date().toISOString(),
         replyToId: replyingTo?.id || null,
         replyTo: replyingTo ? { content: replyingTo.content, sender: replyingTo.sender } : null,
-      }]);
+      };
+      setMessages(prev => [...prev, tempMsg]);
       updateSession(selectedChat.data.id, input, 'text');
+      // 更新缓存
+      const cacheKey = `friend-${selectedChat.data.id}`;
+      const cached = messageCache.current.get(cacheKey) || [];
+      messageCache.current.set(cacheKey, [...cached, tempMsg]);
     } else {
       payload.groupId = selectedChat.data.id;
-      // 群聊不需要本地临时消息，广播后自己也会收到
     }
-
     ws.send(JSON.stringify({ event: 'message:send', data: payload }));
     setInput('');
     setReplyingTo(null);
   };
 
-  // 语音录制（群聊同样改为 WebSocket）
+  // 语音录制（群聊 WebSocket）
   const startRecording = async (clientY: number) => {
     recordStartY.current = clientY;
     setRecordingCancel(false);
@@ -307,7 +359,7 @@ export default function Chat() {
     }
   };
 
-  // 图片发送（群聊改用 WebSocket）
+  // 图片发送（群聊 WebSocket）
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !selectedChat || !ws) return;
@@ -342,22 +394,22 @@ export default function Chat() {
             replyToId: replyingTo?.id || null,
             chatType: selectedChat.type,
           };
-
           if (selectedChat.type === 'friend') {
             payload.receiverId = selectedChat.data.id;
-            // 临时消息
             const tempId = `temp-${Date.now()}`;
-            setMessages(prev => [...prev, {
+            const tempMsg = {
               id: tempId, senderId: userId, content: compressedBase64, type: 'image',
               status: 'sending', createdAt: new Date().toISOString(),
-            }]);
-            ws.send(JSON.stringify({ event: 'message:send', data: payload }));
+            };
+            setMessages(prev => [...prev, tempMsg]);
             updateSession(selectedChat.data.id, '[图片]', 'image');
-            setMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: 'sent' } : m));
+            const cacheKey = `friend-${selectedChat.data.id}`;
+            const cached = messageCache.current.get(cacheKey) || [];
+            messageCache.current.set(cacheKey, [...cached, tempMsg]);
           } else {
             payload.groupId = selectedChat.data.id;
-            ws.send(JSON.stringify({ event: 'message:send', data: payload }));
           }
+          ws.send(JSON.stringify({ event: 'message:send', data: payload }));
         }, 'image/jpeg', 0.8);
       };
     };
@@ -570,64 +622,76 @@ export default function Chat() {
               )}
             </div>
 
+            {/* 消息区域，增加加载状态提示 */}
             <div className="flex-1 overflow-y-auto p-4 bg-gray-50" ref={scrollContainerRef} onScroll={handleScroll}>
-              {loadingMore && <div className="text-center text-gray-400 text-xs py-2">加载中...</div>}
-              {!hasMore && messages.length > 0 && <div className="text-center text-gray-400 text-xs py-2">没有更多消息了</div>}
-              {messages.map((msg: any, i: number) => {
-                const isMe = msg.senderId === userId || msg.sender?.id === userId;
-                if (msg.deleted) return (
-                  <div key={msg.id || i} className="text-center text-gray-400 text-xs py-1">
-                    {isMe ? '你' : (msg.sender?.nickname || msg.sender?.username || '对方')} 撤回了一条消息
+              {isLoadingChat ? (
+                <div className="flex items-center justify-center h-full">
+                  <div className="flex flex-col items-center">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mb-2"></div>
+                    <span className="text-gray-400 text-sm">加载中...</span>
                   </div>
-                );
-                return (
-                  <div
-                    key={msg.id || i}
-                    className={`mb-4 flex ${isMe ? 'justify-end' : 'justify-start'}`}
-                    onContextMenu={(e) => handleContextMenu(e, msg)}
-                    onTouchStart={() => handleTouchStart(msg)}
-                    onTouchEnd={handleTouchEnd}
-                    onTouchMove={handleTouchEnd}
-                  >
-                    <div className={`flex items-end gap-2 max-w-[75%] ${isMe ? 'flex-row-reverse' : ''}`}>
-                      <div className="w-8 h-8 bg-gray-400 rounded-full flex items-center justify-center text-white text-xs">
-                        {isMe ? '我' : ((msg.sender?.nickname || msg.sender?.username || selectedChat.data?.nickname || selectedChat.data?.username)?.[0] || '?')}
+                </div>
+              ) : (
+                <>
+                  {loadingMore && <div className="text-center text-gray-400 text-xs py-2">加载中...</div>}
+                  {!hasMore && messages.length > 0 && <div className="text-center text-gray-400 text-xs py-2">没有更多消息了</div>}
+                  {messages.map((msg: any, i: number) => {
+                    const isMe = msg.senderId === userId || msg.sender?.id === userId;
+                    if (msg.deleted) return (
+                      <div key={msg.id || i} className="text-center text-gray-400 text-xs py-1">
+                        {isMe ? '你' : (msg.sender?.nickname || msg.sender?.username || '对方')} 撤回了一条消息
                       </div>
-                      <div className="flex flex-col">
-                        {msg.replyToId && (
-                          <div className="text-xs text-gray-400 bg-gray-100 rounded px-2 py-1 mb-1 border-l-2 border-blue-300">
-                            回复：{msg.replyTo?.content?.substring(0, 30) || '消息'}
+                    );
+                    return (
+                      <div
+                        key={msg.id || i}
+                        className={`mb-4 flex ${isMe ? 'justify-end' : 'justify-start'}`}
+                        onContextMenu={(e) => handleContextMenu(e, msg)}
+                        onTouchStart={() => handleTouchStart(msg)}
+                        onTouchEnd={handleTouchEnd}
+                        onTouchMove={handleTouchEnd}
+                      >
+                        <div className={`flex items-end gap-2 max-w-[75%] ${isMe ? 'flex-row-reverse' : ''}`}>
+                          <div className="w-8 h-8 bg-gray-400 rounded-full flex items-center justify-center text-white text-xs">
+                            {isMe ? '我' : ((msg.sender?.nickname || msg.sender?.username || selectedChat.data?.nickname || selectedChat.data?.username)?.[0] || '?')}
                           </div>
-                        )}
-                        <div className={`px-3 py-2 rounded-2xl text-sm ${isMe ? 'bg-blue-500 text-white rounded-br-md' : 'bg-white text-gray-800 rounded-bl-md shadow'}`}>
-                          {msg.type === 'image' ? (
-                            <img src={msg.content} alt="图片" className="max-w-60 rounded" loading="lazy" />
-                          ) : msg.type === 'voice' ? (
-                            <audio controls className="max-w-60">
-                              <source src={msg.content} type="audio/webm" />
-                            </audio>
-                          ) : (
-                            msg.content
-                          )}
-                        </div>
-                        <div className={`flex items-center gap-1 mt-1 text-xs ${isMe ? 'justify-end' : 'justify-start'} text-gray-400`}>
-                          {new Date(msg.createdAt).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' })}
-                          {isMe && (
-                            <span className="ml-1">
-                              {msg.status === 'sent' && <span className="text-gray-400">✓</span>}
-                              {msg.status === 'delivered' && <span className="text-gray-400">✓✓</span>}
-                              {msg.status === 'read' && <span className="text-blue-500">✓✓</span>}
-                            </span>
-                          )}
-                          {isMe && msg.status !== 'sending' && <button onClick={() => recallMessage(msg)} className="text-red-400 hover:text-red-600 ml-1" title="撤回">↩</button>}
-                          <button onClick={() => setReplyingTo(msg)} className="text-gray-400 hover:text-gray-600 ml-1" title="回复">↪</button>
+                          <div className="flex flex-col">
+                            {msg.replyToId && (
+                              <div className="text-xs text-gray-400 bg-gray-100 rounded px-2 py-1 mb-1 border-l-2 border-blue-300">
+                                回复：{msg.replyTo?.content?.substring(0, 30) || '消息'}
+                              </div>
+                            )}
+                            <div className={`px-3 py-2 rounded-2xl text-sm ${isMe ? 'bg-blue-500 text-white rounded-br-md' : 'bg-white text-gray-800 rounded-bl-md shadow'}`}>
+                              {msg.type === 'image' ? (
+                                <img src={msg.content} alt="图片" className="max-w-60 rounded" loading="lazy" />
+                              ) : msg.type === 'voice' ? (
+                                <audio controls className="max-w-60">
+                                  <source src={msg.content} type="audio/webm" />
+                                </audio>
+                              ) : (
+                                msg.content
+                              )}
+                            </div>
+                            <div className={`flex items-center gap-1 mt-1 text-xs ${isMe ? 'justify-end' : 'justify-start'} text-gray-400`}>
+                              {new Date(msg.createdAt).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' })}
+                              {isMe && (
+                                <span className="ml-1">
+                                  {msg.status === 'sent' && <span className="text-gray-400">✓</span>}
+                                  {msg.status === 'delivered' && <span className="text-gray-400">✓✓</span>}
+                                  {msg.status === 'read' && <span className="text-blue-500">✓✓</span>}
+                                </span>
+                              )}
+                              {isMe && msg.status !== 'sending' && <button onClick={() => recallMessage(msg)} className="text-red-400 hover:text-red-600 ml-1" title="撤回">↩</button>}
+                              <button onClick={() => setReplyingTo(msg)} className="text-gray-400 hover:text-gray-600 ml-1" title="回复">↪</button>
+                            </div>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </div>
-                );
-              })}
-              <div ref={messagesEndRef} />
+                    );
+                  })}
+                  <div ref={messagesEndRef} />
+                </>
+              )}
             </div>
 
             {replyingTo && (
