@@ -1,7 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import jwt from 'jsonwebtoken';
-import { prisma } from '@xianqu/db-schema';
-import { WsEvent } from '@xianqu/shared-types';
+import { prisma } from '../../db';
+import { WsEvent } from '../../shared-types';
 import { onlineUsers } from '../../websocket';
 
 function authMiddleware(request: any, reply: any, done: any) {
