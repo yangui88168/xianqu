@@ -19,20 +19,26 @@ function authMiddleware(request: any, reply: any, done: any) {
 }
 
 export async function contactRoutes(fastify: FastifyInstance) {
-  // 搜索用户（按邮箱或用户名）
+  // 搜索用户（按昵称或用户名）
   fastify.get('/search', { preHandler: authMiddleware }, async (request, reply) => {
     const { q } = request.query as any;
     if (!q || q.length < 1) return reply.send([]);
     const users = await prisma.user.findMany({
       where: {
         OR: [
-          { email: { contains: q, mode: 'insensitive' } },
-          { username: { contains: q, mode: 'insensitive' } }
+          { nickname: { contains: q, mode: 'insensitive' } },
+          { username: { contains: q, mode: 'insensitive' } },
         ],
-        id: { not: (request as any).userId } // 不包含自己
+        id: { not: (request as any).userId },
       },
-      select: { id: true, email: true, username: true, avatar: true, status: true },
-      take: 10
+      select: {
+        id: true,
+        username: true,
+        nickname: true,
+        avatar: true,
+        status: true,
+      },
+      take: 10,
     });
     reply.send(users);
   });
@@ -49,22 +55,24 @@ export async function contactRoutes(fastify: FastifyInstance) {
       where: {
         OR: [
           { userId: senderId, friendId: receiverId },
-          { userId: receiverId, friendId: senderId }
-        ]
-      }
+          { userId: receiverId, friendId: senderId },
+        ],
+      },
     });
     if (existingFriendship) return reply.status(400).send({ error: 'Already friends' });
 
     // 检查是否已有待处理的请求
     const existingRequest = await prisma.friendRequest.findFirst({
       where: {
-        senderId, receiverId, status: 'pending'
-      }
+        senderId,
+        receiverId,
+        status: 'pending',
+      },
     });
     if (existingRequest) return reply.status(400).send({ error: 'Request already sent' });
 
     const req = await prisma.friendRequest.create({
-      data: { senderId, receiverId }
+      data: { senderId, receiverId },
     });
     reply.send(req);
   });
@@ -74,7 +82,17 @@ export async function contactRoutes(fastify: FastifyInstance) {
     const userId = (request as any).userId;
     const requests = await prisma.friendRequest.findMany({
       where: { receiverId: userId, status: 'pending' },
-      include: { sender: { select: { id: true, email: true, username: true, avatar: true } } }
+      include: {
+        sender: {
+          select: {
+            id: true,
+            username: true,
+            nickname: true,
+            avatar: true,
+            status: true,
+          },
+        },
+      },
     });
     reply.send(requests);
   });
@@ -84,21 +102,21 @@ export async function contactRoutes(fastify: FastifyInstance) {
     const userId = (request as any).userId;
     const { requestId } = request.body as any;
     const req = await prisma.friendRequest.findFirst({
-      where: { id: requestId, receiverId: userId, status: 'pending' }
+      where: { id: requestId, receiverId: userId, status: 'pending' },
     });
     if (!req) return reply.status(404).send({ error: 'Request not found' });
 
     // 更新请求状态
     await prisma.friendRequest.update({
       where: { id: requestId },
-      data: { status: 'accepted' }
+      data: { status: 'accepted' },
     });
     // 创建双向好友关系
     await prisma.friendship.createMany({
       data: [
         { userId: req.senderId, friendId: req.receiverId },
-        { userId: req.receiverId, friendId: req.senderId }
-      ]
+        { userId: req.receiverId, friendId: req.senderId },
+      ],
     });
     reply.send({ success: true });
   });
@@ -109,7 +127,7 @@ export async function contactRoutes(fastify: FastifyInstance) {
     const { requestId } = request.body as any;
     await prisma.friendRequest.updateMany({
       where: { id: requestId, receiverId: userId, status: 'pending' },
-      data: { status: 'rejected' }
+      data: { status: 'rejected' },
     });
     reply.send({ success: true });
   });
@@ -120,10 +138,18 @@ export async function contactRoutes(fastify: FastifyInstance) {
     const friendships = await prisma.friendship.findMany({
       where: { userId },
       include: {
-        friend: { select: { id: true, email: true, username: true, avatar: true, status: true } }
-      }
+        friend: {
+          select: {
+            id: true,
+            username: true,
+            nickname: true,
+            avatar: true,
+            status: true,
+          },
+        },
+      },
     });
-    reply.send(friendships.map(f => f.friend));
+    reply.send(friendships.map((f) => f.friend));
   });
 
   // 删除好友
@@ -134,9 +160,9 @@ export async function contactRoutes(fastify: FastifyInstance) {
       where: {
         OR: [
           { userId, friendId },
-          { userId: friendId, friendId: userId }
-        ]
-      }
+          { userId: friendId, friendId: userId },
+        ],
+      },
     });
     reply.send({ success: true });
   });
