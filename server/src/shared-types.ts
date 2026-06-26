@@ -12,8 +12,4 @@ export enum WsEvent {
   MESSAGE_SEND = 'message:send',
   MESSAGE_RECEIVE = 'message:receive',
   ERROR = 'error',
-  CALL_OFFER = 'call-offer',
-  CALL_ANSWER = 'call-answer',
-  ICE_CANDIDATE = 'ice-candidate',
-  CALL_HANGUP = 'call-hangup',
 }
