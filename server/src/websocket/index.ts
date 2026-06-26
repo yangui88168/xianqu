@@ -63,6 +63,22 @@ export const wsHandler = (connection: SocketStream, req: FastifyRequest) => {
           break;
         }
 
+        // ✅ 已为您精准追加：处理已读事件并推送给发送方
+        case 'message:read': {
+          const { messageId, senderId } = parsed.data;
+          // 更新数据库已读状态
+          await prisma.message.updateMany({
+            where: { id: messageId },
+            data: { status: 'read', readAt: new Date() },
+          });
+          // 推送给原发送方
+          const targetWs = onlineUsers.get(senderId);
+          if (targetWs) {
+            targetWs.send(JSON.stringify({ event: 'message:read', data: { messageId } }));
+          }
+          break;
+        }
+
         // 信令转发：call-offer / call-answer / ice-candidate / call-hangup
         case 'call-offer':
         case 'call-answer':
