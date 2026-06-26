@@ -39,6 +39,7 @@ model Message {
   status       String         @default("sent")
   replyToId    String?
   deleted      Boolean        @default(false)
+  recalled     Boolean        @default(false)
   readAt       DateTime?
   updatedAt    DateTime?
   createdAt    DateTime       @default(now())
@@ -82,7 +83,7 @@ model GroupChat {
   name         String
   ownerId      String
   avatar       String?
-  announcement String?        // ✅ 确认已存在
+  announcement String?
   createdAt    DateTime       @default(now())
   owner        User           @relation(fields: [ownerId], references: [id])
   members      GroupMember[]
@@ -94,7 +95,7 @@ model GroupMember {
   groupId    String
   userId     String
   role       String    @default("member") // owner, admin, member
-  mutedUntil DateTime?                    // ✅ 已成功添加禁言截止时间字段
+  mutedUntil DateTime?
   joinedAt   DateTime  @default(now())
   group      GroupChat @relation(fields: [groupId], references: [id])
   user       User      @relation(fields: [userId], references: [id])
@@ -110,6 +111,7 @@ model GroupMessage {
   type      String         @default("text")
   replyToId String?
   deleted   Boolean        @default(false)
+  recalled  Boolean        @default(false)
   createdAt DateTime       @default(now())
   group     GroupChat      @relation(fields: [groupId], references: [id])
   sender    User           @relation(fields: [senderId], references: [id])
