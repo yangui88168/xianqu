@@ -83,23 +83,26 @@ export async function groupRoutes(fastify: FastifyInstance) {
     const msg = await prisma.groupMessage.create({
       data: { groupId, senderId: userId, content, type: type || 'text', replyToId }
     });
-    // TODO: WebSocket 推送给群内所有在线成员（需扩展 WebSocket 逻辑，现在先用 REST 方式，稍后可在群聊前端轮询）
     reply.send(msg);
   });
 
-  // 获取群消息历史
+  // ✅ 已为您更新：获取群消息历史（支持 skip、take 分页，并包含 nickname）
   fastify.get('/:groupId/messages', { preHandler: authMiddleware }, async (request, reply) => {
     const { groupId } = request.params as any;
+    const skip = parseInt((request.query as any).skip || '0', 10);
+    const take = Math.min(parseInt((request.query as any).take || '50', 10), 50);
+
     const messages = await prisma.groupMessage.findMany({
       where: { groupId, deleted: false },
       include: {
-        sender: { select: { id: true, username: true, avatar: true } },
-        replyTo: { select: { id: true, content: true, sender: { select: { username: true } } } }
+        sender: { select: { id: true, username: true, nickname: true, avatar: true } },
+        replyTo: { select: { id: true, content: true, sender: { select: { username: true } } } },
       },
-      orderBy: { createdAt: 'asc' },
-      take: 100
+      orderBy: { createdAt: 'desc' },
+      skip,
+      take,
     });
-    reply.send(messages);
+    reply.send(messages.reverse());
   });
 
   // 撤回消息（发送者或管理员）
