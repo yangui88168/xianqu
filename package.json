@@ -6,6 +6,9 @@
     "dev": "turbo run dev",
     "build": "turbo run build"
   },
+  "dependencies": {
+    "react-window": "^1.8.9"
+  },
   "devDependencies": {
     "turbo": "^1.10.0"
   }
