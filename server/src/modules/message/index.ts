@@ -1,7 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import jwt from 'jsonwebtoken';
 import { prisma } from '../../db';
-import { WsEvent } from '../shared-types';
+import { WsEvent } from '../../shared-types'; // ✅ 已为您精准修正导入路径
 import { onlineUsers } from '../../websocket';
 
 function authMiddleware(request: any, reply: any, done: any) {
