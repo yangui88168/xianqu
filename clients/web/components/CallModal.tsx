@@ -25,7 +25,7 @@ export default function CallModal({
 
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
-  const remoteAudioRef = useRef<HTMLAudioElement>(null);   // 音频模式专用
+  const remoteAudioRef = useRef<HTMLAudioElement>(null);   // 全局音频播放器
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const durationRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -114,15 +114,15 @@ export default function CallModal({
           const [remote] = event.streams;
           if (remote) {
             setRemoteStream(remote);
-            // 视频模式：设置 video 元素
+            // 始终将远程流绑定到全局音频播放器（视频模式下也可复用）
+            if (remoteAudioRef.current) {
+              remoteAudioRef.current.srcObject = remote;
+              remoteAudioRef.current.play().catch((e) => console.error('音频自动播放失败', e));
+            }
+            // 视频模式则再绑定到视频元素
             if (type === 'video' && remoteVideoRef.current) {
               remoteVideoRef.current.srcObject = remote;
               remoteVideoRef.current.play().catch(console.error);
-            }
-            // 音频模式：设置隐藏的 audio 元素（或 video，但用 audio 更合适）
-            if (type === 'audio' && remoteAudioRef.current) {
-              remoteAudioRef.current.srcObject = remote;
-              remoteAudioRef.current.play().catch(console.error);
             }
             setCallStatus('connected');
             if (!durationRef.current) {
@@ -191,6 +191,9 @@ export default function CallModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90">
       <div className="relative flex flex-col items-center w-full max-w-sm mx-auto h-full max-h-screen py-4">
+        {/* 隐藏的全局音频播放器 */}
+        <audio ref={remoteAudioRef} autoPlay playsInline className="hidden" />
+
         {/* 远程视频或头像占位 */}
         <div className="relative w-full aspect-video bg-gray-900 rounded-2xl overflow-hidden mb-4 flex items-center justify-center">
           {type === 'video' ? (
@@ -201,14 +204,10 @@ export default function CallModal({
               className="w-full h-full object-cover"
             />
           ) : (
-            <>
-              {/* 音频模式：隐藏的音频元素 */}
-              <audio ref={remoteAudioRef} autoPlay className="hidden" />
-              <div className="flex flex-col items-center justify-center h-full text-white">
-                <div className="text-6xl mb-2">🎤</div>
-                <p className="text-lg font-medium">{friendName}</p>
-              </div>
-            </>
+            <div className="flex flex-col items-center justify-center h-full text-white">
+              <div className="text-6xl mb-2">🎤</div>
+              <p className="text-lg font-medium">{friendName}</p>
+            </div>
           )}
           {/* 自己的小窗（视频通话时） */}
           {type === 'video' && localStream && (
