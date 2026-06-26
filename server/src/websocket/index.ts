@@ -43,43 +43,54 @@ export const wsHandler = (connection: SocketStream, req: FastifyRequest) => {
     .catch(console.error);
 
   // 处理客户端发来的消息
-  connection.socket.on('message', (data: any) => {
+  connection.socket.on('message', async (data: any) => {
     try {
       const parsed = JSON.parse(data.toString());
-      if (parsed.event === WsEvent.MESSAGE_SEND) {
-        const { receiverId, content, type = 'text' } = parsed.data;
-        const senderId = userId;
-        
-        // ✅ 已经将 data 变更为支持 replyToId: parsed.data.replyToId
-        prisma.message
-          .create({ data: { senderId, receiverId, content, type, replyToId: parsed.data.replyToId } })
-          .then((msg) => {
-            const receiverWs = onlineUsers.get(receiverId);
-            if (receiverWs) {
-              receiverWs.send(
-                JSON.stringify({ event: WsEvent.MESSAGE_RECEIVE, data: msg })
-              );
-            } else {
-              prisma.offlineQueue.create({
-                data: { userId: receiverId, messageId: msg.id },
-              }).catch(console.error);
-            }
-
-            // 发送已送达回执给发送方（如果在线）
-            const senderWs = onlineUsers.get(senderId);
-            if (senderWs) {
-              senderWs.send(JSON.stringify({
+      switch (parsed.event) {
+        case WsEvent.MESSAGE_SEND: {
+          // 私聊消息（原有逻辑升级为 async/await 确保更稳定）
+          const { receiverId, content, type = 'text', replyToId } = parsed.data;
+          const senderId = userId;
+          const msg = await prisma.message.create({
+            data: { senderId, receiverId, content, type, replyToId },
+          });
+          const receiverWs = onlineUsers.get(receiverId);
+          if (receiverWs) {
+            receiverWs.send(JSON.stringify({ event: WsEvent.MESSAGE_RECEIVE, data: msg }));
+            // 送达回执
+            if (onlineUsers.has(senderId)) {
+              onlineUsers.get(senderId)!.send(JSON.stringify({
                 event: 'message:delivered',
-                data: { messageId: msg.id }
+                data: { messageId: msg.id },
               }));
             }
-          })
-          .catch(console.error);
+          } else {
+            await prisma.offlineQueue.create({ data: { userId: receiverId, messageId: msg.id } });
+          }
+          break;
+        }
+
+        // 新增信令转发
+        case 'call-offer':
+        case 'call-answer':
+        case 'ice-candidate':
+        case 'call-hangup': {
+          const targetId = parsed.data.targetId;
+          const targetWs = onlineUsers.get(targetId);
+          if (targetWs) {
+            targetWs.send(JSON.stringify({
+              event: parsed.event,
+              data: { ...parsed.data, from: userId },
+            }));
+          }
+          break;
+        }
+
+        default:
+          connection.socket.send(JSON.stringify({ event: WsEvent.ERROR, data: 'Unknown event' }));
       }
     } catch {
-      connection.socket.send(
-        JSON.stringify({ event: WsEvent.ERROR, data: 'Invalid format' })
-      );
+      connection.socket.send(JSON.stringify({ event: WsEvent.ERROR, data: 'Invalid format' }));
     }
   });
 
