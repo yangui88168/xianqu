@@ -297,7 +297,7 @@ export default function Chat() {
             <div className="mt-2 max-h-40 overflow-y-auto border rounded p-1">
               {searchResults.map(user => (
                 <div key={user.id} className="flex justify-between items-center p-2 hover:bg-gray-100 rounded">
-                  <span className="text-sm">{user.username}</span>
+                  <span className="text-sm">{user.nickname || user.username}</span>
                   <button onClick={() => sendFriendRequest(user.id)} className="text-xs bg-green-500 text-white px-2 py-1 rounded">添加</button>
                 </div>
               ))}
@@ -310,7 +310,7 @@ export default function Chat() {
             <div className="p-2 text-sm font-bold">好友请求</div>
             {friendRequests.map(req => (
               <div key={req.id} className="flex justify-between items-center px-3 py-2">
-                <span className="text-sm">{req.sender?.username}</span>
+                <span className="text-sm">{req.sender?.nickname || req.sender?.username}</span>
                 <div className="flex gap-1">
                   <button onClick={() => acceptRequest(req.id)} className="text-xs bg-green-500 text-white px-2 py-1 rounded">接受</button>
                   <button onClick={() => rejectRequest(req.id)} className="text-xs bg-red-500 text-white px-2 py-1 rounded">拒绝</button>
@@ -338,10 +338,12 @@ export default function Chat() {
               onClick={() => selectChat('friend', s.friend)}
               className={`flex items-center gap-3 p-3 cursor-pointer hover:bg-gray-50 border-b ${selectedChat?.data?.id === s.friend.id && selectedChat?.type === 'friend' ? 'bg-blue-50' : ''}`}
             >
-              <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold">{s.friend.username[0]}</div>
+              <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold">
+                {(s.friend.nickname || s.friend.username)[0]}
+              </div>
               <div className="flex-1 min-w-0">
                 <div className="flex justify-between">
-                  <span className="font-medium text-sm truncate">{s.friend.username}</span>
+                  <span className="font-medium text-sm truncate">{s.friend.nickname || s.friend.username}</span>
                   {s.lastMessage && <span className="text-xs text-gray-400">{new Date(s.lastMessage.createdAt).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' })}</span>}
                 </div>
                 <div className="flex justify-between">
@@ -364,10 +366,10 @@ export default function Chat() {
           <>
             <div className="bg-white border-b px-4 py-3 flex items-center gap-3">
               <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold">
-                {selectedChat.type === 'group' ? '#' : selectedChat.data.username[0]}
+                {selectedChat.type === 'group' ? '#' : (selectedChat.data.nickname || selectedChat.data.username)[0]}
               </div>
               <div>
-                <p className="font-bold">{selectedChat.type === 'group' ? selectedChat.data.name : selectedChat.data.username}</p>
+                <p className="font-bold">{selectedChat.type === 'group' ? selectedChat.data.name : (selectedChat.data.nickname || selectedChat.data.username)}</p>
                 {selectedChat.type === 'friend' && <p className="text-xs text-gray-500">{selectedChat.data.status === 'online' ? '在线' : '离线'}</p>}
               </div>
             </div>
@@ -377,14 +379,14 @@ export default function Chat() {
                 const isMe = msg.senderId === userId || msg.sender?.id === userId;
                 if (msg.deleted) return (
                   <div key={msg.id || i} className="text-center text-gray-400 text-xs py-1">
-                    {isMe ? '你' : (msg.sender?.username || '对方')}撤回了一条消息
+                    {isMe ? '你' : (msg.sender?.nickname || msg.sender?.username || '对方')}撤回了一条消息
                   </div>
                 );
                 return (
                   <div key={msg.id || i} className={`mb-4 flex ${isMe ? 'justify-end' : 'justify-start'}`}>
                     <div className={`flex items-end gap-2 max-w-[75%] ${isMe ? 'flex-row-reverse' : ''}`}>
                       <div className="w-8 h-8 bg-gray-400 rounded-full flex items-center justify-center text-white text-xs">
-                        {isMe ? '我' : (msg.sender?.username?.[0] || selectedChat.data?.username?.[0] || '?')}
+                        {isMe ? '我' : ((msg.sender?.nickname || msg.sender?.username)?.[0] || selectedChat.data?.nickname?.[0] || selectedChat.data?.username?.[0] || '?')}
                       </div>
                       <div className="flex flex-col">
                         {msg.replyToId && (
@@ -410,7 +412,7 @@ export default function Chat() {
 
             {replyingTo && (
               <div className="bg-gray-200 px-4 py-2 text-sm flex justify-between items-center">
-                <span>回复 {replyingTo.sender?.username || '用户'}：{replyingTo.content?.substring(0, 50)}</span>
+                <span>回复 {(replyingTo.sender?.nickname || replyingTo.sender?.username || '用户')}：{replyingTo.content?.substring(0, 50)}</span>
                 <button onClick={() => setReplyingTo(null)} className="text-red-500">✕</button>
               </div>
             )}
