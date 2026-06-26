@@ -24,7 +24,7 @@ export default function Chat() {
   const [newGroupName, setNewGroupName] = useState('');
   const [isRecording, setIsRecording] = useState(false);
   const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
-  const [callState, setCallState] = useState<{ type: 'audio' | 'video'; friendId: string; friendName: string } | null>(null);
+  const [callState, setCallState] = useState<{ type: 'audio' | 'video'; friendId: string; friendName: string; incoming?: boolean; offerSdp?: any } | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -32,6 +32,9 @@ export default function Chat() {
   const router = useRouter();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // 移动端控制：默认显示侧边栏，点击会话后切换到聊天
+  const [mobileView, setMobileView] = useState<'sidebar' | 'chat'>('sidebar');
 
   // 初始化用户ID
   useEffect(() => {
@@ -75,7 +78,7 @@ export default function Chat() {
     }
   }, [userId, loadSessions, loadGroups, loadFriendRequests]);
 
-  // WebSocket 连接 + 心跳 + 重连 + 信令处理
+  // WebSocket 连接 + 心跳 + 重连 + 信令
   useEffect(() => {
     if (!userId) return;
     let reconnectTimer: NodeJS.Timeout;
@@ -105,9 +108,11 @@ export default function Chat() {
             type: msg.data.type || 'audio',
             friendId: msg.data.from,
             friendName: msg.data.fromName || '好友',
+            incoming: true,
+            offerSdp: msg.data.sdp,
           });
         }
-        // 其他信令由 CallModal 内部处理
+        // 其他信令（answer/ice/hangup）由 CallModal 内部处理
       };
       socket.onclose = () => {
         clearInterval(heartbeatTimer);
@@ -122,7 +127,7 @@ export default function Chat() {
     };
   }, [userId, selectedChat?.data?.id]);
 
-  // 选择会话并加载分页消息
+  // 选择会话
   const selectChat = async (type: string, data: any) => {
     setSelectedChat({ type, data });
     setReplyingTo(null);
@@ -141,6 +146,8 @@ export default function Chat() {
       setMessages(msgs);
       if (msgs.length < PAGE_SIZE) setHasMore(false);
     }
+    // 移动端自动切换到聊天窗口
+    setMobileView('chat');
   };
 
   const loadMoreMessages = async () => {
@@ -170,7 +177,7 @@ export default function Chat() {
     }
   };
 
-  // 发送文字消息
+  // 发送文字
   const sendMessage = () => {
     if (!input.trim() && !replyingTo) return;
     if (!selectedChat || !ws) return;
@@ -329,7 +336,6 @@ export default function Chat() {
     }
   };
 
-  // 搜索、好友请求等函数
   const searchUsers = async () => {
     if (!searchQuery.trim()) return;
     const token = localStorage.getItem('token');
@@ -387,10 +393,13 @@ export default function Chat() {
 
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
+  // 移动端返回侧边栏
+  const goBack = () => setMobileView('sidebar');
+
   return (
-    <div className="flex h-screen bg-gray-100">
-      {/* 左侧栏 */}
-      <div className="w-80 bg-white border-r flex flex-col">
+    <div className="flex h-screen bg-gray-100 relative">
+      {/* 左侧栏：移动端全屏，PC端固定宽度 */}
+      <div className={`${mobileView === 'sidebar' ? 'block' : 'hidden'} md:block md:w-80 w-full bg-white border-r flex flex-col absolute md:relative z-10 h-full`}>
         <div className="p-3 border-b">
           <div className="flex gap-2 mb-2">
             <input className="flex-1 p-2 border rounded text-sm" placeholder="搜索用户..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} onKeyDown={e => e.key === 'Enter' && searchUsers()} />
@@ -420,7 +429,6 @@ export default function Chat() {
             </div>
           )}
         </div>
-
         {friendRequests.length > 0 && (
           <div className="border-b bg-yellow-50">
             <div className="p-2 text-sm font-bold">好友请求</div>
@@ -435,7 +443,6 @@ export default function Chat() {
             ))}
           </div>
         )}
-
         <div className="flex-1 overflow-y-auto">
           <div className="p-2 bg-gray-100 text-sm font-bold">群聊</div>
           {groups.map(g => (
@@ -466,11 +473,13 @@ export default function Chat() {
         </div>
       </div>
 
-      {/* 右侧聊天窗 */}
-      <div className="flex-1 flex flex-col">
+      {/* 右侧聊天窗：移动端全屏，PC端自适应 */}
+      <div className={`${mobileView === 'chat' ? 'block' : 'hidden'} md:block flex-1 flex flex-col`}>
         {selectedChat ? (
           <>
             <div className="bg-white border-b px-4 py-3 flex items-center gap-3">
+              {/* 移动端返回按钮 */}
+              <button onClick={goBack} className="md:hidden text-gray-500 mr-2">←</button>
               <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold">
                 {selectedChat.type === 'group' ? '#' : (selectedChat.data.nickname || selectedChat.data.username)[0]}
               </div>
@@ -478,7 +487,6 @@ export default function Chat() {
                 <p className="font-bold">{selectedChat.type === 'group' ? selectedChat.data.name : (selectedChat.data.nickname || selectedChat.data.username)}</p>
                 {selectedChat.type === 'friend' && <p className="text-xs text-gray-500">{selectedChat.data.status === 'online' ? '在线' : '离线'}</p>}
               </div>
-              {/* 通话按钮（仅单聊） */}
               {selectedChat.type === 'friend' && (
                 <div className="flex gap-1">
                   <button onClick={() => setCallState({ type: 'audio', friendId: selectedChat.data.id, friendName: selectedChat.data.nickname || selectedChat.data.username })}
@@ -544,7 +552,6 @@ export default function Chat() {
             )}
 
             <div className="p-3 bg-white border-t flex items-center gap-2">
-              {/* 语音录制按钮 */}
               <button
                 onMouseDown={startRecording}
                 onMouseUp={stopRecording}
@@ -586,6 +593,8 @@ export default function Chat() {
           friendId={callState.friendId}
           friendName={callState.friendName}
           type={callState.type}
+          incoming={callState.incoming}
+          offerSdp={callState.offerSdp}
           onHangup={() => setCallState(null)}
         />
       )}
