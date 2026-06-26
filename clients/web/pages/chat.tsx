@@ -3,7 +3,7 @@ import { useRouter } from 'next/router';
 import CallModal from '../components/CallModal';
 
 const API = 'https://xianqu-server.onrender.com';
-const PAGE_SIZE = 15; // 减小每页数量，提升加载速度
+const PAGE_SIZE = 15;
 
 const EMOJIS = ['😀', '😂', '❤️', '👍', '😢', '😡', '🎉', '🔥', '💯', '✨', '👋', '🙏'];
 
@@ -33,26 +33,27 @@ export default function Chat() {
   const [callState, setCallState] = useState<any>(null);
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [isLoadingChat, setIsLoadingChat] = useState(false); // 新增：聊天加载状态
+  const [isLoadingChat, setIsLoadingChat] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [mobileView, setMobileView] = useState<'sidebar' | 'chat'>('sidebar');
 
-  // 右键/长按菜单
   const [contextMenu, setContextMenu] = useState<{ msg: any; x: number; y: number } | null>(null);
   const longPressTimer = useRef<NodeJS.Timeout | null>(null);
 
-  // 群信息面板
   const [showGroupInfo, setShowGroupInfo] = useState(false);
   const [groupInfo, setGroupInfo] = useState<any>(null);
   const [groupAnnouncement, setGroupAnnouncement] = useState('');
   const [showMentionList, setShowMentionList] = useState(false);
 
-  // 消息缓存：key 为 "friend-${id}" 或 "group-${id}"
+  // 邀请相关状态
+  const [inviteModal, setInviteModal] = useState(false);
+  const [inviteGroupId, setInviteGroupId] = useState('');
+  const [selectedFriends, setSelectedFriends] = useState<string[]>([]);
+
   const messageCache = useRef<Map<string, any[]>>(new Map());
-  // 请求锁，防止重复加载
   const loadingChatRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
@@ -124,7 +125,6 @@ export default function Chat() {
             });
             ws?.send(JSON.stringify({ event: 'message:read', data: { messageId: newMsg.id, senderId: newMsg.senderId } }));
           }
-          // 更新缓存
           const cacheKey = `friend-${newMsg.senderId}`;
           const cached = messageCache.current.get(cacheKey) || [];
           if (!cached.find(m => m.id === newMsg.id)) {
@@ -141,7 +141,6 @@ export default function Chat() {
             if (prev.find(m => m.id === newMsg.id)) return prev;
             return [...prev, newMsg];
           });
-          // 更新缓存
           const cacheKey = `group-${newMsg.groupId}`;
           const cached = messageCache.current.get(cacheKey) || [];
           if (!cached.find(m => m.id === newMsg.id)) {
@@ -171,26 +170,22 @@ export default function Chat() {
     };
   }, [userId, selectedChat?.data?.id, loadSessions]);
 
-  // 优化后的选择会话：立即切换视图，使用缓存，避免重复加载
   const selectChat = async (type: string, data: any) => {
     setSelectedChat({ type, data });
     setReplyingTo(null);
-    setMobileView('chat'); // 立即切换，不等待请求
+    setMobileView('chat');
 
     const cacheKey = `${type}-${data.id}`;
     const cachedMessages = messageCache.current.get(cacheKey);
 
-    // 如果有缓存且不是首次加载，直接显示缓存
     if (cachedMessages && cachedMessages.length > 0) {
       setMessages(cachedMessages);
       setHasMore(cachedMessages.length >= PAGE_SIZE);
     } else {
-      // 没有缓存则清空消息，显示加载状态
       setMessages([]);
       setIsLoadingChat(true);
     }
 
-    // 如果正在加载同一会话，跳过
     if (loadingChatRef.current.has(cacheKey)) return;
     loadingChatRef.current.add(cacheKey);
 
@@ -213,7 +208,6 @@ export default function Chat() {
       setIsLoadingChat(false);
     }
 
-    // 标记已读（仅好友）
     if (type === 'friend') {
       fetch(`${API}/messages/read`, {
         method: 'POST',
@@ -279,7 +273,6 @@ export default function Chat() {
     });
   };
 
-  // 发送消息（群聊已改为 WebSocket）
   const sendMessage = () => {
     if (!input.trim() && !replyingTo) return;
     if (!selectedChat || !ws) return;
@@ -301,7 +294,6 @@ export default function Chat() {
       };
       setMessages(prev => [...prev, tempMsg]);
       updateSession(selectedChat.data.id, input, 'text');
-      // 更新缓存
       const cacheKey = `friend-${selectedChat.data.id}`;
       const cached = messageCache.current.get(cacheKey) || [];
       messageCache.current.set(cacheKey, [...cached, tempMsg]);
@@ -313,7 +305,6 @@ export default function Chat() {
     setReplyingTo(null);
   };
 
-  // 语音录制（群聊 WebSocket）
   const startRecording = async (clientY: number) => {
     recordStartY.current = clientY;
     setRecordingCancel(false);
@@ -359,7 +350,6 @@ export default function Chat() {
     }
   };
 
-  // 图片发送（群聊 WebSocket）
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !selectedChat || !ws) return;
@@ -518,12 +508,18 @@ export default function Chat() {
     const res = await fetch(`${API}/groups/create`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ name: newGroupName })
+      body: JSON.stringify({
+        name: newGroupName,
+        memberIds: selectedFriends,
+      }),
     });
     if (res.ok) {
       setShowGroupModal(false);
       setNewGroupName('');
+      setSelectedFriends([]);
       loadGroups();
+    } else {
+      alert('创建失败');
     }
   };
 
@@ -622,7 +618,6 @@ export default function Chat() {
               )}
             </div>
 
-            {/* 消息区域，增加加载状态提示 */}
             <div className="flex-1 overflow-y-auto p-4 bg-gray-50" ref={scrollContainerRef} onScroll={handleScroll}>
               {isLoadingChat ? (
                 <div className="flex items-center justify-center h-full">
@@ -783,21 +778,56 @@ export default function Chat() {
         )}
       </div>
 
-      {/* 创建群聊弹窗 */}
+      {/* 创建群聊弹窗（含好友多选） */}
       {showGroupModal && (
         <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
-          <div className="bg-white p-5 rounded shadow-lg w-72">
-            <h3 className="font-bold mb-2">创建群聊</h3>
-            <input className="w-full border p-2 rounded mb-3 text-sm" placeholder="群名称" value={newGroupName} onChange={e => setNewGroupName(e.target.value)} />
+          <div className="bg-white p-5 rounded shadow-lg w-80 max-h-[70vh] flex flex-col">
+            <h3 className="font-bold mb-3">创建群聊</h3>
+            <input
+              className="w-full border p-2 rounded mb-3 text-sm"
+              placeholder="群名称"
+              value={newGroupName}
+              onChange={e => setNewGroupName(e.target.value)}
+            />
+            <p className="text-sm font-medium mb-2">邀请好友（可选）</p>
+            <div className="flex-1 overflow-y-auto border rounded p-2 mb-3">
+              {sessions.length === 0 && <p className="text-xs text-gray-400">暂无好友</p>}
+              {sessions.map((s: any) => (
+                <label key={s.friend.id} className="flex items-center gap-2 py-1 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={selectedFriends.includes(s.friend.id)}
+                    onChange={e => {
+                      if (e.target.checked) {
+                        setSelectedFriends(prev => [...prev, s.friend.id]);
+                      } else {
+                        setSelectedFriends(prev => prev.filter(id => id !== s.friend.id));
+                      }
+                    }}
+                  />
+                  <span className="text-sm">{s.friend.nickname || s.friend.username}</span>
+                </label>
+              ))}
+            </div>
             <div className="flex gap-2 justify-end">
-              <button onClick={() => setShowGroupModal(false)} className="px-3 py-1 bg-gray-300 rounded text-sm">取消</button>
-              <button onClick={createGroup} className="px-3 py-1 bg-green-500 text-white rounded text-sm">创建</button>
+              <button
+                onClick={() => {
+                  setShowGroupModal(false);
+                  setSelectedFriends([]);
+                }}
+                className="px-3 py-1 bg-gray-300 rounded text-sm"
+              >
+                取消
+              </button>
+              <button onClick={createGroup} className="px-3 py-1 bg-green-500 text-white rounded text-sm">
+                创建
+              </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* 群信息面板 */}
+      {/* 群信息面板（含邀请好友按钮） */}
       {showGroupInfo && groupInfo && (
         <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50" onClick={() => setShowGroupInfo(false)}>
           <div className="bg-white rounded-xl shadow-xl w-96 max-h-[80vh] overflow-y-auto p-5" onClick={e => e.stopPropagation()}>
@@ -807,6 +837,19 @@ export default function Chat() {
             </div>
             <p className="font-medium">群名称：{groupInfo.name}</p>
             <p className="text-sm text-gray-500 mt-1">成员 {groupInfo.members?.length} 人</p>
+
+            {/* 邀请好友按钮 */}
+            <button
+              onClick={() => {
+                setInviteGroupId(groupInfo.id);
+                setSelectedFriends([]);
+                setInviteModal(true);
+              }}
+              className="w-full bg-blue-500 text-white py-2 rounded text-sm mt-3"
+            >
+              邀请好友加入
+            </button>
+
             <div className="mt-3">
               <label className="text-sm font-medium">群公告</label>
               {(groupInfo.ownerId === userId || groupInfo.members?.find((m: any) => m.userId === userId && m.role === 'admin')) ? (
@@ -874,6 +917,72 @@ export default function Chat() {
               ))}
             </div>
             <button onClick={() => setShowGroupInfo(false)} className="mt-4 w-full bg-gray-200 py-2 rounded">关闭</button>
+          </div>
+        </div>
+      )}
+
+      {/* 邀请好友弹窗 */}
+      {inviteModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-5 rounded shadow-lg w-80 max-h-[70vh] flex flex-col">
+            <h3 className="font-bold mb-3">邀请好友</h3>
+            <div className="flex-1 overflow-y-auto border rounded p-2 mb-3">
+              {sessions.filter((s: any) => !groupInfo?.members?.find((m: any) => m.userId === s.friend.id)).length === 0 && (
+                <p className="text-xs text-gray-400">没有可邀请的好友</p>
+              )}
+              {sessions
+                .filter((s: any) => !groupInfo?.members?.find((m: any) => m.userId === s.friend.id))
+                .map((s: any) => (
+                  <label key={s.friend.id} className="flex items-center gap-2 py-1 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={selectedFriends.includes(s.friend.id)}
+                      onChange={e => {
+                        if (e.target.checked) {
+                          setSelectedFriends(prev => [...prev, s.friend.id]);
+                        } else {
+                          setSelectedFriends(prev => prev.filter(id => id !== s.friend.id));
+                        }
+                      }}
+                    />
+                    <span className="text-sm">{s.friend.nickname || s.friend.username}</span>
+                  </label>
+                ))}
+            </div>
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => {
+                  setInviteModal(false);
+                  setSelectedFriends([]);
+                }}
+                className="px-3 py-1 bg-gray-300 rounded text-sm"
+              >
+                取消
+              </button>
+              <button
+                onClick={async () => {
+                  if (selectedFriends.length === 0) return;
+                  const token = localStorage.getItem('token');
+                  const res = await fetch(`${API}/groups/${inviteGroupId}/invite`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                    body: JSON.stringify({ userIds: selectedFriends }),
+                  });
+                  if (res.ok) {
+                    alert('邀请成功');
+                    setInviteModal(false);
+                    setSelectedFriends([]);
+                    loadGroupInfo();
+                  } else {
+                    const err = await res.json();
+                    alert(err.error || '邀请失败');
+                  }
+                }}
+                className="px-3 py-1 bg-green-500 text-white rounded text-sm"
+              >
+                邀请
+              </button>
+            </div>
           </div>
         </div>
       )}
