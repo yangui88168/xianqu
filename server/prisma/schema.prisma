@@ -9,47 +9,41 @@ datasource db {
 }
 
 model User {
-  id               String    @id @default(cuid())
-  email            String    @unique
-  username         String    @unique
+  id               String          @id @default(cuid())
+  email            String          @unique
+  username         String          @unique
   password         String
-  nickname         String?   // ✅ 已为您精准补充的昵称字段
+  nickname         String?
   avatar           String?
-  status           String    @default("offline")
-  createdAt        DateTime  @default(now())
-
-  // 与 Message 的关系字段
-  sentMessages     Message[] @relation("SentMessages")
-  receivedMessages Message[] @relation("ReceivedMessages")
-
-  // 好友系统反向关系字段
-  sentRequests     FriendRequest[]  @relation("SentRequests")
-  receivedRequests FriendRequest[]  @relation("ReceivedRequests")
-  friendships      Friendship[]     @relation("UserFriendships")
-  friendOf         Friendship[]     @relation("FriendRelation")
-
-  // 群组系统反向关系字段
+  status           String          @default("offline")
+  createdAt        DateTime        @default(now())
+  
+  // 关系字段
+  sentMessages     Message[]       @relation("SentMessages")
+  receivedMessages Message[]       @relation("ReceivedMessages")
+  sentRequests     FriendRequest[] @relation("SentRequests")
+  receivedRequests FriendRequest[] @relation("ReceivedRequests")
+  friendships      Friendship[]    @relation("UserFriendships")
+  friendOf         Friendship[]    @relation("FriendRelation")
   ownedGroups      GroupChat[]
   groupMemberships GroupMember[]
   groupMessages    GroupMessage[]
 }
 
 model Message {
-  id          String   @id @default(cuid())
-  content     String
-  type        String   @default("text")
-  senderId    String
-  receiverId  String
-  status      String   @default("sent")
-  replyToId   String?                     
-  deleted     Boolean  @default(false)     
-  readAt      DateTime?                   
-  updatedAt   DateTime?                   
-  createdAt   DateTime @default(now())
-
-  sender      User     @relation("SentMessages", fields: [senderId], references: [id])
-  receiver    User     @relation("ReceivedMessages", fields: [receiverId], references: [id])
-
+  id           String         @id @default(cuid())
+  content      String
+  type         String         @default("text")
+  senderId     String
+  receiverId   String
+  status       String         @default("sent")
+  replyToId    String?
+  deleted      Boolean        @default(false)
+  readAt       DateTime?
+  updatedAt    DateTime?
+  createdAt    DateTime       @default(now())
+  sender       User           @relation("SentMessages", fields: [senderId], references: [id])
+  receiver     User           @relation("ReceivedMessages", fields: [receiverId], references: [id])
   offlineQueue OfflineQueue[]
 }
 
@@ -67,57 +61,58 @@ model Friendship {
   createdAt DateTime @default(now())
   user      User     @relation("UserFriendships", fields: [userId], references: [id])
   friend    User     @relation("FriendRelation", fields: [friendId], references: [id])
-  
+
   @@unique([userId, friendId])
 }
 
 model FriendRequest {
-  id         String   @id @default(cuid())
-  senderId   String
+  id        String   @id @default(cuid())
+  senderId  String
   receiverId String
-  status     String   @default("pending")
-  createdAt  DateTime @default(now())
-  sender     User     @relation("SentRequests", fields: [senderId], references: [id])
-  receiver   User     @relation("ReceivedRequests", fields: [receiverId], references: [id])
-  
+  status    String   @default("pending")
+  createdAt DateTime @default(now())
+  sender    User     @relation("SentRequests", fields: [senderId], references: [id])
+  receiver  User     @relation("ReceivedRequests", fields: [receiverId], references: [id])
+
   @@unique([senderId, receiverId])
 }
 
 model GroupChat {
-  id           String        @id @default(cuid())
+  id           String         @id @default(cuid())
   name         String
   ownerId      String
   avatar       String?
-  announcement String?
-  createdAt    DateTime      @default(now())
-  owner        User          @relation(fields: [ownerId], references: [id])
+  announcement String?        // ✅ 确认已存在
+  createdAt    DateTime       @default(now())
+  owner        User           @relation(fields: [ownerId], references: [id])
   members      GroupMember[]
   messages     GroupMessage[]
 }
 
 model GroupMember {
-  id       String   @id @default(cuid())
-  groupId  String
-  userId   String
-  role     String   @default("member")
-  joinedAt DateTime @default(now())
-  group    GroupChat @relation(fields: [groupId], references: [id])
-  user     User      @relation(fields: [userId], references: [id])
+  id         String    @id @default(cuid())
+  groupId    String
+  userId     String
+  role       String    @default("member") // owner, admin, member
+  mutedUntil DateTime?                    // ✅ 已成功添加禁言截止时间字段
+  joinedAt   DateTime  @default(now())
+  group      GroupChat @relation(fields: [groupId], references: [id])
+  user       User      @relation(fields: [userId], references: [id])
 
   @@unique([groupId, userId])
 }
 
 model GroupMessage {
-  id        String   @id @default(cuid())
+  id        String         @id @default(cuid())
   groupId   String
   senderId  String
   content   String
-  type      String   @default("text")
+  type      String         @default("text")
   replyToId String?
-  deleted   Boolean  @default(false)
-  createdAt DateTime @default(now())
-  group     GroupChat @relation(fields: [groupId], references: [id])
-  sender    User      @relation(fields: [senderId], references: [id])
-  replyTo   GroupMessage? @relation("Replies", fields: [replyToId], references: [id])
+  deleted   Boolean        @default(false)
+  createdAt DateTime       @default(now())
+  group     GroupChat      @relation(fields: [groupId], references: [id])
+  sender    User           @relation(fields: [senderId], references: [id])
+  replyTo   GroupMessage?  @relation("Replies", fields: [replyToId], references: [id])
   replies   GroupMessage[] @relation("Replies")
 }
