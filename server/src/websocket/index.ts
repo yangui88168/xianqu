@@ -49,8 +49,10 @@ export const wsHandler = (connection: SocketStream, req: FastifyRequest) => {
       if (parsed.event === WsEvent.MESSAGE_SEND) {
         const { receiverId, content, type = 'text' } = parsed.data;
         const senderId = userId;
+        
+        // ✅ 已经将 data 变更为支持 replyToId: parsed.data.replyToId
         prisma.message
-          .create({ data: { senderId, receiverId, content, type } })
+          .create({ data: { senderId, receiverId, content, type, replyToId: parsed.data.replyToId } })
           .then((msg) => {
             const receiverWs = onlineUsers.get(receiverId);
             if (receiverWs) {
@@ -63,7 +65,7 @@ export const wsHandler = (connection: SocketStream, req: FastifyRequest) => {
               }).catch(console.error);
             }
 
-            // ✅ 已为您精准追加：发送已送达回执给发送方（如果在线）
+            // 发送已送达回执给发送方（如果在线）
             const senderWs = onlineUsers.get(senderId);
             if (senderWs) {
               senderWs.send(JSON.stringify({
