@@ -190,7 +190,7 @@ export default function Chat() {
           // 主叫方收到对方接听，标记 accepted=true
           const currentCall = callStateRef.current;
           if (currentCall && currentCall.friendId === msg.data.from && currentCall.incoming === false) {
-            setCallState(prev => prev ? { ...prev, accepted: true } : null);
+            setCallState((prev: any) => prev ? { ...prev, accepted: true } : null);
           }
         }
       };
