@@ -518,7 +518,7 @@ export default function Chat() {
     }
   };
 
-  // 编辑消息提交
+  // 编辑消息提交（修改了错误提示）
   const submitEdit = async () => {
     if (!editingMessage || !editInput.trim()) return;
     const token = localStorage.getItem('token');
@@ -533,7 +533,7 @@ export default function Chat() {
       setEditingMessage(null);
       setEditInput('');
     } else {
-      alert('编辑失败，可能超过5分钟');
+      alert('编辑失败，请重试');
     }
   };
 
