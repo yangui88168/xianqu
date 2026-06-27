@@ -24,14 +24,12 @@ export default function CallModal({
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
   const remoteAudioRef = useRef<HTMLAudioElement>(null);
-  // ✅ 修复：显式指定类型
-  const pcRef = useRef<RTCPeerConnection | null>(null);
-  const localStreamRef = useRef<MediaStream | null>(null);
+  const pcRef = useRef<RTCPeerConnection | null>(null);          // 显式类型
+  const localStreamRef = useRef<MediaStream | null>(null);       // 显式类型
   const durationRef = useRef<NodeJS.Timeout | null>(null);
   const isClosedRef = useRef(false);
   const remoteStreamBoundRef = useRef(false);
 
-  // 挂断（保留原有完整逻辑）
   const hangup = useCallback(() => {
     if (isClosedRef.current) return;
     isClosedRef.current = true;
@@ -76,7 +74,6 @@ export default function CallModal({
   const bindRemoteStream = useCallback((remoteStream: MediaStream) => {
     if (isClosedRef.current || remoteStreamBoundRef.current) return;
     remoteStreamBoundRef.current = true;
-
     const playElement = (el: HTMLVideoElement | HTMLAudioElement) => {
       el.srcObject = remoteStream;
       el.muted = true;
@@ -84,10 +81,8 @@ export default function CallModal({
         if (!isClosedRef.current && el) el.muted = false;
       }).catch(() => {});
     };
-
     if (type === 'video' && remoteVideoRef.current) playElement(remoteVideoRef.current);
     if (type === 'audio' && remoteAudioRef.current) playElement(remoteAudioRef.current);
-
     setCallStatus('connected');
     if (!durationRef.current) {
       durationRef.current = setInterval(() => setDuration((prev) => prev + 1), 1000);
@@ -112,12 +107,10 @@ export default function CallModal({
     });
     pcRef.current = pc;
     stream.getTracks().forEach((track) => pc.addTrack(track, stream));
-
     pc.ontrack = (event) => {
       const [remote] = event.streams;
       if (remote) bindRemoteStream(remote);
     };
-
     pc.onicecandidate = (event) => {
       if (event.candidate) {
         ws.send(JSON.stringify({
@@ -131,7 +124,6 @@ export default function CallModal({
   useEffect(() => {
     isClosedRef.current = false;
     remoteStreamBoundRef.current = false;
-
     const init = async () => {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
@@ -149,7 +141,6 @@ export default function CallModal({
           if (isClosedRef.current) return;
           const msg = JSON.parse(e.data);
           if (msg.data?.from !== friendId) return;
-
           if (msg.event === 'call-answer') {
             pcRef.current?.setRemoteDescription(new RTCSessionDescription(msg.data.sdp)).catch(console.error);
           } else if (msg.event === 'ice-candidate') {
@@ -163,10 +154,7 @@ export default function CallModal({
                 .then(() => pc.createAnswer())
                 .then((answer) => {
                   pc.setLocalDescription(answer);
-                  ws.send(JSON.stringify({
-                    event: 'call-answer',
-                    data: { targetId: friendId, sdp: answer },
-                  }));
+                  ws.send(JSON.stringify({ event: 'call-answer', data: { targetId: friendId, sdp: answer } }));
                 })
                 .catch(console.error);
             }
@@ -183,10 +171,7 @@ export default function CallModal({
                 .then(() => pc.createAnswer())
                 .then((answer) => {
                   pc.setLocalDescription(answer);
-                  ws.send(JSON.stringify({
-                    event: 'call-answer',
-                    data: { targetId: friendId, sdp: answer },
-                  }));
+                  ws.send(JSON.stringify({ event: 'call-answer', data: { targetId: friendId, sdp: answer } }));
                 })
                 .catch(console.error);
             }
@@ -196,16 +181,12 @@ export default function CallModal({
             createPeerConnection(stream);
             const pc = pcRef.current;
             if (pc) {
-              const offer = await pc.createOffer();
+              const offer = await pc.createOffer();        // 正确的 createOffer
               await pc.setLocalDescription(offer);
-              ws.send(JSON.stringify({
-                event: 'call-offer',
-                data: { targetId: friendId, sdp: offer, type },
-              }));
+              ws.send(JSON.stringify({ event: 'call-offer', data: { targetId: friendId, sdp: offer, type } }));
             }
           }
         }
-
         return () => {
           ws.removeEventListener('message', handleSignal);
         };
@@ -215,9 +196,7 @@ export default function CallModal({
         onHangup();
       }
     };
-
     init();
-
     return () => {
       isClosedRef.current = true;
       localStreamRef.current?.getTracks().forEach((t) => t.stop());
@@ -231,12 +210,9 @@ export default function CallModal({
       createPeerConnection(localStreamRef.current);
       const pc = pcRef.current;
       if (pc) {
-        pc.createOffer().then((offer) => {
+        pc.createOffer().then((offer) => {          // 正确的 createOffer
           pc.setLocalDescription(offer);
-          ws.send(JSON.stringify({
-            event: 'call-offer',
-            data: { targetId: friendId, sdp: offer, type },
-          }));
+          ws.send(JSON.stringify({ event: 'call-offer', data: { targetId: friendId, sdp: offer, type } }));
         }).catch(console.error);
       }
     }
