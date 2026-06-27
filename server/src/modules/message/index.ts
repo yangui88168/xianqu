@@ -110,16 +110,16 @@ export async function messageRoutes(fastify: FastifyInstance) {
     reply.send({ success: true });
   });
 
-  // 编辑消息（仅发送者，限时5分钟 - 已解除限制）
+  // 编辑消息（无时间限制）
   fastify.put('/edit', { preHandler: authMiddleware }, async (request, reply) => {
     const userId = (request as any).userId;
     const { messageId, content } = request.body as any;
     if (!content) return reply.status(400).send({ error: '内容不能为空' });
+
     const msg = await prisma.message.findUnique({ where: { id: messageId } });
     if (!msg) return reply.status(404).send({ error: '消息不存在' });
     if (msg.senderId !== userId) return reply.status(403).send({ error: '只能编辑自己的消息' });
-    // const elapsed = Date.now() - new Date(msg.createdAt).getTime();
-    // if (elapsed > 5 * 60 * 1000) return reply.status(403).send({ error: '超过5分钟无法编辑' });
+
     await prisma.message.update({
       where: { id: messageId },
       data: { content, edited: true, updatedAt: new Date() },
