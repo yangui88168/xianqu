@@ -31,6 +31,10 @@ export default function Chat() {
   const recordStartY = useRef<number>(0);
 
   const [callState, setCallState] = useState<any>(null);
+  const [pendingCall, setPendingCall] = useState<{ type: 'audio' | 'video'; friendId: string; friendName: string } | null>(null);
+  const callStateRef = useRef(callState);
+  callStateRef.current = callState;
+
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [isLoadingChat, setIsLoadingChat] = useState(false);
@@ -175,13 +179,18 @@ export default function Chat() {
           }
           loadGroups();
         } else if (msg.event === 'call-offer') {
-          setCallState({
+          // 被叫方：弹出接听/拒绝提示
+          setPendingCall({
             type: msg.data.type || 'audio',
             friendId: msg.data.from,
             friendName: msg.data.fromName || '好友',
-            incoming: true,
-            offerSdp: msg.data.sdp,
           });
+        } else if (msg.event === 'call-accept') {
+          // 主叫方收到对方接听，标记 accepted=true
+          const currentCall = callStateRef.current;
+          if (currentCall && currentCall.friendId === msg.data.from && currentCall.incoming === false) {
+            setCallState(prev => prev ? { ...prev, accepted: true } : null);
+          }
         }
       };
       socket.onclose = () => {
@@ -601,8 +610,42 @@ export default function Chat() {
               <div className="flex items-center gap-1">
                 {selectedChat.type === 'friend' && (
                   <>
-                    <button onClick={() => setCallState({ type: 'audio', friendId: selectedChat.data.id, friendName: selectedChat.data.nickname || selectedChat.data.username })} className="text-gray-500 hover:text-gray-700 p-1" title="语音通话">📞</button>
-                    <button onClick={() => setCallState({ type: 'video', friendId: selectedChat.data.id, friendName: selectedChat.data.nickname || selectedChat.data.username })} className="text-gray-500 hover:text-gray-700 p-1" title="视频通话">📹</button>
+                    <button
+                      onClick={() => {
+                        if (!ws) return;
+                        ws.send(JSON.stringify({
+                          event: 'call-offer',
+                          data: { targetId: selectedChat.data.id, type: 'audio' }
+                        }));
+                        setCallState({
+                          type: 'audio',
+                          friendId: selectedChat.data.id,
+                          friendName: selectedChat.data.nickname || selectedChat.data.username,
+                          incoming: false,
+                          accepted: false,
+                        });
+                      }}
+                      className="text-gray-500 hover:text-gray-700 p-1"
+                      title="语音通话"
+                    >📞</button>
+                    <button
+                      onClick={() => {
+                        if (!ws) return;
+                        ws.send(JSON.stringify({
+                          event: 'call-offer',
+                          data: { targetId: selectedChat.data.id, type: 'video' }
+                        }));
+                        setCallState({
+                          type: 'video',
+                          friendId: selectedChat.data.id,
+                          friendName: selectedChat.data.nickname || selectedChat.data.username,
+                          incoming: false,
+                          accepted: false,
+                        });
+                      }}
+                      className="text-gray-500 hover:text-gray-700 p-1"
+                      title="视频通话"
+                    >📹</button>
                   </>
                 )}
                 {selectedChat.type === 'group' && (
@@ -612,9 +655,7 @@ export default function Chat() {
                   onClick={() => { setSelectedChat(null); setMessages([]); }}
                   className="text-gray-400 hover:text-gray-600 p-1 ml-1"
                   title="关闭"
-                >
-                  ✕
-                </button>
+                >✕</button>
               </div>
             </div>
 
@@ -889,6 +930,43 @@ export default function Chat() {
         </div>
       )}
 
+      {/* 被叫方接听/拒绝弹窗 */}
+      {pendingCall && (
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 text-center w-72">
+            <div className="text-4xl mb-3">{pendingCall.type === 'video' ? '📹' : '📞'}</div>
+            <p className="font-bold text-lg mb-1">{pendingCall.friendName}</p>
+            <p className="text-gray-500 text-sm mb-6">邀请你进行{pendingCall.type === 'video' ? '视频' : '语音'}通话</p>
+            <div className="flex gap-3 justify-center">
+              <button
+                onClick={() => {
+                  ws?.send(JSON.stringify({ event: 'call-hangup', data: { targetId: pendingCall.friendId } }));
+                  setPendingCall(null);
+                }}
+                className="px-6 py-3 bg-red-500 text-white rounded-full font-medium"
+              >
+                拒绝
+              </button>
+              <button
+                onClick={() => {
+                  ws?.send(JSON.stringify({ event: 'call-accept', data: { targetId: pendingCall.friendId } }));
+                  setCallState({
+                    type: pendingCall.type,
+                    friendId: pendingCall.friendId,
+                    friendName: pendingCall.friendName,
+                    incoming: true,
+                  });
+                  setPendingCall(null);
+                }}
+                className="px-6 py-3 bg-green-500 text-white rounded-full font-medium"
+              >
+                接听
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 通话弹窗 */}
       {callState && ws && (
         <CallModal
@@ -899,6 +977,7 @@ export default function Chat() {
           type={callState.type}
           incoming={callState.incoming}
           offerSdp={callState.offerSdp}
+          accepted={callState.accepted}
           onHangup={() => setCallState(null)}
         />
       )}
