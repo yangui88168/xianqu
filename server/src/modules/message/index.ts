@@ -180,7 +180,7 @@ export async function messageRoutes(fastify: FastifyInstance) {
     reply.send(sessions);
   });
 
-  // 转发消息（已修复实时推送）
+  // 转发消息（修复实时推送并添加错误捕获）
   fastify.post('/forward', { preHandler: authMiddleware }, async (request, reply) => {
     const userId = (request as any).userId;
     const { messageId, targetIds } = request.body as any;
@@ -196,37 +196,41 @@ export async function messageRoutes(fastify: FastifyInstance) {
 
     for (const targetId of targetIds) {
       const isGroup = targetId.startsWith('group-');
-      if (isGroup) {
-        const groupId = targetId.replace('group-', '');
-        const msg = await prisma.groupMessage.create({
-          data: { groupId, senderId: userId, content: forwardedContent, type: original.type },
-        });
-        // 广播给群成员
-        const group = await prisma.groupChat.findUnique({
-          where: { id: groupId },
-          include: { members: true },
-        });
-        if (group) {
-          group.members.forEach(member => {
-            const memberWs = onlineUsers.get(member.userId);
-            if (memberWs) {
-              memberWs.send(JSON.stringify({ event: 'group-message:receive', data: msg }));
-            }
+      try {
+        if (isGroup) {
+          const groupId = targetId.replace('group-', '');
+          const msg = await prisma.groupMessage.create({
+            data: { groupId, senderId: userId, content: forwardedContent, type: original.type },
           });
-        }
-        results.push({ targetId, msg });
-      } else {
-        const msg = await prisma.message.create({
-          data: { senderId: userId, receiverId: targetId, content: forwardedContent, type: original.type },
-        });
-        // 推送给接收方
-        const receiverWs = onlineUsers.get(targetId);
-        if (receiverWs) {
-          receiverWs.send(JSON.stringify({ event: WsEvent.MESSAGE_RECEIVE, data: msg }));
+          // 广播给群成员
+          const group = await prisma.groupChat.findUnique({
+            where: { id: groupId },
+            include: { members: true },
+          });
+          if (group) {
+            group.members.forEach(member => {
+              const memberWs = onlineUsers.get(member.userId);
+              if (memberWs) {
+                memberWs.send(JSON.stringify({ event: 'group-message:receive', data: msg }));
+              }
+            });
+          }
+          results.push({ targetId, msg });
         } else {
-          await prisma.offlineQueue.create({ data: { userId: targetId, messageId: msg.id } });
+          const msg = await prisma.message.create({
+            data: { senderId: userId, receiverId: targetId, content: forwardedContent, type: original.type },
+          });
+          // 实时推送给接收方
+          const receiverWs = onlineUsers.get(targetId);
+          if (receiverWs) {
+            receiverWs.send(JSON.stringify({ event: WsEvent.MESSAGE_RECEIVE, data: msg }));
+          } else {
+            await prisma.offlineQueue.create({ data: { userId: targetId, messageId: msg.id } });
+          }
+          results.push({ targetId, msg });
         }
-        results.push({ targetId, msg });
+      } catch (err) {
+        console.error('转发失败', err);
       }
     }
 
