@@ -46,10 +46,12 @@ export default function CallModal({
     localStreamRef.current?.getAudioTracks().forEach((t) => (t.enabled = !isMuted));
     setIsMuted(!isMuted);
   };
+
   const toggleCamera = () => {
     localStreamRef.current?.getVideoTracks().forEach((t) => (t.enabled = !isCameraOff));
     setIsCameraOff(!isCameraOff);
   };
+
   const toggleSpeaker = () => setIsSpeakerOn(!isSpeakerOn);
 
   const switchCamera = useCallback(async () => {
@@ -247,6 +249,7 @@ export default function CallModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90">
       <div className="relative flex flex-col items-center w-full max-w-sm mx-auto h-full max-h-screen py-4">
         <audio ref={remoteAudioRef} autoPlay playsInline className="hidden" />
+
         <div className="relative w-full aspect-video bg-gray-900 rounded-2xl overflow-hidden mb-4 flex items-center justify-center">
           {type === 'video' ? (
             <video ref={remoteVideoRef} autoPlay playsInline className="w-full h-full object-cover" />
@@ -256,6 +259,7 @@ export default function CallModal({
               <p className="text-lg font-medium">{friendName}</p>
             </div>
           )}
+          {/* 自己的小窗 */}
           {type === 'video' && (
             <div className="absolute bottom-4 right-4 w-24 h-36 bg-gray-700 rounded-xl overflow-hidden border-2 border-white shadow-lg">
               <video ref={localVideoRef} autoPlay muted playsInline className="w-full h-full object-cover" />
@@ -270,14 +274,25 @@ export default function CallModal({
             </div>
           )}
         </div>
+
         <div className="flex items-center gap-3 bg-gray-800/80 px-5 py-3 rounded-full mt-auto mb-6">
-          <button onClick={toggleMute} className={`w-10 h-10 rounded-full flex items-center justify-center text-white ${isMuted ? 'bg-red-500' : 'bg-gray-600 hover:bg-gray-500'}`}>{isMuted ? '🔇' : '🎙️'}</button>
-          <button onClick={hangup} className="w-14 h-14 rounded-full bg-red-600 hover:bg-red-700 flex items-center justify-center text-white text-2xl shadow-lg">📞</button>
-          <button onClick={toggleSpeaker} className={`w-10 h-10 rounded-full flex items-center justify-center text-white ${isSpeakerOn ? 'bg-gray-600 hover:bg-gray-500' : 'bg-blue-500'}`}>{isSpeakerOn ? '🔊' : '🔈'}</button>
+          <button onClick={toggleMute} className={`w-10 h-10 rounded-full flex items-center justify-center text-white ${isMuted ? 'bg-red-500' : 'bg-gray-600 hover:bg-gray-500'}`}>
+            {isMuted ? '🔇' : '🎙️'}
+          </button>
+          <button onClick={hangup} className="w-14 h-14 rounded-full bg-red-600 hover:bg-red-700 flex items-center justify-center text-white text-2xl shadow-lg">
+            📞
+          </button>
+          <button onClick={toggleSpeaker} className={`w-10 h-10 rounded-full flex items-center justify-center text-white ${isSpeakerOn ? 'bg-gray-600 hover:bg-gray-500' : 'bg-blue-500'}`}>
+            {isSpeakerOn ? '🔊' : '🔈'}
+          </button>
           {type === 'video' && (
             <>
-              <button onClick={toggleCamera} className={`w-10 h-10 rounded-full flex items-center justify-center text-white ${isCameraOff ? 'bg-red-500' : 'bg-gray-600 hover:bg-gray-500'}`}>{isCameraOff ? '📷❌' : '📷'}</button>
-              <button onClick={switchCamera} className="w-10 h-10 rounded-full flex items-center justify-center text-white bg-gray-600 hover:bg-gray-500">🔄</button>
+              <button onClick={toggleCamera} className={`w-10 h-10 rounded-full flex items-center justify-center text-white ${isCameraOff ? 'bg-red-500' : 'bg-gray-600 hover:bg-gray-500'}`}>
+                {isCameraOff ? '📷❌' : '📷'}
+              </button>
+              <button onClick={switchCamera} className="w-10 h-10 rounded-full flex items-center justify-center text-white bg-gray-600 hover:bg-gray-500">
+                🔄
+              </button>
             </>
           )}
         </div>
