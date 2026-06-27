@@ -103,6 +103,24 @@ export default function Chat() {
     }
   }, [userId, loadSessions, loadGroups, loadFriendRequests]);
 
+  // 自动进入好友聊天（从联系人页跳转）
+  useEffect(() => {
+    const friendId = router.query.friendId as string;
+    if (userId && friendId) {
+      const token = localStorage.getItem('token');
+      fetch(`${API}/messages/sessions`, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+        .then(res => res.json())
+        .then(sessions => {
+          const session = sessions.find((s: any) => s.friend.id === friendId);
+          if (session) {
+            selectChat('friend', session.friend);
+          }
+        });
+    }
+  }, [userId, router.query.friendId, selectChat]);
+
   // 初始化 Cloudinary Widget
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -207,7 +225,7 @@ export default function Chat() {
     };
   }, [userId, selectedChat?.data?.id, loadSessions]);
 
-  const selectChat = async (type: string, data: any) => {
+  const selectChat = useCallback(async (type: string, data: any) => {
     setSelectedChat({ type, data });
     setReplyingTo(null);
     setMobileView('chat');
@@ -248,7 +266,7 @@ export default function Chat() {
       }).catch(() => {});
       setSessions(prev => prev.map(s => s.friend.id === data.id ? { ...s, unreadCount: 0 } : s));
     }
-  };
+  }, []);
 
   const loadMoreMessages = async () => {
     if (!selectedChat || loadingMore || !hasMore) return;
