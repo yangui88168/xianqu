@@ -32,39 +32,40 @@ export default function Chat() {
   const recordStartY = useRef<number>(0);
 
   const [callState, setCallState] = useState<any>(null);
-  const [pendingCall, setPendingCall] = useState<{ type: 'audio' | 'video'; friendId: string; friendName: string } | null>(null);
-
-  const callStateRef = useRef(callState);
-  useEffect(() => { callStateRef.current = callState; }, [callState]);
-
-  const selectedChatRef = useRef(selectedChat);
-  useEffect(() => { selectedChatRef.current = selectedChat; }, [selectedChat]);
-
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [isLoadingChat, setIsLoadingChat] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [mobileView, setMobileView] = useState<'sidebar' | 'chat'>('sidebar');
 
+  // 右键/长按菜单
   const [contextMenu, setContextMenu] = useState<{ msg: any; x: number; y: number } | null>(null);
   const longPressTimer = useRef<NodeJS.Timeout | null>(null);
 
+  // 群信息面板
   const [showGroupInfo, setShowGroupInfo] = useState(false);
   const [groupInfo, setGroupInfo] = useState<any>(null);
   const [groupAnnouncement, setGroupAnnouncement] = useState('');
   const [showMentionList, setShowMentionList] = useState(false);
 
+  // 邀请相关
   const [inviteModal, setInviteModal] = useState(false);
   const [inviteGroupId, setInviteGroupId] = useState('');
   const [selectedFriends, setSelectedFriends] = useState<string[]>([]);
 
+  // 消息缓存
   const messageCache = useRef<Map<string, any[]>>(new Map());
   const loadingChatRef = useRef<Set<string>>(new Set());
 
+  // Cloudinary Widget
   const cloudinaryRef = useRef<any>();
   const widgetRef = useRef<any>();
+
+  // 接听弹窗
+  const [pendingCall, setPendingCall] = useState<any>(null);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -137,7 +138,7 @@ export default function Chat() {
     };
   }, []);
 
-  // WebSocket 连接（心跳、重连、消息/信令处理）
+  // WebSocket 连接
   useEffect(() => {
     if (!userId) return;
     let reconnectTimer: NodeJS.Timeout;
@@ -152,20 +153,19 @@ export default function Chat() {
       };
       socket.onmessage = (event) => {
         const msg = JSON.parse(event.data);
-        const currentChat = selectedChatRef.current;
-
         if (msg.event === 'message:receive') {
           const newMsg = msg.data;
           setMessages(prev => {
             if (prev.find(m => m.id === newMsg.id)) return prev;
             return [...prev, newMsg];
           });
-          if (currentChat?.type === 'friend' && currentChat.data.id === newMsg.senderId) {
+          if (selectedChat?.type === 'friend' && selectedChat.data.id === newMsg.senderId) {
             fetch(`${API}/messages/read`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
               body: JSON.stringify({ senderId: newMsg.senderId })
             });
+            ws?.send(JSON.stringify({ event: 'message:read', data: { messageId: newMsg.id, senderId: newMsg.senderId } }));
           }
           const cacheKey = `friend-${newMsg.senderId}`;
           const cached = messageCache.current.get(cacheKey) || [];
@@ -186,16 +186,14 @@ export default function Chat() {
           }
           loadGroups();
         } else if (msg.event === 'call-offer') {
+          // 弹出接听/拒绝弹窗
           setPendingCall({
             type: msg.data.type || 'audio',
             friendId: msg.data.from,
             friendName: msg.data.fromName || '好友',
           });
-        } else if (msg.event === 'call-accepted') {
-          const currentCall = callStateRef.current;
-          if (currentCall && currentCall.friendId === msg.data.from && currentCall.incoming === false) {
-            setCallState((prev: any) => prev ? { ...prev, accepted: true } : null);
-          }
+        } else if (msg.event === 'call-accepted' && callState?.friendId === msg.data.from) {
+          setCallState((prev: any) => prev ? { ...prev, accepted: true } : null);
         }
       };
       socket.onclose = () => {
@@ -209,8 +207,9 @@ export default function Chat() {
       clearTimeout(reconnectTimer);
       clearInterval(heartbeatTimer);
     };
-  }, [userId, loadSessions, loadGroups]);
+  }, [userId, selectedChat?.data?.id, loadSessions, callState?.friendId]);
 
+  // 选择会话
   const selectChat = useCallback(async (type: string, data: any) => {
     setSelectedChat({ type, data });
     setReplyingTo(null);
@@ -254,6 +253,7 @@ export default function Chat() {
     }
   }, []);
 
+  // 加载更多消息
   const loadMoreMessages = async () => {
     if (!selectedChat || loadingMore || !hasMore) return;
     setLoadingMore(true);
@@ -392,6 +392,64 @@ export default function Chat() {
     }
   };
 
+  // 图片上传（压缩后 base64，后续可改为直接上传 Cloudinary）
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !selectedChat || !ws) return;
+
+    const img = new Image();
+    const reader = new FileReader();
+    reader.onload = () => {
+      img.src = reader.result as string;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const maxWidth = 1200;
+        let { width, height } = img;
+        if (width > maxWidth) {
+          height = (height * maxWidth) / width;
+          width = maxWidth;
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d')!;
+        ctx.drawImage(img, 0, 0, width, height);
+        canvas.toBlob(async (blob) => {
+          if (!blob) return;
+          const compressedBase64 = await new Promise<string>((res) => {
+            const r = new FileReader();
+            r.onloadend = () => res(r.result as string);
+            r.readAsDataURL(blob);
+          });
+
+          const payload: any = {
+            content: compressedBase64,
+            type: 'image',
+            replyToId: replyingTo?.id || null,
+            chatType: selectedChat.type,
+          };
+          if (selectedChat.type === 'friend') {
+            payload.receiverId = selectedChat.data.id;
+            const tempId = `temp-${Date.now()}`;
+            const tempMsg = {
+              id: tempId, senderId: userId, content: compressedBase64, type: 'image',
+              status: 'sending', createdAt: new Date().toISOString(),
+            };
+            setMessages(prev => [...prev, tempMsg]);
+            updateSession(selectedChat.data.id, '[图片]', 'image');
+            const cacheKey = `friend-${selectedChat.data.id}`;
+            const cached = messageCache.current.get(cacheKey) || [];
+            messageCache.current.set(cacheKey, [...cached, tempMsg]);
+          } else {
+            payload.groupId = selectedChat.data.id;
+          }
+          ws.send(JSON.stringify({ event: 'message:send', data: payload }));
+        }, 'image/jpeg', 0.8);
+      };
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
   const recallMessage = async (msg: any) => {
     const token = localStorage.getItem('token');
     if (selectedChat?.type === 'friend') {
@@ -515,10 +573,7 @@ export default function Chat() {
     const res = await fetch(`${API}/groups/create`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({
-        name: newGroupName,
-        memberIds: selectedFriends,
-      }),
+      body: JSON.stringify({ name: newGroupName, memberIds: selectedFriends }),
     });
     if (res.ok) {
       setShowGroupModal(false);
@@ -555,6 +610,7 @@ export default function Chat() {
             </div>
           )}
         </div>
+
         {friendRequests.length > 0 && (
           <div className="border-b bg-yellow-50">
             <div className="p-2 text-sm font-bold">好友请求</div>
@@ -569,6 +625,7 @@ export default function Chat() {
             ))}
           </div>
         )}
+
         <div className="flex-1 overflow-y-auto">
           <div className="p-2 bg-gray-100 text-sm font-bold">群聊</div>
           {groups.map((g: any) => (
@@ -615,52 +672,22 @@ export default function Chat() {
               <div className="flex items-center gap-1">
                 {selectedChat.type === 'friend' && (
                   <>
-                    <button
-                      onClick={() => {
-                        if (!ws) return;
-                        ws.send(JSON.stringify({
-                          event: 'call-offer',
-                          data: { targetId: selectedChat.data.id, type: 'audio' }
-                        }));
-                        setCallState({
-                          type: 'audio',
-                          friendId: selectedChat.data.id,
-                          friendName: selectedChat.data.nickname || selectedChat.data.username,
-                          incoming: false,
-                          accepted: false,
-                        });
-                      }}
-                      className="text-gray-500 hover:text-gray-700 p-1"
-                      title="语音通话"
-                    >📞</button>
-                    <button
-                      onClick={() => {
-                        if (!ws) return;
-                        ws.send(JSON.stringify({
-                          event: 'call-offer',
-                          data: { targetId: selectedChat.data.id, type: 'video' }
-                        }));
-                        setCallState({
-                          type: 'video',
-                          friendId: selectedChat.data.id,
-                          friendName: selectedChat.data.nickname || selectedChat.data.username,
-                          incoming: false,
-                          accepted: false,
-                        });
-                      }}
-                      className="text-gray-500 hover:text-gray-700 p-1"
-                      title="视频通话"
-                    >📹</button>
+                    <button onClick={() => {
+                      if (!ws) return;
+                      ws.send(JSON.stringify({ event: 'call-offer', data: { targetId: selectedChat.data.id, type: 'audio' } }));
+                      setCallState({ type: 'audio', friendId: selectedChat.data.id, friendName: selectedChat.data.nickname || selectedChat.data.username, incoming: false });
+                    }} className="text-gray-500 hover:text-gray-700 p-1" title="语音通话">📞</button>
+                    <button onClick={() => {
+                      if (!ws) return;
+                      ws.send(JSON.stringify({ event: 'call-offer', data: { targetId: selectedChat.data.id, type: 'video' } }));
+                      setCallState({ type: 'video', friendId: selectedChat.data.id, friendName: selectedChat.data.nickname || selectedChat.data.username, incoming: false });
+                    }} className="text-gray-500 hover:text-gray-700 p-1" title="视频通话">📹</button>
                   </>
                 )}
                 {selectedChat.type === 'group' && (
                   <button onClick={() => { loadGroupInfo(); setShowGroupInfo(true); }} className="text-gray-500 hover:text-gray-700 p-1" title="群信息">ℹ️</button>
                 )}
-                <button
-                  onClick={() => { setSelectedChat(null); setMessages([]); }}
-                  className="text-gray-400 hover:text-gray-600 p-1 ml-1"
-                  title="关闭"
-                >✕</button>
+                <button onClick={() => { setSelectedChat(null); setMessages([]); }} className="text-gray-400 hover:text-gray-600 p-1 ml-1" title="关闭">✕</button>
               </div>
             </div>
 
@@ -716,6 +743,13 @@ export default function Chat() {
                             </div>
                             <div className={`flex items-center gap-1 mt-1 text-xs ${isMe ? 'justify-end' : 'justify-start'} text-gray-400`}>
                               {new Date(msg.createdAt).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' })}
+                              {isMe && (
+                                <span className="ml-1">
+                                  {msg.status === 'sent' && <span className="text-gray-400">✓</span>}
+                                  {msg.status === 'delivered' && <span className="text-gray-400">✓✓</span>}
+                                  {msg.status === 'read' && <span className="text-blue-500">✓✓</span>}
+                                </span>
+                              )}
                               {isMe && msg.status !== 'sending' && <button onClick={() => recallMessage(msg)} className="text-red-400 hover:text-red-600 ml-1" title="撤回">↩</button>}
                               <button onClick={() => setReplyingTo(msg)} className="text-gray-400 hover:text-gray-600 ml-1" title="回复">↪</button>
                             </div>
@@ -747,17 +781,12 @@ export default function Chat() {
                     {selectedChat?.type === 'group' && (
                       <button onClick={async () => {
                         const token = localStorage.getItem('token');
-                        const res = await fetch(`${API}/groups/${selectedChat.data.id}`, {
-                          headers: { Authorization: `Bearer ${token}` }
-                        });
+                        const res = await fetch(`${API}/groups/${selectedChat.data.id}`, { headers: { Authorization: `Bearer ${token}` } });
                         if (res.ok) {
                           const g = await res.json();
                           const member = g.members?.find((m: any) => m.userId !== userId);
-                          if (member) {
-                            setInput(prev => prev + `@${member.user?.nickname || member.user?.username} `);
-                          } else {
-                            alert('没有其他成员可@');
-                          }
+                          if (member) setInput(prev => prev + `@${member.user?.nickname || member.user?.username} `);
+                          else alert('没有其他成员可@');
                         }
                       }} className="text-gray-400 hover:text-gray-600 p-2">@</button>
                     )}
@@ -775,12 +804,7 @@ export default function Chat() {
                       className="flex-1 p-2 border rounded-full focus:outline-none focus:ring-2 focus:ring-blue-300 text-sm"
                       value={input}
                       onChange={e => setInput(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' && !e.shiftKey) {
-                          e.preventDefault();
-                          sendMessage();
-                        }
-                      }}
+                      onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
                       placeholder="输入消息..."
                     />
                     <button onClick={sendMessage} className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-full text-sm">发送</button>
@@ -802,9 +826,7 @@ export default function Chat() {
                   </div>
                 )}
               </div>
-              {isRecording && !recordingCancel && (
-                <div className="text-center text-xs text-gray-400 mt-1">上滑取消</div>
-              )}
+              {isRecording && !recordingCancel && <div className="text-center text-xs text-gray-400 mt-1">上滑取消</div>}
             </div>
           </>
         ) : (
@@ -828,10 +850,7 @@ export default function Chat() {
               {sessions.length === 0 && <p className="text-xs text-gray-400">暂无好友</p>}
               {sessions.map((s: any) => (
                 <label key={s.friend.id} className="flex items-center gap-2 py-1 cursor-pointer">
-                  <input type="checkbox" checked={selectedFriends.includes(s.friend.id)} onChange={e => {
-                    if (e.target.checked) setSelectedFriends(prev => [...prev, s.friend.id]);
-                    else setSelectedFriends(prev => prev.filter(id => id !== s.friend.id));
-                  }} />
+                  <input type="checkbox" checked={selectedFriends.includes(s.friend.id)} onChange={e => { if (e.target.checked) setSelectedFriends(prev => [...prev, s.friend.id]); else setSelectedFriends(prev => prev.filter(id => id !== s.friend.id)); }} />
                   <span className="text-sm">{s.friend.nickname || s.friend.username}</span>
                 </label>
               ))}
@@ -854,22 +873,13 @@ export default function Chat() {
             </div>
             <p className="font-medium">群名称：{groupInfo.name}</p>
             <p className="text-sm text-gray-500 mt-1">成员 {groupInfo.members?.length} 人</p>
-            <button
-              onClick={() => { setInviteGroupId(groupInfo.id); setSelectedFriends([]); setInviteModal(true); }}
-              className="w-full bg-blue-500 text-white py-2 rounded text-sm mt-3"
-            >
-              邀请好友加入
-            </button>
+            <button onClick={() => { setInviteGroupId(groupInfo.id); setSelectedFriends([]); setInviteModal(true); }} className="w-full bg-blue-500 text-white py-2 rounded text-sm mt-3">邀请好友加入</button>
             <div className="mt-3">
               <label className="text-sm font-medium">群公告</label>
               {(groupInfo.ownerId === userId || groupInfo.members?.find((m: any) => m.userId === userId && m.role === 'admin')) ? (
                 <div className="flex gap-2 mt-1">
                   <input value={groupAnnouncement} onChange={e => setGroupAnnouncement(e.target.value)} className="flex-1 border p-1 rounded text-sm" placeholder="编辑公告" />
-                  <button onClick={async () => {
-                    const token = localStorage.getItem('token');
-                    await fetch(`${API}/groups/${groupInfo.id}/announcement`, { method: 'PUT', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ announcement: groupAnnouncement }) });
-                    alert('公告已更新');
-                  }} className="bg-blue-500 text-white px-3 py-1 rounded text-sm">保存</button>
+                  <button onClick={async () => { const token = localStorage.getItem('token'); await fetch(`${API}/groups/${groupInfo.id}/announcement`, { method: 'PUT', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ announcement: groupAnnouncement }) }); alert('公告已更新'); }} className="bg-blue-500 text-white px-3 py-1 rounded text-sm">保存</button>
                 </div>
               ) : (
                 <p className="text-sm text-gray-600 mt-1 bg-gray-50 p-2 rounded">{groupInfo.announcement || '暂无公告'}</p>
@@ -921,7 +931,7 @@ export default function Chat() {
         </div>
       )}
 
-      {/* 消息操作菜单（右键/长按） */}
+      {/* 消息操作菜单 */}
       {contextMenu && (
         <div className="fixed bg-white border rounded shadow-lg py-1 z-50" style={{ left: contextMenu.x, top: contextMenu.y }} onClick={() => setContextMenu(null)}>
           <button onClick={() => { copyToClipboard(contextMenu.msg.content); setContextMenu(null); }} className="block w-full text-left px-4 py-2 text-sm hover:bg-gray-100">复制</button>
@@ -943,30 +953,8 @@ export default function Chat() {
             <p className="font-bold text-lg mb-1">{pendingCall.friendName}</p>
             <p className="text-gray-500 text-sm mb-6">邀请你进行{pendingCall.type === 'video' ? '视频' : '语音'}通话</p>
             <div className="flex gap-3 justify-center">
-              <button
-                onClick={() => {
-                  ws?.send(JSON.stringify({ event: 'call-hangup', data: { targetId: pendingCall.friendId } }));
-                  setPendingCall(null);
-                }}
-                className="px-6 py-3 bg-red-500 text-white rounded-full font-medium"
-              >
-                拒绝
-              </button>
-              <button
-                onClick={() => {
-                  ws?.send(JSON.stringify({ event: 'call-accepted', data: { targetId: pendingCall.friendId } }));
-                  setCallState({
-                    type: pendingCall.type,
-                    friendId: pendingCall.friendId,
-                    friendName: pendingCall.friendName,
-                    incoming: true,
-                  });
-                  setPendingCall(null);
-                }}
-                className="px-6 py-3 bg-green-500 text-white rounded-full font-medium"
-              >
-                接听
-              </button>
+              <button onClick={() => { ws?.send(JSON.stringify({ event: 'call-hangup', data: { targetId: pendingCall.friendId } })); setPendingCall(null); }} className="px-6 py-3 bg-red-500 text-white rounded-full font-medium">拒绝</button>
+              <button onClick={() => { ws?.send(JSON.stringify({ event: 'call-accepted', data: { targetId: pendingCall.friendId } })); setCallState({ type: pendingCall.type, friendId: pendingCall.friendId, friendName: pendingCall.friendName, incoming: true }); setPendingCall(null); }} className="px-6 py-3 bg-green-500 text-white rounded-full font-medium">接听</button>
             </div>
           </div>
         </div>
@@ -981,7 +969,6 @@ export default function Chat() {
           friendName={callState.friendName}
           type={callState.type}
           incoming={callState.incoming}
-          offerSdp={callState.offerSdp}
           accepted={callState.accepted}
           onHangup={() => setCallState(null)}
         />
