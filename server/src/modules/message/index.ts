@@ -179,4 +179,48 @@ export async function messageRoutes(fastify: FastifyInstance) {
 
     reply.send(sessions);
   });
+
+  // 转发消息
+  fastify.post('/forward', { preHandler: authMiddleware }, async (request, reply) => {
+    const userId = (request as any).userId;
+    const { messageId, targetIds } = request.body as any;
+    if (!messageId || !targetIds || targetIds.length === 0) {
+      return reply.status(400).send({ error: '缺少参数' });
+    }
+
+    const original = await prisma.message.findUnique({ where: { id: messageId } });
+    if (!original) return reply.status(404).send({ error: '消息不存在' });
+
+    const forwardedContent = `[转发] ${original.content}`;
+    const results = [];
+
+    for (const targetId of targetIds) {
+      // 判断是群聊还是好友
+      const isGroup = targetId.startsWith('group-');
+      if (isGroup) {
+        const groupId = targetId.replace('group-', '');
+        const msg = await prisma.groupMessage.create({
+          data: {
+            groupId,
+            senderId: userId,
+            content: forwardedContent,
+            type: original.type,
+          },
+        });
+        results.push({ targetId, msg });
+      } else {
+        const msg = await prisma.message.create({
+          data: {
+            senderId: userId,
+            receiverId: targetId,
+            content: forwardedContent,
+            type: original.type,
+          },
+        });
+        results.push({ targetId, msg });
+      }
+    }
+
+    reply.send({ success: true, results });
+  });
 }
