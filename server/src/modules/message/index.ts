@@ -110,14 +110,14 @@ export async function messageRoutes(fastify: FastifyInstance) {
     reply.send({ success: true });
   });
 
-  // 获取会话列表（包含最后一条消息预览和未读计数）
+  // 获取会话列表（包含最后一条消息预览和未读计数，好友信息含 lastSeen）
   fastify.get('/sessions', { preHandler: authMiddleware }, async (request, reply) => {
     const userId = (request as any).userId;
     const friendships = await prisma.friendship.findMany({
       where: { userId },
       include: {
         friend: {
-          select: { id: true, username: true, nickname: true, avatar: true, status: true },
+          select: { id: true, username: true, nickname: true, avatar: true, status: true, lastSeen: true },
         },
       },
     });
