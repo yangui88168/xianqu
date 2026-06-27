@@ -85,6 +85,11 @@ export default function Chat() {
   const [editingMessage, setEditingMessage] = useState<any>(null);
   const [editInput, setEditInput] = useState('');
 
+  // 转发消息相关
+  const [forwardModal, setForwardModal] = useState(false);
+  const [forwardMessage, setForwardMessage] = useState<any>(null);
+  const [selectedTargets, setSelectedTargets] = useState<string[]>([]);
+
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (!token) { router.push('/'); return; }
@@ -530,6 +535,24 @@ export default function Chat() {
     } else {
       alert('编辑失败，可能超过5分钟');
     }
+  };
+
+  // 转发确认
+  const confirmForward = async () => {
+    if (!forwardMessage || selectedTargets.length === 0) return;
+    const token = localStorage.getItem('token');
+    await fetch(`${API}/messages/forward`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({
+        messageId: forwardMessage.id,
+        targetIds: selectedTargets,
+      }),
+    });
+    alert('转发成功');
+    setForwardModal(false);
+    setForwardMessage(null);
+    setSelectedTargets([]);
   };
 
   const copyToClipboard = (text: string) => {
@@ -992,11 +1015,14 @@ export default function Chat() {
         </div>
       )}
 
-      {/* 消息操作菜单（增加编辑） */}
+      {/* 消息操作菜单（增加编辑和转发） */}
       {contextMenu && (
         <div className="fixed bg-white border rounded shadow-lg py-1 z-50" style={{ left: contextMenu.x, top: contextMenu.y }} onClick={() => setContextMenu(null)}>
           <button onClick={() => { copyToClipboard(contextMenu.msg.content); setContextMenu(null); }} className="block w-full text-left px-4 py-2 text-sm hover:bg-gray-100">复制</button>
           <button onClick={() => { setReplyingTo(contextMenu.msg); setContextMenu(null); }} className="block w-full text-left px-4 py-2 text-sm hover:bg-gray-100">引用回复</button>
+          <button onClick={() => { setForwardMessage(contextMenu.msg); setForwardModal(true); setContextMenu(null); }} className="block w-full text-left px-4 py-2 text-sm hover:bg-gray-100">
+            转发
+          </button>
           {contextMenu.msg.senderId === userId && (
             <>
               <button onClick={() => { setEditingMessage(contextMenu.msg); setEditInput(contextMenu.msg.content); setContextMenu(null); }} className="block w-full text-left px-4 py-2 text-sm hover:bg-gray-100">编辑</button>
@@ -1017,6 +1043,59 @@ export default function Chat() {
             <div className="flex gap-3 justify-center">
               <button onClick={() => { ws?.send(JSON.stringify({ event: 'call-hangup', data: { targetId: pendingCall.friendId } })); setPendingCall(null); }} className="px-6 py-3 bg-red-500 text-white rounded-full font-medium">拒绝</button>
               <button onClick={() => { ws?.send(JSON.stringify({ event: 'call-accepted', data: { targetId: pendingCall.friendId } })); setCallState({ type: pendingCall.type, friendId: pendingCall.friendId, friendName: pendingCall.friendName, incoming: true }); setPendingCall(null); }} className="px-6 py-3 bg-green-500 text-white rounded-full font-medium">接听</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 转发弹窗 */}
+      {forwardModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50" onClick={() => setForwardModal(false)}>
+          <div className="bg-white p-5 rounded shadow-lg w-80 max-h-[70vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            <h3 className="font-bold mb-3">转发消息</h3>
+            <div className="flex-1 overflow-y-auto border rounded p-2 mb-3">
+              <p className="text-xs text-gray-500 mb-2">好友</p>
+              {sessions.map((s: any) => (
+                <label key={s.friend.id} className="flex items-center gap-2 py-1 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={selectedTargets.includes(s.friend.id)}
+                    onChange={e => {
+                      if (e.target.checked) {
+                        setSelectedTargets(prev => [...prev, s.friend.id]);
+                      } else {
+                        setSelectedTargets(prev => prev.filter(id => id !== s.friend.id));
+                      }
+                    }}
+                  />
+                  <span className="text-sm">{s.friend.nickname || s.friend.username}</span>
+                </label>
+              ))}
+              <p className="text-xs text-gray-500 mt-3 mb-2">群聊</p>
+              {groups.map((g: any) => (
+                <label key={g.id} className="flex items-center gap-2 py-1 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={selectedTargets.includes(`group-${g.id}`)}
+                    onChange={e => {
+                      if (e.target.checked) {
+                        setSelectedTargets(prev => [...prev, `group-${g.id}`]);
+                      } else {
+                        setSelectedTargets(prev => prev.filter(id => id !== `group-${g.id}`));
+                      }
+                    }}
+                  />
+                  <span className="text-sm"># {g.name}</span>
+                </label>
+              ))}
+            </div>
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => { setForwardModal(false); setSelectedTargets([]); }} className="px-3 py-1 bg-gray-300 rounded text-sm">
+                取消
+              </button>
+              <button onClick={confirmForward} className="px-3 py-1 bg-green-500 text-white rounded text-sm">
+                转发
+              </button>
             </div>
           </div>
         </div>
