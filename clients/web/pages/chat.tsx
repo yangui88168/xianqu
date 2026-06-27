@@ -537,7 +537,7 @@ export default function Chat() {
     }
   };
 
-  // 转发确认
+  // 转发确认（增加了刷新列表）
   const confirmForward = async () => {
     if (!forwardMessage || selectedTargets.length === 0) return;
     const token = localStorage.getItem('token');
@@ -550,6 +550,8 @@ export default function Chat() {
       }),
     });
     alert('转发成功');
+    loadSessions();   // 刷新好友会话列表
+    loadGroups();     // 刷新群聊列表
     setForwardModal(false);
     setForwardMessage(null);
     setSelectedTargets([]);
