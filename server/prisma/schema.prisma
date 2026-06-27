@@ -32,12 +32,16 @@ model User {
   exp              UserExp?
   favorites        Favorite[]
 
-  // 新增关系（动态广场）
+  // 动态广场
   posts            StarPost[]
   likes            StarLike[]
   comments         StarComment[]
   followers        Follow[]        @relation("Followers")
   following        Follow[]        @relation("Followings")
+
+  // 黑名单
+  blockedUsers     Blocked[]       @relation("Blocker")
+  blockedBy        Blocked[]       @relation("Blocked")
 }
 
 model Message {
@@ -69,6 +73,8 @@ model Friendship {
   id        String   @id @default(cuid())
   userId    String
   friendId  String
+  note      String?
+  groupName String?
   createdAt DateTime @default(now())
   user      User     @relation("UserFriendships", fields: [userId], references: [id])
   friend    User     @relation("FriendRelation", fields: [friendId], references: [id])
@@ -189,4 +195,15 @@ model Follow {
   following   User     @relation("Followers", fields: [followingId], references: [id])
 
   @@unique([followerId, followingId])
+}
+
+// 黑名单
+model Blocked {
+  userId    String
+  blockedId String
+  createdAt DateTime @default(now())
+  user      User     @relation("Blocker", fields: [userId], references: [id])
+  blocked   User     @relation("Blocked", fields: [blockedId], references: [id])
+
+  @@id([userId, blockedId])
 }
