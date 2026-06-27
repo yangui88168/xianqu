@@ -11,6 +11,11 @@ export default function Contacts() {
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
+  // 新增状态：编辑备注和分组
+  const [editingFriendId, setEditingFriendId] = useState<string | null>(null);
+  const [editNote, setEditNote] = useState('');
+  const [editGroup, setEditGroup] = useState('');
+
   // 加载好友列表和请求
   const loadFriends = useCallback(async () => {
     const token = localStorage.getItem('token');
@@ -87,6 +92,41 @@ export default function Contacts() {
     await fetch(`${API}/contacts/friend/${friendId}`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${token}` },
+    });
+    loadFriends();
+  };
+
+  // 更新备注
+  const updateNote = async (friendId: string) => {
+    const token = localStorage.getItem('token');
+    await fetch(`${API}/contacts/friend/${friendId}/note`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ note: editNote }),
+    });
+    setEditingFriendId(null);
+    loadFriends();
+  };
+
+  // 更新分组
+  const updateGroup = async (friendId: string) => {
+    const token = localStorage.getItem('token');
+    await fetch(`${API}/contacts/friend/${friendId}/group`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ groupName: editGroup }),
+    });
+    setEditingFriendId(null);
+    loadFriends();
+  };
+
+  // 拉黑用户
+  const blockUser = async (blockedId: string) => {
+    const token = localStorage.getItem('token');
+    await fetch(`${API}/contacts/block`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ blockedId }),
     });
     loadFriends();
   };
@@ -172,12 +212,8 @@ export default function Contacts() {
           <p className="text-center text-gray-400 mt-10">暂无好友，快去添加吧</p>
         ) : (
           friends.map((friend: any) => (
-            <div
-              key={friend.id}
-              className="flex items-center justify-between px-4 py-3 bg-white border-b hover:bg-gray-50 cursor-pointer"
-              onClick={() => openChat(friend.id)}
-            >
-              <div className="flex items-center gap-3">
+            <div key={friend.id} className="flex items-center justify-between px-4 py-3 bg-white border-b hover:bg-gray-50 cursor-pointer relative" onClick={() => openChat(friend.id)}>
+              <div className="flex items-center gap-3 flex-1">
                 <div className="relative">
                   <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold">
                     {(friend.nickname || friend.username)[0]}
@@ -188,24 +224,29 @@ export default function Contacts() {
                     }`}
                   ></span>
                 </div>
-                <div>
-                  <p className="font-medium text-sm">
-                    {friend.nickname || friend.username}
-                  </p>
-                  <p className="text-xs text-gray-500">
-                    {friend.status === 'online' ? '在线' : '离线'}
-                  </p>
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <p className="font-medium text-sm">{friend.nickname || friend.username}</p>
+                    {friend.note && <span className="text-xs text-gray-400 bg-gray-100 px-1 rounded">备注：{friend.note}</span>}
+                  </div>
+                  <p className="text-xs text-gray-500">{friend.groupName || '未分组'} · {friend.status === 'online' ? '在线' : '离线'}</p>
                 </div>
               </div>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  deleteFriend(friend.id);
-                }}
-                className="text-xs text-red-500 hover:underline"
-              >
-                删除
-              </button>
+              <div className="flex gap-2" onClick={e => e.stopPropagation()}>
+                <button onClick={() => { setEditingFriendId(friend.id); setEditNote(friend.note || ''); setEditGroup(friend.groupName || ''); }} className="text-xs text-blue-500">编辑</button>
+                <button onClick={() => blockUser(friend.id)} className="text-xs text-red-500">拉黑</button>
+                <button onClick={() => deleteFriend(friend.id)} className="text-xs text-red-500">删除</button>
+              </div>
+              {editingFriendId === friend.id && (
+                <div className="absolute bg-white p-3 border rounded shadow" style={{ zIndex: 10, top: '100%', right: 0 }}>
+                  <input placeholder="备注" value={editNote} onChange={e => setEditNote(e.target.value)} className="border p-1 text-sm mb-1 w-full" />
+                  <input placeholder="分组" value={editGroup} onChange={e => setEditGroup(e.target.value)} className="border p-1 text-sm mb-1 w-full" />
+                  <div className="flex gap-2">
+                    <button onClick={() => updateNote(friend.id)} className="bg-blue-500 text-white px-2 py-1 text-xs rounded">保存备注</button>
+                    <button onClick={() => updateGroup(friend.id)} className="bg-green-500 text-white px-2 py-1 text-xs rounded">保存分组</button>
+                  </div>
+                </div>
+              )}
             </div>
           ))
         )}
