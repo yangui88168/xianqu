@@ -33,8 +33,12 @@ export default function Chat() {
 
   const [callState, setCallState] = useState<any>(null);
   const [pendingCall, setPendingCall] = useState<{ type: 'audio' | 'video'; friendId: string; friendName: string } | null>(null);
+
   const callStateRef = useRef(callState);
-  callStateRef.current = callState;
+  useEffect(() => { callStateRef.current = callState; }, [callState]);
+
+  const selectedChatRef = useRef(selectedChat);
+  useEffect(() => { selectedChatRef.current = selectedChat; }, [selectedChat]);
 
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -119,7 +123,7 @@ export default function Chat() {
           }
         });
     }
-  }, [userId, router.query.friendId, selectChat]);
+  }, [userId, router.query.friendId]);
 
   // 初始化 Cloudinary Widget
   useEffect(() => {
@@ -151,7 +155,7 @@ export default function Chat() {
     };
   }, []);
 
-  // WebSocket 连接（心跳、重连、消息/信令处理）
+  // WebSocket 连接（心跳、重连、消息/信令处理）—— 不再依赖 selectedChat，避免重连
   useEffect(() => {
     if (!userId) return;
     let reconnectTimer: NodeJS.Timeout;
@@ -166,13 +170,15 @@ export default function Chat() {
       };
       socket.onmessage = (event) => {
         const msg = JSON.parse(event.data);
+        const currentChat = selectedChatRef.current;
+
         if (msg.event === 'message:receive') {
           const newMsg = msg.data;
           setMessages(prev => {
             if (prev.find(m => m.id === newMsg.id)) return prev;
             return [...prev, newMsg];
           });
-          if (selectedChat?.type === 'friend' && selectedChat.data.id === newMsg.senderId) {
+          if (currentChat?.type === 'friend' && currentChat.data.id === newMsg.senderId) {
             fetch(`${API}/messages/read`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -198,14 +204,12 @@ export default function Chat() {
           }
           loadGroups();
         } else if (msg.event === 'call-offer') {
-          // 被叫方：弹出接听/拒绝提示
           setPendingCall({
             type: msg.data.type || 'audio',
             friendId: msg.data.from,
             friendName: msg.data.fromName || '好友',
           });
         } else if (msg.event === 'call-accepted') {
-          // 主叫方收到对方接听，标记 accepted=true
           const currentCall = callStateRef.current;
           if (currentCall && currentCall.friendId === msg.data.from && currentCall.incoming === false) {
             setCallState((prev: any) => prev ? { ...prev, accepted: true } : null);
@@ -223,7 +227,7 @@ export default function Chat() {
       clearTimeout(reconnectTimer);
       clearInterval(heartbeatTimer);
     };
-  }, [userId, selectedChat?.data?.id, loadSessions]);
+  }, [userId, loadSessions, loadGroups]);
 
   const selectChat = useCallback(async (type: string, data: any) => {
     setSelectedChat({ type, data });
@@ -959,7 +963,6 @@ export default function Chat() {
             <div className="flex gap-3 justify-center">
               <button
                 onClick={() => {
-                  // 拒绝：发送挂断信令
                   ws?.send(JSON.stringify({ event: 'call-hangup', data: { targetId: pendingCall.friendId } }));
                   setPendingCall(null);
                 }}
@@ -969,7 +972,6 @@ export default function Chat() {
               </button>
               <button
                 onClick={() => {
-                  // 接听：发送 call-accepted 信令 + 打开 CallModal
                   ws?.send(JSON.stringify({ event: 'call-accepted', data: { targetId: pendingCall.friendId } }));
                   setCallState({
                     type: pendingCall.type,
