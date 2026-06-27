@@ -3,6 +3,21 @@ import { useRouter } from 'next/router';
 
 const API = 'https://xianqu-server.onrender.com';
 
+// 动态时间描述（从 chat.tsx 复用）
+const getLastSeenText = (friend: any) => {
+  if (friend.status === 'online') return '在线';
+  if (!friend.lastSeen) return '离线';
+  const diff = Date.now() - new Date(friend.lastSeen).getTime();
+  const minutes = Math.floor(diff / 60000);
+  if (minutes < 1) return '刚刚在线';
+  if (minutes < 60) return `${minutes}分钟前在线`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}小时前在线`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}天前在线`;
+  return new Date(friend.lastSeen).toLocaleDateString();
+};
+
 export default function Contacts() {
   const [friends, setFriends] = useState<any[]>([]);
   const [requests, setRequests] = useState<any[]>([]);
@@ -229,7 +244,8 @@ export default function Contacts() {
                     <p className="font-medium text-sm">{friend.nickname || friend.username}</p>
                     {friend.note && <span className="text-xs text-gray-400 bg-gray-100 px-1 rounded">备注：{friend.note}</span>}
                   </div>
-                  <p className="text-xs text-gray-500">{friend.groupName || '未分组'} · {friend.status === 'online' ? '在线' : '离线'}</p>
+                  {/* 替换为动态时间描述 */}
+                  <p className="text-xs text-gray-500">{friend.groupName || '未分组'} · {getLastSeenText(friend)}</p>
                 </div>
               </div>
               <div className="flex gap-2" onClick={e => e.stopPropagation()}>
