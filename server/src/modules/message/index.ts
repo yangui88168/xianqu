@@ -15,10 +15,17 @@ function authMiddleware(request: any, reply: any, done: any) {
 }
 
 export async function messageRoutes(fastify: FastifyInstance) {
-  // 发送私聊消息
+  // 发送私聊消息（已添加拉黑检查）
   fastify.post('/send', { preHandler: authMiddleware }, async (request, reply) => {
     const { receiverId, content, type = 'text', replyToId } = request.body as any;
     const senderId = (request as any).userId;
+
+    // 拉黑检查
+    const isBlocked = await prisma.blocked.findFirst({
+      where: { OR: [{ userId: senderId, blockedId: receiverId }, { userId: receiverId, blockedId: senderId }] },
+    });
+    if (isBlocked) return reply.status(403).send({ error: '无法发送消息，对方已被拉黑' });
+
     const msg = await prisma.message.create({ data: { senderId, receiverId, content, type, replyToId } });
 
     // 实时推送
@@ -50,7 +57,7 @@ export async function messageRoutes(fastify: FastifyInstance) {
           { senderId: currentUserId, receiverId: otherUserId },
           { senderId: otherUserId, receiverId: currentUserId },
         ],
-        deleted: false, // 不返回已删除的消息
+        deleted: false,
       },
       orderBy: { createdAt: 'desc' },
       skip,
