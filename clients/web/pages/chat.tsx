@@ -185,7 +185,7 @@ export default function Chat() {
             friendId: msg.data.from,
             friendName: msg.data.fromName || '好友',
           });
-        } else if (msg.event === 'call-accept') {
+        } else if (msg.event === 'call-accepted') {
           // 主叫方收到对方接听，标记 accepted=true
           const currentCall = callStateRef.current;
           if (currentCall && currentCall.friendId === msg.data.from && currentCall.incoming === false) {
@@ -940,6 +940,7 @@ export default function Chat() {
             <div className="flex gap-3 justify-center">
               <button
                 onClick={() => {
+                  // 拒绝：发送挂断信令
                   ws?.send(JSON.stringify({ event: 'call-hangup', data: { targetId: pendingCall.friendId } }));
                   setPendingCall(null);
                 }}
@@ -949,7 +950,8 @@ export default function Chat() {
               </button>
               <button
                 onClick={() => {
-                  ws?.send(JSON.stringify({ event: 'call-accept', data: { targetId: pendingCall.friendId } }));
+                  // 接听：发送 call-accepted 信令 + 打开 CallModal
+                  ws?.send(JSON.stringify({ event: 'call-accepted', data: { targetId: pendingCall.friendId } }));
                   setCallState({
                     type: pendingCall.type,
                     friendId: pendingCall.friendId,
