@@ -15,6 +15,7 @@ model User {
   password         String
   nickname         String?
   avatar           String?
+  signature        String?
   status           String          @default("offline")
   createdAt        DateTime        @default(now())
   
@@ -28,6 +29,8 @@ model User {
   ownedGroups      GroupChat[]
   groupMemberships GroupMember[]
   groupMessages    GroupMessage[]
+  exp              UserExp?
+  favorites        Favorite[]
 }
 
 model Message {
@@ -117,4 +120,21 @@ model GroupMessage {
   sender    User           @relation(fields: [senderId], references: [id])
   replyTo   GroupMessage?  @relation("Replies", fields: [replyToId], references: [id])
   replies   GroupMessage[] @relation("Replies")
+}
+
+model UserExp {
+  userId String @id
+  exp    Int    @default(0)
+  level  Int    @default(1)
+  user   User   @relation(fields: [userId], references: [id])
+}
+
+model Favorite {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String
+  targetId  String
+  content   String?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
 }
