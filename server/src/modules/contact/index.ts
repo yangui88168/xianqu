@@ -73,7 +73,6 @@ export async function contactRoutes(fastify: FastifyInstance) {
     });
     if (!req) return reply.status(404).send({ error: 'Request not found' });
 
-    // 正确用法：将更新数据放在 data 里
     await prisma.friendRequest.update({
       where: { id: requestId },
       data: { status: 'accepted' },
@@ -92,7 +91,6 @@ export async function contactRoutes(fastify: FastifyInstance) {
   fastify.post('/request/reject', { preHandler: authMiddleware }, async (request, reply) => {
     const userId = (request as any).userId;
     const { requestId } = request.body as any;
-    // 正确用法：使用 updateMany 时，修改的字段必须放在 data 对象内
     await prisma.friendRequest.updateMany({
       where: { id: requestId, receiverId: userId, status: 'pending' },
       data: { status: 'rejected' },
@@ -100,7 +98,7 @@ export async function contactRoutes(fastify: FastifyInstance) {
     reply.send({ success: true });
   });
 
-  // 好友列表
+  // 好友列表（返回备注和分组）
   fastify.get('/friends', { preHandler: authMiddleware }, async (request, reply) => {
     const userId = (request as any).userId;
     const friendships = await prisma.friendship.findMany({
@@ -111,7 +109,11 @@ export async function contactRoutes(fastify: FastifyInstance) {
         },
       },
     });
-    reply.send(friendships.map(f => f.friend));
+    reply.send(friendships.map(f => ({
+      ...f.friend,
+      note: f.note,
+      groupName: f.groupName,
+    })));
   });
 
   // 删除好友
@@ -122,5 +124,69 @@ export async function contactRoutes(fastify: FastifyInstance) {
       where: { OR: [{ userId, friendId }, { userId: friendId, friendId: userId }] },
     });
     reply.send({ success: true });
+  });
+
+  // 更新好友备注
+  fastify.put('/friend/:friendId/note', { preHandler: authMiddleware }, async (request, reply) => {
+    const userId = (request as any).userId;
+    const { friendId } = request.params as any;
+    const { note } = request.body as any;
+    await prisma.friendship.updateMany({
+      where: { userId, friendId },
+      data: { note },
+    });
+    reply.send({ success: true });
+  });
+
+  // 更新好友分组
+  fastify.put('/friend/:friendId/group', { preHandler: authMiddleware }, async (request, reply) => {
+    const userId = (request as any).userId;
+    const { friendId } = request.params as any;
+    const { groupName } = request.body as any;
+    await prisma.friendship.updateMany({
+      where: { userId, friendId },
+      data: { groupName },
+    });
+    reply.send({ success: true });
+  });
+
+  // 拉黑用户
+  fastify.post('/block', { preHandler: authMiddleware }, async (request, reply) => {
+    const userId = (request as any).userId;
+    const { blockedId } = request.body as any;
+    // 删除双向好友关系
+    await prisma.friendship.deleteMany({
+      where: {
+        OR: [
+          { userId, friendId: blockedId },
+          { userId: blockedId, friendId: userId },
+        ],
+      },
+    });
+    // 添加拉黑记录
+    await prisma.blocked.create({
+      data: { userId, blockedId },
+    });
+    reply.send({ success: true });
+  });
+
+  // 取消拉黑
+  fastify.delete('/block/:blockedId', { preHandler: authMiddleware }, async (request, reply) => {
+    const userId = (request as any).userId;
+    const { blockedId } = request.params as any;
+    await prisma.blocked.deleteMany({
+      where: { userId, blockedId },
+    });
+    reply.send({ success: true });
+  });
+
+  // 获取拉黑列表
+  fastify.get('/blocked', { preHandler: authMiddleware }, async (request, reply) => {
+    const userId = (request as any).userId;
+    const blocked = await prisma.blocked.findMany({
+      where: { userId },
+      include: { blocked: { select: { id: true, username: true, nickname: true, avatar: true } } },
+    });
+    reply.send(blocked.map(b => b.blocked));
   });
 }
