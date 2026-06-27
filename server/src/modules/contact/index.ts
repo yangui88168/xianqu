@@ -98,14 +98,14 @@ export async function contactRoutes(fastify: FastifyInstance) {
     reply.send({ success: true });
   });
 
-  // 好友列表（返回备注和分组）
+  // 好友列表（返回备注、分组和最后在线时间）
   fastify.get('/friends', { preHandler: authMiddleware }, async (request, reply) => {
     const userId = (request as any).userId;
     const friendships = await prisma.friendship.findMany({
       where: { userId },
       include: {
         friend: {
-          select: { id: true, username: true, nickname: true, avatar: true, status: true },
+          select: { id: true, username: true, nickname: true, avatar: true, status: true, lastSeen: true },
         },
       },
     });
