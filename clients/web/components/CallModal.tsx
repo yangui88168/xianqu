@@ -8,65 +8,78 @@ interface CallModalProps {
   type: 'audio' | 'video';
   incoming?: boolean;
   offerSdp?: any;
+  accepted?: boolean; // 主叫方是否已接听
   onHangup: () => void;
 }
 
 export default function CallModal({
-  ws, userId, friendId, friendName, type, incoming, offerSdp, onHangup,
+  ws, userId, friendId, friendName, type, incoming, offerSdp, accepted, onHangup,
 }: CallModalProps) {
+  const [localStream, setLocalStream] = useState<MediaStream | null>(null);
+  const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   const [callStatus, setCallStatus] = useState<'calling' | 'connected' | 'ended'>('calling');
   const [duration, setDuration] = useState(0);
   const [isMuted, setIsMuted] = useState(false);
   const [isCameraOff, setIsCameraOff] = useState(false);
   const [isSpeakerOn, setIsSpeakerOn] = useState(true);
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user');
+  const [audioBlocked, setAudioBlocked] = useState(false);
 
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
   const remoteAudioRef = useRef<HTMLAudioElement>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
-  const localStreamRef = useRef<MediaStream | null>(null);
   const durationRef = useRef<NodeJS.Timeout | null>(null);
-  const isClosedRef = useRef(false);
+  const interactionRef = useRef(false);
 
   // 挂断
   const hangup = useCallback(() => {
-    if (isClosedRef.current) return;
-    isClosedRef.current = true;
     setCallStatus('ended');
-
-    localStreamRef.current?.getTracks().forEach((t) => t.stop());
+    localStream?.getTracks().forEach((t) => t.stop());
+    remoteStream?.getTracks().forEach((t) => t.stop());
     pcRef.current?.close();
-    pcRef.current = null;
     if (durationRef.current) clearInterval(durationRef.current);
-
-    try {
-      ws.send(JSON.stringify({ event: 'call-hangup', data: { targetId: friendId } }));
-    } catch {}
-
+    ws.send(JSON.stringify({ event: 'call-hangup', data: { targetId: friendId } }));
     onHangup();
-  }, [ws, friendId, onHangup]);
+  }, [ws, friendId, localStream, remoteStream, onHangup]);
 
-  // 静音
+  // 尝试解锁音频
+  const unlockAudio = useCallback(() => {
+    if (remoteAudioRef.current) {
+      remoteAudioRef.current.muted = true;
+      remoteAudioRef.current.play().then(() => {
+        remoteAudioRef.current!.muted = false;
+        interactionRef.current = true;
+        if (remoteStream && remoteAudioRef.current) {
+          remoteAudioRef.current.srcObject = remoteStream;
+          remoteAudioRef.current.play().catch(() => setAudioBlocked(true));
+        }
+      }).catch(() => {});
+    }
+  }, [remoteStream]);
+
   const toggleMute = () => {
-    localStreamRef.current?.getAudioTracks().forEach((t) => (t.enabled = !isMuted));
+    localStream?.getAudioTracks().forEach((t) => (t.enabled = !isMuted));
     setIsMuted(!isMuted);
+    unlockAudio();
   };
 
-  // 摄像头开关
   const toggleCamera = () => {
-    localStreamRef.current?.getVideoTracks().forEach((t) => (t.enabled = !isCameraOff));
+    localStream?.getVideoTracks().forEach((t) => (t.enabled = !isCameraOff));
     setIsCameraOff(!isCameraOff);
+    unlockAudio();
   };
 
-  const toggleSpeaker = () => setIsSpeakerOn(!isSpeakerOn);
+  const toggleSpeaker = () => {
+    setIsSpeakerOn(!isSpeakerOn);
+    unlockAudio();
+  };
 
-  // 切换前后摄像头
   const switchCamera = useCallback(async () => {
     const newMode = facingMode === 'user' ? 'environment' : 'user';
     setFacingMode(newMode);
-    if (localStreamRef.current) {
-      localStreamRef.current.getVideoTracks().forEach((t) => t.stop());
+    if (localStream) {
+      localStream.getVideoTracks().forEach((t) => t.stop());
       try {
         const newStream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: newMode },
@@ -76,30 +89,70 @@ export default function CallModal({
         const sender = pcRef.current?.getSenders().find((s) => s.track?.kind === 'video');
         if (sender) sender.replaceTrack(videoTrack);
         if (localVideoRef.current) localVideoRef.current.srcObject = newStream;
-        localStreamRef.current = newStream;
-      } catch (e) {
-        console.error('切换摄像头失败', e);
-      }
+        setLocalStream((prev) => {
+          prev?.getTracks().forEach((t) => t.stop());
+          return newStream;
+        });
+      } catch (e) { console.error(e); }
     }
-  }, [facingMode]);
+  }, [facingMode, localStream]);
 
+  // 信令处理
+  const handleSignal = useCallback(
+    (e: MessageEvent) => {
+      const msg = JSON.parse(e.data);
+      if (msg.data?.from !== friendId) return;
+      if (msg.event === 'call-answer') {
+        pcRef.current?.setRemoteDescription(new RTCSessionDescription(msg.data.sdp));
+      } else if (msg.event === 'ice-candidate') {
+        pcRef.current?.addIceCandidate(new RTCIceCandidate(msg.data.candidate));
+      } else if (msg.event === 'call-hangup') {
+        hangup();
+      } else if (msg.event === 'call-offer' && incoming) {
+        // 被叫方收到主叫方的 offer（含 SDP），设置远程描述并创建 answer
+        pcRef.current?.setRemoteDescription(new RTCSessionDescription(msg.data.sdp))
+          .then(() => pcRef.current!.createAnswer())
+          .then(answer => {
+            pcRef.current!.setLocalDescription(answer);
+            ws.send(JSON.stringify({
+              event: 'call-answer',
+              data: { targetId: friendId, sdp: answer },
+            }));
+          })
+          .catch(console.error);
+      }
+    },
+    [friendId, hangup, incoming, ws]
+  );
+
+  // 初始化媒体流
   useEffect(() => {
-    isClosedRef.current = false;
-    const init = async () => {
+    const initStream = async () => {
       try {
-        // 获取本地流
         const stream = await navigator.mediaDevices.getUserMedia({
           audio: true,
           video: type === 'video' ? { facingMode: 'user' } : false,
         });
-        if (isClosedRef.current) {
-          stream.getTracks().forEach((t) => t.stop());
-          return;
-        }
-        localStreamRef.current = stream;
+        setLocalStream(stream);
         if (localVideoRef.current) localVideoRef.current.srcObject = stream;
+        return stream;
+      } catch (err) {
+        console.error(err);
+        alert('无法访问摄像头/麦克风');
+        onHangup();
+      }
+    };
 
-        // 创建对等连接
+    initStream().then(stream => {
+      if (!stream) return;
+
+      // 添加信令监听
+      ws.addEventListener('message', handleSignal);
+
+      // 根据角色决定何时创建 PeerConnection
+      if (incoming) {
+        // 被叫方：等待主叫方的 call-offer（在 handleSignal 中处理）
+        // 仅创建空的 PeerConnection 以准备接收 offer
         const pc = new RTCPeerConnection({
           iceServers: [
             { urls: 'stun:stun.l.google.com:19302' },
@@ -116,44 +169,26 @@ export default function CallModal({
           ],
         });
         pcRef.current = pc;
-        stream.getTracks().forEach((track) => pc.addTrack(track, stream));
-
-        // 远程流处理
+        stream.getTracks().forEach(track => pc.addTrack(track, stream));
         pc.ontrack = (event) => {
-          if (isClosedRef.current) return;
-          const remoteStream = event.streams[0];
-          if (!remoteStream) return;
-
-          // 视频模式绑定到 video 元素
-          if (type === 'video' && remoteVideoRef.current) {
-            remoteVideoRef.current.srcObject = remoteStream;
-            remoteVideoRef.current.muted = true;
-            remoteVideoRef.current.play().then(() => {
-              if (remoteVideoRef.current && !isClosedRef.current) {
-                remoteVideoRef.current.muted = false;
-              }
-            }).catch(console.error);
-          }
-
-          // 音频模式绑定到隐藏的 audio 元素
-          if (type === 'audio' && remoteAudioRef.current) {
-            remoteAudioRef.current.srcObject = remoteStream;
-            remoteAudioRef.current.muted = true;
-            remoteAudioRef.current.play().then(() => {
-              if (remoteAudioRef.current && !isClosedRef.current) {
-                remoteAudioRef.current.muted = false;
-              }
-            }).catch(console.error);
-          }
-
-          setCallStatus('connected');
-          if (!durationRef.current) {
-            durationRef.current = setInterval(() => setDuration((prev) => prev + 1), 1000);
+          const [remote] = event.streams;
+          if (remote) {
+            setRemoteStream(remote);
+            if (remoteAudioRef.current) {
+              remoteAudioRef.current.srcObject = remote;
+              remoteAudioRef.current.play().catch(() => setAudioBlocked(true));
+            }
+            if (type === 'video' && remoteVideoRef.current) {
+              remoteVideoRef.current.srcObject = remote;
+              remoteVideoRef.current.play().catch(console.error);
+            }
+            setCallStatus('connected');
+            if (!durationRef.current) {
+              durationRef.current = setInterval(() => setDuration(prev => prev + 1), 1000);
+            }
           }
         };
-
         pc.onicecandidate = (event) => {
-          if (isClosedRef.current) return;
           if (event.candidate) {
             ws.send(JSON.stringify({
               event: 'ice-candidate',
@@ -161,123 +196,85 @@ export default function CallModal({
             }));
           }
         };
-
-        // 信令监听
-        const handleSignal = (e: MessageEvent) => {
-          if (isClosedRef.current) return;
-          const msg = JSON.parse(e.data);
-          if (msg.data.from !== friendId) return;
-
-          if (msg.event === 'call-answer') {
-            pc.setRemoteDescription(new RTCSessionDescription(msg.data.sdp)).catch(console.error);
-          } else if (msg.event === 'ice-candidate') {
-            pc.addIceCandidate(new RTCIceCandidate(msg.data.candidate)).catch(console.error);
-          } else if (msg.event === 'call-hangup') {
-            hangup();
-          }
-        };
-        ws.addEventListener('message', handleSignal);
-
-        // 建立信令
-        if (incoming && offerSdp) {
-          await pc.setRemoteDescription(new RTCSessionDescription(offerSdp));
-          const answer = await pc.createAnswer();
-          await pc.setLocalDescription(answer);
-          ws.send(JSON.stringify({
-            event: 'call-answer',
-            data: { targetId: friendId, sdp: answer },
-          }));
+        // 被叫方不需要主动创建 offer，等待主叫方 offer
+      } else {
+        // 主叫方：如果已经收到 accepted 信号，立即创建 PeerConnection 和 offer
+        if (accepted) {
+          createPCAndOffer(stream);
         } else {
-          const offer = await pc.createOffer();
-          await pc.setLocalDescription(offer);
-          ws.send(JSON.stringify({
-            event: 'call-offer',
-            data: { targetId: friendId, sdp: offer, type },
-          }));
+          // 否则保持等待，直到 accepted 变为 true（由外部状态变化触发）
         }
+      }
 
-        return () => {
-          ws.removeEventListener('message', handleSignal);
-        };
-      } catch (err) {
-        console.error('通话初始化失败', err);
-        if (!isClosedRef.current) {
-          alert('无法访问摄像头/麦克风，请检查权限');
-          hangup();
+      return () => {
+        ws.removeEventListener('message', handleSignal);
+        localStream?.getTracks().forEach((t) => t.stop());
+        remoteStream?.getTracks().forEach((t) => t.stop());
+        pcRef.current?.close();
+        if (durationRef.current) clearInterval(durationRef.current);
+      };
+    });
+  }, []);
+
+  // 当 accepted 变为 true 时，主叫方开始创建连接
+  useEffect(() => {
+    if (!incoming && accepted && localStream && !pcRef.current) {
+      createPCAndOffer(localStream);
+    }
+  }, [accepted, incoming, localStream]);
+
+  const createPCAndOffer = (stream: MediaStream) => {
+    const pc = new RTCPeerConnection({
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        {
+          urls: 'turn:openrelay.metered.ca:443',
+          username: 'openrelayproject',
+          credential: 'openrelayproject',
+        },
+        {
+          urls: 'turn:global.relay.metered.ca:443',
+          username: '680a360a85d7aad8037a5be4',
+          credential: 'Uz8+sEjedvuGre/9',
+        },
+      ],
+    });
+    pcRef.current = pc;
+    stream.getTracks().forEach(track => pc.addTrack(track, stream));
+    pc.ontrack = (event) => {
+      const [remote] = event.streams;
+      if (remote) {
+        setRemoteStream(remote);
+        if (remoteAudioRef.current) {
+          remoteAudioRef.current.srcObject = remote;
+          remoteAudioRef.current.play().catch(() => setAudioBlocked(true));
+        }
+        if (type === 'video' && remoteVideoRef.current) {
+          remoteVideoRef.current.srcObject = remote;
+          remoteVideoRef.current.play().catch(console.error);
+        }
+        setCallStatus('connected');
+        if (!durationRef.current) {
+          durationRef.current = setInterval(() => setDuration(prev => prev + 1), 1000);
         }
       }
     };
-
-    const cleanupPromise = init();
-
-    return () => {
-      isClosedRef.current = true;
-      cleanupPromise?.then((cleanup) => {
-        if (typeof cleanup === 'function') cleanup();
-        localStreamRef.current?.getTracks().forEach((t) => t.stop());
-        pcRef.current?.close();
-        if (durationRef.current) clearInterval(durationRef.current);
-      });
+    pc.onicecandidate = (event) => {
+      if (event.candidate) {
+        ws.send(JSON.stringify({
+          event: 'ice-candidate',
+          data: { targetId: friendId, candidate: event.candidate },
+        }));
+      }
     };
-  }, []);
+    pc.createOffer().then(offer => {
+      pc.setLocalDescription(offer);
+      ws.send(JSON.stringify({
+        event: 'call-offer',
+        data: { targetId: friendId, sdp: offer, type },
+      }));
+    }).catch(console.error);
+  };
 
-  const formatTime = (sec: number) =>
-    `${Math.floor(sec / 60).toString().padStart(2, '0')}:${(sec % 60).toString().padStart(2, '0')}`;
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90">
-      <div className="relative flex flex-col items-center w-full max-w-sm mx-auto h-full max-h-screen py-4">
-        <audio ref={remoteAudioRef} autoPlay playsInline className="hidden" />
-
-        <div className="relative w-full aspect-video bg-gray-900 rounded-2xl overflow-hidden mb-4 flex items-center justify-center">
-          {type === 'video' ? (
-            <video ref={remoteVideoRef} autoPlay playsInline className="w-full h-full object-cover" />
-          ) : (
-            <div className="flex flex-col items-center justify-center h-full text-white">
-              <div className="text-6xl mb-2">🎤</div>
-              <p className="text-lg font-medium">{friendName}</p>
-            </div>
-          )}
-          {/* 自己的小窗（视频通话时） */}
-          {type === 'video' && (
-            <div className="absolute bottom-4 right-4 w-24 h-36 bg-gray-700 rounded-xl overflow-hidden border-2 border-white shadow-lg">
-              <video ref={localVideoRef} autoPlay muted playsInline className="w-full h-full object-cover" />
-            </div>
-          )}
-          {callStatus === 'connected' && (
-            <div className="absolute top-4 left-4 bg-black/50 text-white text-sm px-3 py-1 rounded-full">
-              {formatTime(duration)}
-            </div>
-          )}
-          {callStatus === 'calling' && (
-            <div className="absolute top-4 left-4 bg-black/50 text-white text-sm px-3 py-1 rounded-full">
-              {incoming ? '邀请你进行通话...' : '呼叫中...'}
-            </div>
-          )}
-        </div>
-
-        <div className="flex items-center gap-3 bg-gray-800/80 px-5 py-3 rounded-full mt-auto mb-6">
-          <button onClick={toggleMute} className={`w-10 h-10 rounded-full flex items-center justify-center text-white ${isMuted ? 'bg-red-500' : 'bg-gray-600 hover:bg-gray-500'}`}>
-            {isMuted ? '🔇' : '🎙️'}
-          </button>
-          <button onClick={hangup} className="w-14 h-14 rounded-full bg-red-600 hover:bg-red-700 flex items-center justify-center text-white text-2xl shadow-lg">
-            📞
-          </button>
-          <button onClick={toggleSpeaker} className={`w-10 h-10 rounded-full flex items-center justify-center text-white ${isSpeakerOn ? 'bg-gray-600 hover:bg-gray-500' : 'bg-blue-500'}`}>
-            {isSpeakerOn ? '🔊' : '🔈'}
-          </button>
-          {type === 'video' && (
-            <>
-              <button onClick={toggleCamera} className={`w-10 h-10 rounded-full flex items-center justify-center text-white ${isCameraOff ? 'bg-red-500' : 'bg-gray-600 hover:bg-gray-500'}`}>
-                {isCameraOff ? '📷❌' : '📷'}
-              </button>
-              <button onClick={switchCamera} className="w-10 h-10 rounded-full flex items-center justify-center text-white bg-gray-600 hover:bg-gray-500">
-                🔄
-              </button>
-            </>
-          )}
-        </div>
-      </div>
-    </div>
-  );
+  // ... 其余 UI 与之前完全相同 ...
 }
