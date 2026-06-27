@@ -181,7 +181,7 @@ export default function CallModal({
             createPeerConnection(stream);
             const pc = pcRef.current;
             if (pc) {
-              const offer = await pc.createOffer();        // ✅ 正确的 createOffer
+              const offer = await pc.createOffer();
               await pc.setLocalDescription(offer);
               ws.send(JSON.stringify({ event: 'call-offer', data: { targetId: friendId, sdp: offer, type } }));
             }
@@ -210,7 +210,7 @@ export default function CallModal({
       createPeerConnection(localStreamRef.current);
       const pc = pcRef.current;
       if (pc) {
-        pc.createOffer().then((offer) => {          // ✅ 正确的 createOffer
+        pc.createOffer().then((offer) => {
           pc.setLocalDescription(offer);
           ws.send(JSON.stringify({ event: 'call-offer', data: { targetId: friendId, sdp: offer, type } }));
         }).catch(console.error);
