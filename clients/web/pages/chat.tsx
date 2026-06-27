@@ -521,9 +521,9 @@ export default function Chat() {
   const goBack = () => setMobileView('sidebar');
 
   return (
-    <div className="flex h-screen bg-gray-100 relative" onClick={() => { setContextMenu(null); setShowMentionList(false); }}>
+    <div className="flex h-dvh bg-gray-100 relative overflow-hidden" onClick={() => { setContextMenu(null); setShowMentionList(false); }}>
       {/* 左侧栏 */}
-      <div className={`${mobileView === 'sidebar' ? 'block' : 'hidden'} md:block md:w-80 w-full bg-white border-r flex flex-col absolute md:relative z-10 h-full`}>
+      <div className={`${mobileView === 'sidebar' ? 'block' : 'hidden'} md:block md:w-80 w-full bg-white border-r flex flex-col absolute md:relative z-10 h-dvh md:h-full`}>
         <div className="p-3 border-b">
           <div className="flex gap-2 mb-2">
             <input className="flex-1 p-2 border rounded text-sm" placeholder="搜索用户..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} onKeyDown={e => e.key === 'Enter' && searchUsers()} />
@@ -589,9 +589,7 @@ export default function Chat() {
       <div className={`${mobileView === 'chat' ? 'block' : 'hidden'} md:block flex-1 flex flex-col`}>
         {selectedChat ? (
           <>
-            {/* 修改后的顶部栏：增加了关闭按钮 */}
             <div className="bg-white border-b px-4 py-3 flex items-center gap-3">
-              {/* 移动端返回侧边栏按钮 */}
               <button onClick={goBack} className="md:hidden text-gray-500 mr-2">←</button>
               <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold">
                 {selectedChat.type === 'group' ? '#' : (selectedChat.data.nickname || selectedChat.data.username)[0]}
@@ -600,7 +598,6 @@ export default function Chat() {
                 <p className="font-bold">{selectedChat.type === 'group' ? selectedChat.data.name : (selectedChat.data.nickname || selectedChat.data.username)}</p>
                 {selectedChat.type === 'friend' && <p className="text-xs text-gray-500">{selectedChat.data.status === 'online' ? '在线' : '离线'}</p>}
               </div>
-              {/* 右侧操作按钮组 */}
               <div className="flex items-center gap-1">
                 {selectedChat.type === 'friend' && (
                   <>
@@ -611,7 +608,6 @@ export default function Chat() {
                 {selectedChat.type === 'group' && (
                   <button onClick={() => { loadGroupInfo(); setShowGroupInfo(true); }} className="text-gray-500 hover:text-gray-700 p-1" title="群信息">ℹ️</button>
                 )}
-                {/* 关闭当前会话按钮 (PC/移动端均显示) */}
                 <button
                   onClick={() => { setSelectedChat(null); setMessages([]); }}
                   className="text-gray-400 hover:text-gray-600 p-1 ml-1"
