@@ -27,26 +27,19 @@ export default function CallModal({
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
   const durationRef = useRef<NodeJS.Timeout | null>(null);
-  const isClosedRef = useRef(false);                    // 防止重复操作
-  const remoteStreamBoundRef = useRef(false);            // 防止重复绑定远程流
-  const pendingCandidatesRef = useRef<RTCIceCandidateInit[]>([]); // 缓存早到的 ICE 候选
+  const isClosedRef = useRef(false);
 
-  // 挂断（安全清理）
+  // 挂断
   const hangup = useCallback(() => {
     if (isClosedRef.current) return;
     isClosedRef.current = true;
     setCallStatus('ended');
 
-    // 停止所有轨道
     localStreamRef.current?.getTracks().forEach((t) => t.stop());
-
-    // 关闭连接
     pcRef.current?.close();
     pcRef.current = null;
-
     if (durationRef.current) clearInterval(durationRef.current);
 
-    // 发送挂断信令（忽略发送失败）
     try {
       ws.send(JSON.stringify({ event: 'call-hangup', data: { targetId: friendId } }));
     } catch {}
@@ -68,7 +61,7 @@ export default function CallModal({
 
   const toggleSpeaker = () => setIsSpeakerOn(!isSpeakerOn);
 
-  // 切换摄像头
+  // 切换前后摄像头
   const switchCamera = useCallback(async () => {
     const newMode = facingMode === 'user' ? 'environment' : 'user';
     setFacingMode(newMode);
@@ -91,14 +84,10 @@ export default function CallModal({
   }, [facingMode]);
 
   useEffect(() => {
-    // 重置标志
     isClosedRef.current = false;
-    remoteStreamBoundRef.current = false;
-    pendingCandidatesRef.current = [];
-
     const init = async () => {
       try {
-        // 1. 获取本地流
+        // 获取本地流
         const stream = await navigator.mediaDevices.getUserMedia({
           audio: true,
           video: type === 'video' ? { facingMode: 'user' } : false,
@@ -110,7 +99,7 @@ export default function CallModal({
         localStreamRef.current = stream;
         if (localVideoRef.current) localVideoRef.current.srcObject = stream;
 
-        // 2. 创建对等连接
+        // 创建对等连接
         const pc = new RTCPeerConnection({
           iceServers: [
             { urls: 'stun:stun.l.google.com:19302' },
@@ -127,19 +116,15 @@ export default function CallModal({
           ],
         });
         pcRef.current = pc;
-
-        // 3. 添加本地轨道
         stream.getTracks().forEach((track) => pc.addTrack(track, stream));
 
-        // 4. 远程流处理（安全绑定，仅一次）
+        // 远程流处理
         pc.ontrack = (event) => {
-          if (isClosedRef.current || remoteStreamBoundRef.current) return;
+          if (isClosedRef.current) return;
           const remoteStream = event.streams[0];
           if (!remoteStream) return;
-          remoteStreamBoundRef.current = true;
 
-          console.log('✅ 远程流已接收');
-
+          // 视频模式绑定到 video 元素
           if (type === 'video' && remoteVideoRef.current) {
             remoteVideoRef.current.srcObject = remoteStream;
             remoteVideoRef.current.muted = true;
@@ -147,9 +132,10 @@ export default function CallModal({
               if (remoteVideoRef.current && !isClosedRef.current) {
                 remoteVideoRef.current.muted = false;
               }
-            }).catch(() => {});
+            }).catch(console.error);
           }
 
+          // 音频模式绑定到隐藏的 audio 元素
           if (type === 'audio' && remoteAudioRef.current) {
             remoteAudioRef.current.srcObject = remoteStream;
             remoteAudioRef.current.muted = true;
@@ -157,7 +143,7 @@ export default function CallModal({
               if (remoteAudioRef.current && !isClosedRef.current) {
                 remoteAudioRef.current.muted = false;
               }
-            }).catch(() => {});
+            }).catch(console.error);
           }
 
           setCallStatus('connected');
@@ -166,7 +152,6 @@ export default function CallModal({
           }
         };
 
-        // 5. ICE 候选发送
         pc.onicecandidate = (event) => {
           if (isClosedRef.current) return;
           if (event.candidate) {
@@ -177,46 +162,23 @@ export default function CallModal({
           }
         };
 
-        // 6. 信令处理（带状态检查）
+        // 信令监听
         const handleSignal = (e: MessageEvent) => {
           if (isClosedRef.current) return;
           const msg = JSON.parse(e.data);
+          if (msg.data.from !== friendId) return;
 
-          if (msg.event === 'call-answer' && msg.data.from === friendId) {
-            const pc = pcRef.current;
-            if (pc && pc.signalingState !== 'closed') {
-              pc.setRemoteDescription(new RTCSessionDescription(msg.data.sdp))
-                .then(() => {
-                  // 设置远程描述后，添加缓存的 ICE 候选
-                  if (pendingCandidatesRef.current.length > 0) {
-                    pendingCandidatesRef.current.forEach((c) => {
-                      if (pc.signalingState !== 'closed') {
-                        pc.addIceCandidate(new RTCIceCandidate(c)).catch(() => {});
-                      }
-                    });
-                    pendingCandidatesRef.current = [];
-                  }
-                })
-                .catch(() => {});
-            }
-          } else if (msg.event === 'ice-candidate' && msg.data.from === friendId) {
-            const pc = pcRef.current;
-            if (pc && pc.signalingState !== 'closed') {
-              // 如果远程描述尚未设置，先缓存 ICE 候选
-              if (pc.remoteDescription) {
-                pc.addIceCandidate(new RTCIceCandidate(msg.data.candidate)).catch(() => {});
-              } else {
-                pendingCandidatesRef.current.push(msg.data.candidate);
-              }
-            }
-          } else if (msg.event === 'call-hangup' && msg.data.from === friendId) {
+          if (msg.event === 'call-answer') {
+            pc.setRemoteDescription(new RTCSessionDescription(msg.data.sdp)).catch(console.error);
+          } else if (msg.event === 'ice-candidate') {
+            pc.addIceCandidate(new RTCIceCandidate(msg.data.candidate)).catch(console.error);
+          } else if (msg.event === 'call-hangup') {
             hangup();
           }
         };
-
         ws.addEventListener('message', handleSignal);
 
-        // 7. 建立信令
+        // 建立信令
         if (incoming && offerSdp) {
           await pc.setRemoteDescription(new RTCSessionDescription(offerSdp));
           const answer = await pc.createAnswer();
@@ -234,7 +196,6 @@ export default function CallModal({
           }));
         }
 
-        // 返回清理函数（仅移除监听器）
         return () => {
           ws.removeEventListener('message', handleSignal);
         };
@@ -249,10 +210,8 @@ export default function CallModal({
 
     const cleanupPromise = init();
 
-    // 最终清理
     return () => {
       isClosedRef.current = true;
-      // 等待初始化完成再清理
       cleanupPromise?.then((cleanup) => {
         if (typeof cleanup === 'function') cleanup();
         localStreamRef.current?.getTracks().forEach((t) => t.stop());
@@ -279,6 +238,7 @@ export default function CallModal({
               <p className="text-lg font-medium">{friendName}</p>
             </div>
           )}
+          {/* 自己的小窗（视频通话时） */}
           {type === 'video' && (
             <div className="absolute bottom-4 right-4 w-24 h-36 bg-gray-700 rounded-xl overflow-hidden border-2 border-white shadow-lg">
               <video ref={localVideoRef} autoPlay muted playsInline className="w-full h-full object-cover" />
