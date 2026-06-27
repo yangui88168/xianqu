@@ -17,6 +17,7 @@ model User {
   avatar           String?
   signature        String?
   status           String          @default("offline")
+  lastSeen         DateTime?
   createdAt        DateTime        @default(now())
 
   // 原有关系
