@@ -90,6 +90,10 @@ export default function Chat() {
   const [forwardMessage, setForwardMessage] = useState<any>(null);
   const [selectedTargets, setSelectedTargets] = useState<string[]>([]);
 
+  // 全局搜索相关
+  const [searchMode, setSearchMode] = useState(false);
+  const [searchMessageResults, setSearchMessageResults] = useState<any[]>([]);
+
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (!token) { router.push('/'); return; }
@@ -518,7 +522,7 @@ export default function Chat() {
     }
   };
 
-  // 编辑消息提交（修改了错误提示）
+  // 编辑消息提交
   const submitEdit = async () => {
     if (!editingMessage || !editInput.trim()) return;
     const token = localStorage.getItem('token');
@@ -537,7 +541,7 @@ export default function Chat() {
     }
   };
 
-  // 转发确认（增加了刷新列表）
+  // 转发确认（含刷新列表）
   const confirmForward = async () => {
     if (!forwardMessage || selectedTargets.length === 0) return;
     const token = localStorage.getItem('token');
@@ -550,8 +554,8 @@ export default function Chat() {
       }),
     });
     alert('转发成功');
-    loadSessions();   // 刷新好友会话列表
-    loadGroups();     // 刷新群聊列表
+    loadSessions();
+    loadGroups();
     setForwardModal(false);
     setForwardMessage(null);
     setSelectedTargets([]);
@@ -597,6 +601,38 @@ export default function Chat() {
       headers: { Authorization: `Bearer ${token}` }
     });
     if (res.ok) setSearchResults(await res.json());
+  };
+
+  // 全局搜索：同时搜索用户和消息
+  const handleSearch = async () => {
+    if (!searchQuery.trim()) return;
+    setSearchMode(true);
+    // 搜索用户
+    await searchUsers();
+    // 搜索消息
+    const token = localStorage.getItem('token');
+    const res = await fetch(`${API}/search/messages?q=${encodeURIComponent(searchQuery)}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (res.ok) {
+      setSearchMessageResults(await res.json());
+    }
+  };
+
+  // 点击搜索结果跳转到对应会话
+  const openSearchResult = async (item: any) => {
+    if (item.chatType === 'friend') {
+      const friendSession = sessions.find(s => s.friend.id === item.id || s.friend.nickname === item.chatName);
+      if (friendSession) {
+        selectChat('friend', friendSession.friend);
+      }
+    } else {
+      const group = groups.find(g => g.name === item.chatName);
+      if (group) selectChat('group', group);
+    }
+    setSearchMessageResults([]);
+    setSearchMode(false);
+    setSearchQuery('');
   };
 
   const sendFriendRequest = async (receiverId: string) => {
@@ -658,10 +694,24 @@ export default function Chat() {
       <div className={`${mobileView === 'sidebar' ? 'block' : 'hidden'} md:block md:w-80 w-full bg-white border-r flex flex-col absolute md:relative z-10 h-dvh md:h-full`}>
         <div className="p-3 border-b">
           <div className="flex gap-2 mb-2">
-            <input className="flex-1 p-2 border rounded text-sm" placeholder="搜索用户..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} onKeyDown={e => e.key === 'Enter' && searchUsers()} />
-            <button onClick={searchUsers} className="bg-blue-500 text-white px-3 py-1 rounded text-sm">搜索</button>
+            <input
+              className="flex-1 p-2 border rounded text-sm"
+              placeholder="搜索用户或消息..."
+              value={searchQuery}
+              onChange={e => {
+                setSearchQuery(e.target.value);
+                if (!e.target.value) {
+                  setSearchMode(false);
+                  setSearchMessageResults([]);
+                  setSearchResults([]);
+                }
+              }}
+              onKeyDown={e => e.key === 'Enter' && handleSearch()}
+            />
+            <button onClick={handleSearch} className="bg-blue-500 text-white px-3 py-1 rounded text-sm">搜索</button>
           </div>
-          <button onClick={() => setShowGroupModal(true)} className="w-full bg-green-500 text-white py-1 rounded text-sm mb-2">+ 创建群聊</button>
+
+          {/* 用户搜索结果 */}
           {searchResults.length > 0 && (
             <div className="max-h-40 overflow-y-auto border rounded p-1">
               {searchResults.map((user: any) => (
@@ -672,6 +722,20 @@ export default function Chat() {
               ))}
             </div>
           )}
+
+          {/* 消息搜索结果 */}
+          {searchMode && searchMessageResults.length > 0 && (
+            <div className="mt-2 max-h-40 overflow-y-auto border rounded p-1">
+              <p className="text-xs text-gray-500 mb-1">消息搜索结果</p>
+              {searchMessageResults.map((item: any, i: number) => (
+                <div key={i} className="p-2 hover:bg-gray-100 rounded text-xs cursor-pointer" onClick={() => openSearchResult(item)}>
+                  <span className="font-medium">{item.chatName}</span>：{item.content.substring(0, 30)}
+                </div>
+              ))}
+            </div>
+          )}
+
+          <button onClick={() => setShowGroupModal(true)} className="w-full bg-green-500 text-white py-1 rounded text-sm mb-2 mt-2">+ 创建群聊</button>
         </div>
 
         {friendRequests.length > 0 && (
@@ -709,7 +773,6 @@ export default function Chat() {
                   <span className="text-xs text-gray-500 truncate">{s.lastMessage?.type === 'image' ? '[图片]' : s.lastMessage?.type === 'voice' ? '[语音]' : s.lastMessage?.content || ''}</span>
                   {s.unreadCount > 0 && <span className="bg-red-500 text-white text-xs rounded-full px-1.5 py-0.5">{s.unreadCount}</span>}
                 </div>
-                {/* 动态时间描述 */}
                 <p className="text-xs text-gray-500 mt-0.5">{getLastSeenText(s.friend)}</p>
               </div>
             </div>
@@ -731,7 +794,6 @@ export default function Chat() {
               </div>
               <div className="flex-1">
                 <p className="font-bold">{selectedChat.type === 'group' ? selectedChat.data.name : (selectedChat.data.nickname || selectedChat.data.username)}</p>
-                {/* 动态时间描述 */}
                 {selectedChat.type === 'friend' && <p className="text-xs text-gray-500">{getLastSeenText(selectedChat.data)}</p>}
               </div>
               <div className="flex items-center gap-1">
@@ -795,7 +857,6 @@ export default function Chat() {
                                 回复：{msg.replyTo?.content?.substring(0, 30) || '消息'}
                               </div>
                             )}
-                            {/* 编辑消息输入框 */}
                             {editingMessage?.id === msg.id ? (
                               <div className="flex gap-2">
                                 <input
@@ -861,7 +922,6 @@ export default function Chat() {
                 {inputMode === 'text' ? (
                   <>
                     <button onClick={() => widgetRef.current?.open()} className="text-gray-400 hover:text-gray-600 p-2">📷</button>
-                    {/* 本地图片上传（隐藏的 input） */}
                     <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
                     <button onClick={() => fileInputRef.current?.click()} className="text-gray-400 hover:text-gray-600 p-2">🖼️</button>
                     {selectedChat?.type === 'group' && (
@@ -1017,20 +1077,37 @@ export default function Chat() {
         </div>
       )}
 
-      {/* 消息操作菜单（增加编辑和转发） */}
+      {/* 消息操作菜单（增加编辑、转发和收藏） */}
       {contextMenu && (
         <div className="fixed bg-white border rounded shadow-lg py-1 z-50" style={{ left: contextMenu.x, top: contextMenu.y }} onClick={() => setContextMenu(null)}>
           <button onClick={() => { copyToClipboard(contextMenu.msg.content); setContextMenu(null); }} className="block w-full text-left px-4 py-2 text-sm hover:bg-gray-100">复制</button>
           <button onClick={() => { setReplyingTo(contextMenu.msg); setContextMenu(null); }} className="block w-full text-left px-4 py-2 text-sm hover:bg-gray-100">引用回复</button>
-          <button onClick={() => { setForwardMessage(contextMenu.msg); setForwardModal(true); setContextMenu(null); }} className="block w-full text-left px-4 py-2 text-sm hover:bg-gray-100">
-            转发
-          </button>
+          <button onClick={() => { setForwardMessage(contextMenu.msg); setForwardModal(true); setContextMenu(null); }} className="block w-full text-left px-4 py-2 text-sm hover:bg-gray-100">转发</button>
           {contextMenu.msg.senderId === userId && (
             <>
               <button onClick={() => { setEditingMessage(contextMenu.msg); setEditInput(contextMenu.msg.content); setContextMenu(null); }} className="block w-full text-left px-4 py-2 text-sm hover:bg-gray-100">编辑</button>
               <button onClick={() => { recallMessage(contextMenu.msg); setContextMenu(null); }} className="block w-full text-left px-4 py-2 text-sm hover:bg-gray-100">撤回</button>
-              <button onClick={() => { deleteMessage(contextMenu.msg); setContextMenu(null); }} className="block w-full text-left px-4 py-2 text-sm hover:bg-gray-100 text-red-500">删除</button>
             </>
+          )}
+          <button
+            onClick={() => {
+              const token = localStorage.getItem('token');
+              fetch(`${API}/user/favorite`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify({
+                  type: 'message',
+                  targetId: contextMenu.msg.id,
+                  content: contextMenu.msg.content,
+                }),
+              }).finally(() => setContextMenu(null));
+            }}
+            className="block w-full text-left px-4 py-2 text-sm hover:bg-gray-100"
+          >
+            收藏
+          </button>
+          {contextMenu.msg.senderId === userId && (
+            <button onClick={() => { deleteMessage(contextMenu.msg); setContextMenu(null); }} className="block w-full text-left px-4 py-2 text-sm hover:bg-gray-100 text-red-500">删除</button>
           )}
         </div>
       )}
@@ -1063,11 +1140,8 @@ export default function Chat() {
                     type="checkbox"
                     checked={selectedTargets.includes(s.friend.id)}
                     onChange={e => {
-                      if (e.target.checked) {
-                        setSelectedTargets(prev => [...prev, s.friend.id]);
-                      } else {
-                        setSelectedTargets(prev => prev.filter(id => id !== s.friend.id));
-                      }
+                      if (e.target.checked) setSelectedTargets(prev => [...prev, s.friend.id]);
+                      else setSelectedTargets(prev => prev.filter(id => id !== s.friend.id));
                     }}
                   />
                   <span className="text-sm">{s.friend.nickname || s.friend.username}</span>
@@ -1080,11 +1154,8 @@ export default function Chat() {
                     type="checkbox"
                     checked={selectedTargets.includes(`group-${g.id}`)}
                     onChange={e => {
-                      if (e.target.checked) {
-                        setSelectedTargets(prev => [...prev, `group-${g.id}`]);
-                      } else {
-                        setSelectedTargets(prev => prev.filter(id => id !== `group-${g.id}`));
-                      }
+                      if (e.target.checked) setSelectedTargets(prev => [...prev, `group-${g.id}`]);
+                      else setSelectedTargets(prev => prev.filter(id => id !== `group-${g.id}`));
                     }}
                   />
                   <span className="text-sm"># {g.name}</span>
@@ -1092,12 +1163,8 @@ export default function Chat() {
               ))}
             </div>
             <div className="flex gap-2 justify-end">
-              <button onClick={() => { setForwardModal(false); setSelectedTargets([]); }} className="px-3 py-1 bg-gray-300 rounded text-sm">
-                取消
-              </button>
-              <button onClick={confirmForward} className="px-3 py-1 bg-green-500 text-white rounded text-sm">
-                转发
-              </button>
+              <button onClick={() => { setForwardModal(false); setSelectedTargets([]); }} className="px-3 py-1 bg-gray-300 rounded text-sm">取消</button>
+              <button onClick={confirmForward} className="px-3 py-1 bg-green-500 text-white rounded text-sm">转发</button>
             </div>
           </div>
         </div>
