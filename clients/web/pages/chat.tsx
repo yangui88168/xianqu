@@ -81,6 +81,10 @@ export default function Chat() {
   const cloudinaryRef = useRef<any>();
   const widgetRef = useRef<any>();
 
+  // 编辑消息相关
+  const [editingMessage, setEditingMessage] = useState<any>(null);
+  const [editInput, setEditInput] = useState('');
+
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (!token) { router.push('/'); return; }
@@ -509,6 +513,25 @@ export default function Chat() {
     }
   };
 
+  // 编辑消息提交
+  const submitEdit = async () => {
+    if (!editingMessage || !editInput.trim()) return;
+    const token = localStorage.getItem('token');
+    const res = await fetch(`${API}/messages/edit`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ messageId: editingMessage.id, content: editInput }),
+    });
+    if (res.ok) {
+      const { content } = await res.json();
+      setMessages(prev => prev.map(m => m.id === editingMessage.id ? { ...m, content, edited: true } : m));
+      setEditingMessage(null);
+      setEditInput('');
+    } else {
+      alert('编辑失败，可能超过5分钟');
+    }
+  };
+
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
     alert('已复制');
@@ -747,17 +770,35 @@ export default function Chat() {
                                 回复：{msg.replyTo?.content?.substring(0, 30) || '消息'}
                               </div>
                             )}
-                            <div className={`px-3 py-2 rounded-2xl text-sm ${isMe ? 'bg-blue-500 text-white rounded-br-md' : 'bg-white text-gray-800 rounded-bl-md shadow'}`}>
-                              {msg.type === 'image' ? (
-                                <img src={msg.content} alt="图片" className="max-w-60 rounded" loading="lazy" />
-                              ) : msg.type === 'voice' ? (
-                                <audio controls className="max-w-60">
-                                  <source src={msg.content} type="audio/webm" />
-                                </audio>
-                              ) : (
-                                msg.content
-                              )}
-                            </div>
+                            {/* 编辑消息输入框 */}
+                            {editingMessage?.id === msg.id ? (
+                              <div className="flex gap-2">
+                                <input
+                                  className="flex-1 border p-1 rounded text-sm"
+                                  value={editInput}
+                                  onChange={e => setEditInput(e.target.value)}
+                                  onKeyDown={e => {
+                                    if (e.key === 'Enter') submitEdit();
+                                    if (e.key === 'Escape') { setEditingMessage(null); setEditInput(''); }
+                                  }}
+                                  autoFocus
+                                />
+                                <button onClick={submitEdit} className="text-blue-500 text-xs">保存</button>
+                              </div>
+                            ) : (
+                              <div className={`px-3 py-2 rounded-2xl text-sm ${isMe ? 'bg-blue-500 text-white rounded-br-md' : 'bg-white text-gray-800 rounded-bl-md shadow'}`}>
+                                {msg.type === 'image' ? (
+                                  <img src={msg.content} alt="图片" className="max-w-60 rounded" loading="lazy" />
+                                ) : msg.type === 'voice' ? (
+                                  <audio controls className="max-w-60">
+                                    <source src={msg.content} type="audio/webm" />
+                                  </audio>
+                                ) : (
+                                  msg.content
+                                )}
+                                {msg.edited && <span className="text-xs ml-1 opacity-70">(已编辑)</span>}
+                              </div>
+                            )}
                             <div className={`flex items-center gap-1 mt-1 text-xs ${isMe ? 'justify-end' : 'justify-start'} text-gray-400`}>
                               {new Date(msg.createdAt).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' })}
                               {isMe && (
@@ -951,13 +992,14 @@ export default function Chat() {
         </div>
       )}
 
-      {/* 消息操作菜单 */}
+      {/* 消息操作菜单（增加编辑） */}
       {contextMenu && (
         <div className="fixed bg-white border rounded shadow-lg py-1 z-50" style={{ left: contextMenu.x, top: contextMenu.y }} onClick={() => setContextMenu(null)}>
           <button onClick={() => { copyToClipboard(contextMenu.msg.content); setContextMenu(null); }} className="block w-full text-left px-4 py-2 text-sm hover:bg-gray-100">复制</button>
           <button onClick={() => { setReplyingTo(contextMenu.msg); setContextMenu(null); }} className="block w-full text-left px-4 py-2 text-sm hover:bg-gray-100">引用回复</button>
           {contextMenu.msg.senderId === userId && (
             <>
+              <button onClick={() => { setEditingMessage(contextMenu.msg); setEditInput(contextMenu.msg.content); setContextMenu(null); }} className="block w-full text-left px-4 py-2 text-sm hover:bg-gray-100">编辑</button>
               <button onClick={() => { recallMessage(contextMenu.msg); setContextMenu(null); }} className="block w-full text-left px-4 py-2 text-sm hover:bg-gray-100">撤回</button>
               <button onClick={() => { deleteMessage(contextMenu.msg); setContextMenu(null); }} className="block w-full text-left px-4 py-2 text-sm hover:bg-gray-100 text-red-500">删除</button>
             </>
