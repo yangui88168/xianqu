@@ -18,8 +18,8 @@ model User {
   signature        String?
   status           String          @default("offline")
   createdAt        DateTime        @default(now())
-  
-  // 关系字段
+
+  // 原有关系
   sentMessages     Message[]       @relation("SentMessages")
   receivedMessages Message[]       @relation("ReceivedMessages")
   sentRequests     FriendRequest[] @relation("SentRequests")
@@ -31,6 +31,13 @@ model User {
   groupMessages    GroupMessage[]
   exp              UserExp?
   favorites        Favorite[]
+
+  // 新增关系（动态广场）
+  posts            StarPost[]
+  likes            StarLike[]
+  comments         StarComment[]
+  followers        Follow[]        @relation("Followers")
+  following        Follow[]        @relation("Followings")
 }
 
 model Message {
@@ -137,4 +144,49 @@ model Favorite {
   content   String?
   createdAt DateTime @default(now())
   user      User     @relation(fields: [userId], references: [id])
+}
+
+// 动态广场
+model StarPost {
+  id         String        @id @default(cuid())
+  userId     String
+  content    String
+  imageUrl   String?
+  createdAt  DateTime      @default(now())
+  permission String        @default("public")
+  user       User          @relation(fields: [userId], references: [id])
+  likes      StarLike[]
+  comments   StarComment[]
+}
+
+model StarLike {
+  id        String   @id @default(cuid())
+  postId    String
+  userId    String
+  createdAt DateTime @default(now())
+  post      StarPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@unique([postId, userId])
+}
+
+model StarComment {
+  id        String   @id @default(cuid())
+  postId    String
+  userId    String
+  content   String
+  createdAt DateTime @default(now())
+  post      StarPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id])
+}
+
+model Follow {
+  id          String   @id @default(cuid())
+  followerId  String
+  followingId String
+  createdAt   DateTime @default(now())
+  follower    User     @relation("Followings", fields: [followerId], references: [id])
+  following   User     @relation("Followers", fields: [followingId], references: [id])
+
+  @@unique([followerId, followingId])
 }
