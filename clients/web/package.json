@@ -9,8 +9,7 @@
   "dependencies": {
     "next": "^13.0.0",
     "react": "^18.0.0",
-    "react-dom": "^18.0.0",
-    "react-window": "^1.8.9"
+    "react-dom": "^18.0.0"
   },
   "devDependencies": {
     "tailwindcss": "^3.0.0",
