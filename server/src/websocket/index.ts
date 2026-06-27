@@ -25,6 +25,12 @@ export const wsHandler = (connection: SocketStream, req: FastifyRequest) => {
   onlineUsers.set(userId, connection.socket);
   console.log(`User ${userId} online`);
 
+  // 更新在线状态和最后活跃时间
+  prisma.user.update({
+    where: { id: userId },
+    data: { status: 'online', lastSeen: new Date() },
+  }).catch(console.error);
+
   // 推送离线私聊消息
   prisma.offlineQueue.findMany({
     where: { userId },
@@ -91,7 +97,7 @@ export const wsHandler = (connection: SocketStream, req: FastifyRequest) => {
               });
             }
           } 
-          // 2. 私聊消息处理分支（增加拉黑检查）
+          // 2. 私聊消息处理分支（包含拉黑检查）
           else {
             // 拉黑检查
             const blocked = await prisma.blocked.findFirst({
@@ -169,8 +175,17 @@ export const wsHandler = (connection: SocketStream, req: FastifyRequest) => {
     }
   });
 
-  connection.socket.on('close', () => {
+  // 用户断开连接时更新状态为 offline 并记录最后活跃时间
+  connection.socket.on('close', async () => {
     onlineUsers.delete(userId);
     console.log(`User ${userId} offline`);
+    try {
+      await prisma.user.update({
+        where: { id: userId },
+        data: { status: 'offline', lastSeen: new Date() },
+      });
+    } catch (e) {
+      console.error('更新离线状态失败', e);
+    }
   });
 };
