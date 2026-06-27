@@ -5,6 +5,7 @@ import { authRoutes } from './modules/auth';
 import { messageRoutes } from './modules/message';
 import { contactRoutes } from './modules/contact';
 import { groupRoutes } from './modules/group';
+import { userRoutes } from './modules/user';
 import { wsHandler } from './websocket';
 
 export const app = Fastify({ logger: true });
@@ -15,6 +16,7 @@ app.register(authRoutes, { prefix: '/auth' });
 app.register(messageRoutes, { prefix: '/messages' });
 app.register(contactRoutes, { prefix: '/contacts' });
 app.register(groupRoutes, { prefix: '/groups' });
+app.register(userRoutes, { prefix: '/user' });
 
 app.register(async (fastify) => {
   fastify.get('/ws', { websocket: true }, wsHandler);
