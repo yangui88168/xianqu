@@ -91,8 +91,22 @@ export const wsHandler = (connection: SocketStream, req: FastifyRequest) => {
               });
             }
           } 
-          // 2. 私聊消息处理分支
+          // 2. 私聊消息处理分支（增加拉黑检查）
           else {
+            // 拉黑检查
+            const blocked = await prisma.blocked.findFirst({
+              where: {
+                OR: [
+                  { userId: senderId, blockedId: receiverId },
+                  { userId: receiverId, blockedId: senderId },
+                ],
+              },
+            });
+            if (blocked) {
+              connection.socket.send(JSON.stringify({ event: WsEvent.ERROR, data: '无法发送消息，对方已被拉黑' }));
+              return;
+            }
+
             const msg = await prisma.message.create({
               data: { senderId, receiverId, content, type, replyToId },
             });
