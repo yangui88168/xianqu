@@ -408,7 +408,6 @@ export default function Chat() {
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ messageId: msg.id })
       });
-      // 从当前列表中移除
       setMessages(prev => prev.filter(m => m.id !== msg.id));
       const cacheKey = `friend-${selectedChat.data.id}`;
       const cached = messageCache.current.get(cacheKey) || [];
@@ -590,7 +589,9 @@ export default function Chat() {
       <div className={`${mobileView === 'chat' ? 'block' : 'hidden'} md:block flex-1 flex flex-col`}>
         {selectedChat ? (
           <>
+            {/* 修改后的顶部栏：增加了关闭按钮 */}
             <div className="bg-white border-b px-4 py-3 flex items-center gap-3">
+              {/* 移动端返回侧边栏按钮 */}
               <button onClick={goBack} className="md:hidden text-gray-500 mr-2">←</button>
               <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold">
                 {selectedChat.type === 'group' ? '#' : (selectedChat.data.nickname || selectedChat.data.username)[0]}
@@ -599,18 +600,29 @@ export default function Chat() {
                 <p className="font-bold">{selectedChat.type === 'group' ? selectedChat.data.name : (selectedChat.data.nickname || selectedChat.data.username)}</p>
                 {selectedChat.type === 'friend' && <p className="text-xs text-gray-500">{selectedChat.data.status === 'online' ? '在线' : '离线'}</p>}
               </div>
-              {selectedChat.type === 'group' && (
-                <button onClick={() => { loadGroupInfo(); setShowGroupInfo(true); }} className="text-gray-500 hover:text-gray-700 p-1" title="群信息">ℹ️</button>
-              )}
-              {selectedChat.type === 'friend' && (
-                <div className="flex gap-1">
-                  <button onClick={() => setCallState({ type: 'audio', friendId: selectedChat.data.id, friendName: selectedChat.data.nickname || selectedChat.data.username })} className="text-gray-500 hover:text-gray-700 p-1" title="语音通话">📞</button>
-                  <button onClick={() => setCallState({ type: 'video', friendId: selectedChat.data.id, friendName: selectedChat.data.nickname || selectedChat.data.username })} className="text-gray-500 hover:text-gray-700 p-1" title="视频通话">📹</button>
-                </div>
-              )}
+              {/* 右侧操作按钮组 */}
+              <div className="flex items-center gap-1">
+                {selectedChat.type === 'friend' && (
+                  <>
+                    <button onClick={() => setCallState({ type: 'audio', friendId: selectedChat.data.id, friendName: selectedChat.data.nickname || selectedChat.data.username })} className="text-gray-500 hover:text-gray-700 p-1" title="语音通话">📞</button>
+                    <button onClick={() => setCallState({ type: 'video', friendId: selectedChat.data.id, friendName: selectedChat.data.nickname || selectedChat.data.username })} className="text-gray-500 hover:text-gray-700 p-1" title="视频通话">📹</button>
+                  </>
+                )}
+                {selectedChat.type === 'group' && (
+                  <button onClick={() => { loadGroupInfo(); setShowGroupInfo(true); }} className="text-gray-500 hover:text-gray-700 p-1" title="群信息">ℹ️</button>
+                )}
+                {/* 关闭当前会话按钮 (PC/移动端均显示) */}
+                <button
+                  onClick={() => { setSelectedChat(null); setMessages([]); }}
+                  className="text-gray-400 hover:text-gray-600 p-1 ml-1"
+                  title="关闭"
+                >
+                  ✕
+                </button>
+              </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-4 bg-gray-50" ref={scrollContainerRef} onScroll={handleScroll}>
+            <div className="flex-1 min-h-0 overflow-y-auto p-4 bg-gray-50" ref={scrollContainerRef} onScroll={handleScroll}>
               {isLoadingChat ? (
                 <div className="flex items-center justify-center h-full">
                   <div className="flex flex-col items-center">
