@@ -55,6 +55,7 @@ model Message {
   replyToId    String?
   deleted      Boolean        @default(false)
   recalled     Boolean        @default(false)
+  edited       Boolean        @default(false)
   readAt       DateTime?
   updatedAt    DateTime?
   createdAt    DateTime       @default(now())
