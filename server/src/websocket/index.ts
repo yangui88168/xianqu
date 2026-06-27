@@ -126,9 +126,9 @@ export const wsHandler = (connection: SocketStream, req: FastifyRequest) => {
           break;
         }
 
-        // WebRTC 信令转发（已补充 call-accept）
+        // WebRTC 信令转发（事件名统一为 call-accepted）
         case 'call-offer':
-        case 'call-accept':
+        case 'call-accepted':
         case 'call-answer':
         case 'ice-candidate':
         case 'call-hangup': {
