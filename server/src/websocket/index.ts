@@ -47,7 +47,6 @@ export const wsHandler = (connection: SocketStream, req: FastifyRequest) => {
 
           // 1. 群聊消息处理分支
           if (chatType === 'group' && groupId) {
-            // 检查成员身份及禁言状态
             const membership = await prisma.groupMember.findUnique({
               where: { groupId_userId: { groupId, userId: senderId } },
             });
@@ -60,7 +59,6 @@ export const wsHandler = (connection: SocketStream, req: FastifyRequest) => {
               return;
             }
 
-            // 创建群聊消息
             const msg = await prisma.groupMessage.create({
               data: {
                 groupId,
@@ -75,7 +73,6 @@ export const wsHandler = (connection: SocketStream, req: FastifyRequest) => {
               },
             });
 
-            // 广播给所有在线的群成员（包括自己）
             const group = await prisma.groupChat.findUnique({
               where: { id: groupId },
               include: { members: true },
@@ -102,7 +99,6 @@ export const wsHandler = (connection: SocketStream, req: FastifyRequest) => {
             const receiverWs = onlineUsers.get(receiverId);
             if (receiverWs) {
               receiverWs.send(JSON.stringify({ event: WsEvent.MESSAGE_RECEIVE, data: msg }));
-              // 送达回执
               const senderWs = onlineUsers.get(senderId);
               if (senderWs) {
                 senderWs.send(JSON.stringify({
@@ -117,7 +113,6 @@ export const wsHandler = (connection: SocketStream, req: FastifyRequest) => {
           break;
         }
 
-        // 处理私聊已读回执
         case 'message:read': {
           const { messageId, senderId: originalSenderId } = parsed.data;
           await prisma.message.updateMany({
@@ -131,8 +126,9 @@ export const wsHandler = (connection: SocketStream, req: FastifyRequest) => {
           break;
         }
 
-        // WebRTC 信令转发保持不变
+        // WebRTC 信令转发（已补充 call-accept）
         case 'call-offer':
+        case 'call-accept':
         case 'call-answer':
         case 'ice-candidate':
         case 'call-hangup': {
