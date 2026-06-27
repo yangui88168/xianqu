@@ -1,7 +1,6 @@
 {
   "name": "xianqu",
   "private": true,
-  "packageManager": "pnpm@8.15.0",
   "scripts": {
     "dev": "turbo run dev",
     "build": "turbo run build"
