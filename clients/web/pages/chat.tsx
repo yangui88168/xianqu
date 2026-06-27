@@ -8,6 +8,21 @@ const PAGE_SIZE = 10;
 
 const EMOJIS = ['😀', '😂', '❤️', '👍', '😢', '😡', '🎉', '🔥', '💯', '✨', '👋', '🙏'];
 
+// 根据用户状态和 lastSeen 生成描述文字
+const getLastSeenText = (friend: any) => {
+  if (friend.status === 'online') return '在线';
+  if (!friend.lastSeen) return '离线';
+  const diff = Date.now() - new Date(friend.lastSeen).getTime();
+  const minutes = Math.floor(diff / 60000);
+  if (minutes < 1) return '刚刚在线';
+  if (minutes < 60) return `${minutes}分钟前在线`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}小时前在线`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}天前在线`;
+  return new Date(friend.lastSeen).toLocaleDateString();
+};
+
 export default function Chat() {
   const [ws, setWs] = useState<WebSocket | null>(null);
   const [userId, setUserId] = useState('');
@@ -32,40 +47,39 @@ export default function Chat() {
   const recordStartY = useRef<number>(0);
 
   const [callState, setCallState] = useState<any>(null);
+  const [pendingCall, setPendingCall] = useState<any>(null);
+  const callStateRef = useRef(callState);
+  useEffect(() => { callStateRef.current = callState; }, [callState]);
+
+  const selectedChatRef = useRef(selectedChat);
+  useEffect(() => { selectedChatRef.current = selectedChat; }, [selectedChat]);
+
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [isLoadingChat, setIsLoadingChat] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null); // 本地图片上传
   const [mobileView, setMobileView] = useState<'sidebar' | 'chat'>('sidebar');
 
-  // 右键/长按菜单
   const [contextMenu, setContextMenu] = useState<{ msg: any; x: number; y: number } | null>(null);
   const longPressTimer = useRef<NodeJS.Timeout | null>(null);
 
-  // 群信息面板
   const [showGroupInfo, setShowGroupInfo] = useState(false);
   const [groupInfo, setGroupInfo] = useState<any>(null);
   const [groupAnnouncement, setGroupAnnouncement] = useState('');
   const [showMentionList, setShowMentionList] = useState(false);
 
-  // 邀请相关
   const [inviteModal, setInviteModal] = useState(false);
   const [inviteGroupId, setInviteGroupId] = useState('');
   const [selectedFriends, setSelectedFriends] = useState<string[]>([]);
 
-  // 消息缓存
   const messageCache = useRef<Map<string, any[]>>(new Map());
   const loadingChatRef = useRef<Set<string>>(new Set());
 
-  // Cloudinary Widget
   const cloudinaryRef = useRef<any>();
   const widgetRef = useRef<any>();
-
-  // 接听弹窗
-  const [pendingCall, setPendingCall] = useState<any>(null);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -138,7 +152,7 @@ export default function Chat() {
     };
   }, []);
 
-  // WebSocket 连接
+  // WebSocket 连接（心跳、重连、消息/信令处理）
   useEffect(() => {
     if (!userId) return;
     let reconnectTimer: NodeJS.Timeout;
@@ -153,19 +167,20 @@ export default function Chat() {
       };
       socket.onmessage = (event) => {
         const msg = JSON.parse(event.data);
+        const currentChat = selectedChatRef.current;
+
         if (msg.event === 'message:receive') {
           const newMsg = msg.data;
           setMessages(prev => {
             if (prev.find(m => m.id === newMsg.id)) return prev;
             return [...prev, newMsg];
           });
-          if (selectedChat?.type === 'friend' && selectedChat.data.id === newMsg.senderId) {
+          if (currentChat?.type === 'friend' && currentChat.data.id === newMsg.senderId) {
             fetch(`${API}/messages/read`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
               body: JSON.stringify({ senderId: newMsg.senderId })
             });
-            ws?.send(JSON.stringify({ event: 'message:read', data: { messageId: newMsg.id, senderId: newMsg.senderId } }));
           }
           const cacheKey = `friend-${newMsg.senderId}`;
           const cached = messageCache.current.get(cacheKey) || [];
@@ -186,14 +201,16 @@ export default function Chat() {
           }
           loadGroups();
         } else if (msg.event === 'call-offer') {
-          // 弹出接听/拒绝弹窗
           setPendingCall({
             type: msg.data.type || 'audio',
             friendId: msg.data.from,
             friendName: msg.data.fromName || '好友',
           });
-        } else if (msg.event === 'call-accepted' && callState?.friendId === msg.data.from) {
-          setCallState((prev: any) => prev ? { ...prev, accepted: true } : null);
+        } else if (msg.event === 'call-accepted') {
+          const currentCall = callStateRef.current;
+          if (currentCall && currentCall.friendId === msg.data.from && currentCall.incoming === false) {
+            setCallState((prev: any) => prev ? { ...prev, accepted: true } : null);
+          }
         }
       };
       socket.onclose = () => {
@@ -207,9 +224,8 @@ export default function Chat() {
       clearTimeout(reconnectTimer);
       clearInterval(heartbeatTimer);
     };
-  }, [userId, selectedChat?.data?.id, loadSessions, callState?.friendId]);
+  }, [userId, loadSessions, loadGroups]);
 
-  // 选择会话
   const selectChat = useCallback(async (type: string, data: any) => {
     setSelectedChat({ type, data });
     setReplyingTo(null);
@@ -253,7 +269,6 @@ export default function Chat() {
     }
   }, []);
 
-  // 加载更多消息
   const loadMoreMessages = async () => {
     if (!selectedChat || loadingMore || !hasMore) return;
     setLoadingMore(true);
@@ -392,7 +407,7 @@ export default function Chat() {
     }
   };
 
-  // 图片上传（压缩后 base64，后续可改为直接上传 Cloudinary）
+  // 本地图片上传（压缩后 base64 发送）
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !selectedChat || !ws) return;
@@ -646,8 +661,9 @@ export default function Chat() {
                   <span className="text-xs text-gray-500 truncate">{s.lastMessage?.type === 'image' ? '[图片]' : s.lastMessage?.type === 'voice' ? '[语音]' : s.lastMessage?.content || ''}</span>
                   {s.unreadCount > 0 && <span className="bg-red-500 text-white text-xs rounded-full px-1.5 py-0.5">{s.unreadCount}</span>}
                 </div>
+                {/* 动态时间描述 */}
+                <p className="text-xs text-gray-500 mt-0.5">{getLastSeenText(s.friend)}</p>
               </div>
-              <span className={`w-2 h-2 rounded-full ${s.friend.status === 'online' ? 'bg-green-500' : 'bg-gray-300'}`}></span>
             </div>
           ))}
         </div>
@@ -667,7 +683,8 @@ export default function Chat() {
               </div>
               <div className="flex-1">
                 <p className="font-bold">{selectedChat.type === 'group' ? selectedChat.data.name : (selectedChat.data.nickname || selectedChat.data.username)}</p>
-                {selectedChat.type === 'friend' && <p className="text-xs text-gray-500">{selectedChat.data.status === 'online' ? '在线' : '离线'}</p>}
+                {/* 动态时间描述 */}
+                {selectedChat.type === 'friend' && <p className="text-xs text-gray-500">{getLastSeenText(selectedChat.data)}</p>}
               </div>
               <div className="flex items-center gap-1">
                 {selectedChat.type === 'friend' && (
@@ -778,6 +795,9 @@ export default function Chat() {
                 {inputMode === 'text' ? (
                   <>
                     <button onClick={() => widgetRef.current?.open()} className="text-gray-400 hover:text-gray-600 p-2">📷</button>
+                    {/* 本地图片上传（隐藏的 input） */}
+                    <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
+                    <button onClick={() => fileInputRef.current?.click()} className="text-gray-400 hover:text-gray-600 p-2">🖼️</button>
                     {selectedChat?.type === 'group' && (
                       <button onClick={async () => {
                         const token = localStorage.getItem('token');
