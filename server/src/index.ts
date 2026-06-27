@@ -7,6 +7,7 @@ import { contactRoutes } from './modules/contact';
 import { groupRoutes } from './modules/group';
 import { userRoutes } from './modules/user';
 import { starRoutes } from './modules/star';
+import { searchRoutes } from './modules/search';
 import { wsHandler } from './websocket';
 
 export const app = Fastify({ logger: true });
@@ -19,6 +20,7 @@ app.register(contactRoutes, { prefix: '/contacts' });
 app.register(groupRoutes, { prefix: '/groups' });
 app.register(userRoutes, { prefix: '/user' });
 app.register(starRoutes, { prefix: '/star' });
+app.register(searchRoutes, { prefix: '/search' });
 
 app.register(async (fastify) => {
   fastify.get('/ws', { websocket: true }, wsHandler);
