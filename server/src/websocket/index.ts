@@ -3,6 +3,7 @@ import { FastifyRequest } from 'fastify';
 import jwt from 'jsonwebtoken';
 import { prisma } from '../db';
 import { WsEvent } from '../shared-types';
+import { progressTask } from '../task'; // 新增：导入任务进度函数
 
 export const onlineUsers = new Map<string, SocketStream['socket']>();
 
@@ -79,6 +80,9 @@ export const wsHandler = (connection: SocketStream, req: FastifyRequest) => {
               },
             });
 
+            // 推进发送消息任务
+            await progressTask(senderId, 'send_message');
+
             const group = await prisma.groupChat.findUnique({
               where: { id: groupId },
               include: { members: true },
@@ -116,6 +120,10 @@ export const wsHandler = (connection: SocketStream, req: FastifyRequest) => {
             const msg = await prisma.message.create({
               data: { senderId, receiverId, content, type, replyToId },
             });
+
+            // 推进发送消息任务
+            await progressTask(senderId, 'send_message');
+
             const receiverWs = onlineUsers.get(receiverId);
             if (receiverWs) {
               receiverWs.send(JSON.stringify({ event: WsEvent.MESSAGE_RECEIVE, data: msg }));
