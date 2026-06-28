@@ -24,6 +24,9 @@ export default function Profile() {
   const [showFavorites, setShowFavorites] = useState(false);
   const [currentStatus, setCurrentStatus] = useState('online');
 
+  // 注销账号相关
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+
   const router = useRouter();
   const cloudinaryRef = useRef<any>();
   const widgetRef = useRef<any>();
@@ -163,6 +166,21 @@ export default function Profile() {
       headers: { Authorization: `Bearer ${token}` },
     });
     setFavorites(prev => prev.filter(f => f.id !== favId));
+  };
+
+  const deleteAccount = async () => {
+    const token = localStorage.getItem('token');
+    const res = await fetch(`${API}/user/account`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (res.ok) {
+      alert('账号已注销');
+      localStorage.clear();
+      router.push('/');
+    } else {
+      alert('注销失败，请重试');
+    }
   };
 
   const logout = () => {
@@ -325,12 +343,33 @@ export default function Profile() {
         </button>
       </div>
 
+      {/* 注销账号 */}
+      <div className="bg-white mt-3">
+        <button onClick={() => setShowDeleteModal(true)} className="w-full px-5 py-3 text-red-500 text-sm font-medium hover:bg-gray-50">
+          注销账号
+        </button>
+      </div>
+
       {/* 退出登录 */}
       <div className="mt-3 bg-white">
         <button onClick={logout} className="w-full px-5 py-3 text-red-500 text-sm font-medium hover:bg-gray-50">
           退出登录
         </button>
       </div>
+
+      {/* 注销确认弹窗 */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={() => setShowDeleteModal(false)}>
+          <div className="bg-white p-5 rounded shadow-lg w-80" onClick={e => e.stopPropagation()}>
+            <h3 className="font-bold text-lg mb-3">确定注销账号？</h3>
+            <p className="text-sm text-gray-600 mb-4">注销后所有数据将永久删除，无法恢复。</p>
+            <div className="flex gap-3 justify-end">
+              <button onClick={() => setShowDeleteModal(false)} className="px-4 py-2 bg-gray-200 rounded text-sm">取消</button>
+              <button onClick={deleteAccount} className="px-4 py-2 bg-red-500 text-white rounded text-sm">确定注销</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 密码修改弹窗 */}
       {showPasswordModal && (
