@@ -38,9 +38,37 @@ export default function Profile() {
   const [favorites, setFavorites] = useState<any[]>([]);
   const [showFavorites, setShowFavorites] = useState(false);
 
+  // 隐私与通知设置
+  const [settings, setSettings] = useState({
+    allowFriendRequest: true,
+    allowSearch: true,
+    notifyMessage: true,
+    notifyCall: true,
+    notifyPost: true,
+  });
+
   const router = useRouter();
   const cloudinaryRef = useRef<any>();
   const widgetRef = useRef<any>();
+
+  // 加载设置
+  const loadSettings = async () => {
+    const token = localStorage.getItem('token');
+    const res = await fetch(`${API}/user/settings`, { headers: { Authorization: `Bearer ${token}` } });
+    if (res.ok) setSettings(await res.json());
+  };
+
+  // 更新单个设置并同步后端
+  const updateSetting = async (key: string, value: boolean) => {
+    const newSettings = { ...settings, [key]: value };
+    setSettings(newSettings);
+    const token = localStorage.getItem('token');
+    await fetch(`${API}/user/settings`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(newSettings),
+    });
+  };
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -68,6 +96,8 @@ export default function Profile() {
     loadTasks();
     // 获取勋章
     loadBadges();
+    // 获取隐私设置
+    loadSettings();
   }, [router]);
 
   // 初始化 Cloudinary Widget
@@ -323,20 +353,52 @@ export default function Profile() {
         )}
       </div>
 
-      {/* 设置中心 */}
+      {/* 修改密码按钮 */}
       <div className="bg-white mt-3">
         <button onClick={() => setShowPasswordModal(true)} className="w-full flex items-center justify-between px-6 py-4 border-b hover:bg-gray-50">
           <span className="text-sm">修改密码</span>
           <span className="text-gray-400 text-sm">建议定期更换</span>
         </button>
-        <button onClick={() => alert('隐私设置开发中')} className="w-full flex items-center justify-between px-6 py-4 border-b hover:bg-gray-50">
-          <span className="text-sm">隐私设置</span>
-          <span className="text-gray-400 text-sm">谁可以加我、看我</span>
-        </button>
-        <button onClick={() => alert('通知设置开发中')} className="w-full flex items-center justify-between px-6 py-4 hover:bg-gray-50">
-          <span className="text-sm">通知设置</span>
-          <span className="text-gray-400 text-sm">消息提醒</span>
-        </button>
+      </div>
+
+      {/* 隐私设置 */}
+      <div className="bg-white mt-3 px-6 py-4">
+        <h3 className="text-sm font-medium mb-3">隐私设置</h3>
+        <div className="flex items-center justify-between py-2">
+          <span className="text-sm">允许任何人加我为好友</span>
+          <button onClick={() => updateSetting('allowFriendRequest', !settings.allowFriendRequest)} className={`w-10 h-5 rounded-full ${settings.allowFriendRequest ? 'bg-blue-500' : 'bg-gray-300'}`}>
+            <div className={`w-4 h-4 bg-white rounded-full shadow transform mx-0.5 ${settings.allowFriendRequest ? 'translate-x-5' : ''}`}></div>
+          </button>
+        </div>
+        <div className="flex items-center justify-between py-2">
+          <span className="text-sm">允许通过搜索找到我</span>
+          <button onClick={() => updateSetting('allowSearch', !settings.allowSearch)} className={`w-10 h-5 rounded-full ${settings.allowSearch ? 'bg-blue-500' : 'bg-gray-300'}`}>
+            <div className={`w-4 h-4 bg-white rounded-full shadow transform mx-0.5 ${settings.allowSearch ? 'translate-x-5' : ''}`}></div>
+          </button>
+        </div>
+      </div>
+
+      {/* 通知设置 */}
+      <div className="bg-white mt-3 px-6 py-4">
+        <h3 className="text-sm font-medium mb-3">通知设置</h3>
+        <div className="flex items-center justify-between py-2">
+          <span className="text-sm">消息通知</span>
+          <button onClick={() => updateSetting('notifyMessage', !settings.notifyMessage)} className={`w-10 h-5 rounded-full ${settings.notifyMessage ? 'bg-blue-500' : 'bg-gray-300'}`}>
+            <div className={`w-4 h-4 bg-white rounded-full shadow transform mx-0.5 ${settings.notifyMessage ? 'translate-x-5' : ''}`}></div>
+          </button>
+        </div>
+        <div className="flex items-center justify-between py-2">
+          <span className="text-sm">通话通知</span>
+          <button onClick={() => updateSetting('notifyCall', !settings.notifyCall)} className={`w-10 h-5 rounded-full ${settings.notifyCall ? 'bg-blue-500' : 'bg-gray-300'}`}>
+            <div className={`w-4 h-4 bg-white rounded-full shadow transform mx-0.5 ${settings.notifyCall ? 'translate-x-5' : ''}`}></div>
+          </button>
+        </div>
+        <div className="flex items-center justify-between py-2">
+          <span className="text-sm">动态通知</span>
+          <button onClick={() => updateSetting('notifyPost', !settings.notifyPost)} className={`w-10 h-5 rounded-full ${settings.notifyPost ? 'bg-blue-500' : 'bg-gray-300'}`}>
+            <div className={`w-4 h-4 bg-white rounded-full shadow transform mx-0.5 ${settings.notifyPost ? 'translate-x-5' : ''}`}></div>
+          </button>
+        </div>
       </div>
 
       <div className="mt-3 bg-white">
