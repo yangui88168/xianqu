@@ -4,15 +4,29 @@ import { useRouter } from 'next/router';
 
 const API = 'https://xianqu-server.onrender.com';
 
+// 从 JWT 中解析 userId
+function getUserIdFromToken(token: string): string | null {
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    return payload.userId || null;
+  } catch {
+    return null;
+  }
+}
+
 // 频道列表组件
 function ChannelList({ onSelect }: { onSelect: (id: string) => void }) {
   const [channels, setChannels] = useState<any[]>([]);
+  const [userId, setUserId] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
 
   useEffect(() => {
     const token = localStorage.getItem('token');
+    if (token) {
+      setUserId(getUserIdFromToken(token));
+    }
     fetch(`${API}/channel/list`, { headers: { Authorization: `Bearer ${token}` } })
       .then(res => res.json())
       .then(setChannels);
@@ -34,6 +48,17 @@ function ChannelList({ onSelect }: { onSelect: (id: string) => void }) {
       const listRes = await fetch(`${API}/channel/list`, { headers: { Authorization: `Bearer ${token}` } });
       if (listRes.ok) setChannels(await listRes.json());
     }
+  };
+
+  const deleteChannel = async (channelId: string) => {
+    const token = localStorage.getItem('token');
+    await fetch(`${API}/channel/${channelId}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    // 刷新列表
+    const listRes = await fetch(`${API}/channel/list`, { headers: { Authorization: `Bearer ${token}` } });
+    if (listRes.ok) setChannels(await listRes.json());
   };
 
   return (
@@ -72,25 +97,35 @@ function ChannelList({ onSelect }: { onSelect: (id: string) => void }) {
       )}
 
       {channels.map((ch: any) => (
-        <button
-          key={ch.id}
-          onClick={() => onSelect(ch.id)}
-          className="w-full text-left bg-white rounded-xl shadow p-4 mb-3 flex justify-between items-center"
-        >
-          <div>
+        <div key={ch.id} className="bg-white rounded-xl shadow p-4 mb-3 flex justify-between items-center">
+          <button onClick={() => onSelect(ch.id)} className="text-left flex-1">
             <p className="font-bold text-sm">{ch.name}</p>
             <p className="text-xs text-gray-500">{ch.description || '暂无简介'}</p>
-          </div>
-          <div className="text-xs text-gray-400">
-            {ch._count?.subscribers} 订阅 | {ch._count?.posts} 帖子
-          </div>
-        </button>
+            <div className="text-xs text-gray-400 mt-1">
+              {ch._count?.subscribers} 订阅 | {ch._count?.posts} 帖子
+            </div>
+          </button>
+          {/* 删除按钮：仅所有者可见 */}
+          {userId && ch.ownerId === userId && (
+            <button
+              onClick={async (e) => {
+                e.stopPropagation();
+                if (confirm('确定删除此频道吗？相关帖子也将被删除')) {
+                  await deleteChannel(ch.id);
+                }
+              }}
+              className="text-red-500 text-xs px-2 ml-2"
+            >
+              删除
+            </button>
+          )}
+        </div>
       ))}
     </div>
   );
 }
 
-// 频道详情组件
+// 频道详情组件 (无改动)
 function ChannelDetail({ channelId, onBack }: { channelId: string; onBack: () => void }) {
   const [channel, setChannel] = useState<any>(null);
   const [posts, setPosts] = useState<any[]>([]);
