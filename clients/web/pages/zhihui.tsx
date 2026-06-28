@@ -100,8 +100,8 @@ export default function ZhihuiStar() {
   };
 
   return (
-    <div className="flex flex-col h-full overflow-y-auto bg-gray-50">
-      {/* 顶部发布按钮 */}
+    <div className="h-full overflow-y-auto bg-gray-50">
+      {/* 发布按钮 */}
       <div className="p-4 bg-white border-b">
         <button onClick={() => setShowPublish(!showPublish)} className="w-full bg-blue-500 text-white py-2 rounded-full text-sm font-medium">
           + 发布动态
@@ -127,7 +127,7 @@ export default function ZhihuiStar() {
       </div>
 
       {/* 动态流 */}
-      <div className="flex-1 overflow-y-auto">
+      <div>
         {feed.map((post: any) => (
           <div key={post.id} className="bg-white p-4 border-b">
             <div className="flex items-center gap-3 mb-2">
@@ -135,9 +135,7 @@ export default function ZhihuiStar() {
                 {(post.user?.nickname || post.user?.username)[0]}
               </div>
               <span className="font-medium text-sm">{post.user?.nickname || post.user?.username}</span>
-              <span className="text-xs text-gray-400 ml-auto">
-                {new Date(post.createdAt).toLocaleDateString()}
-              </span>
+              <span className="text-xs text-gray-400 ml-auto">{new Date(post.createdAt).toLocaleDateString()}</span>
             </div>
             <p className="text-sm text-gray-800">{post.content}</p>
             {post.imageUrl && (
