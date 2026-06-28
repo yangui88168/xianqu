@@ -2,6 +2,7 @@ import { FastifyInstance } from 'fastify';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import { prisma } from '../../db';
+import { checkBadges } from '../badge'; // 新增：导入徽章检查函数
 
 function authMiddleware(request: any, reply: any, done: any) {
   const token = (request.headers.authorization || '').replace('Bearer ', '');
@@ -121,6 +122,9 @@ export async function userRoutes(fastify: FastifyInstance) {
     if (userExp && userExp.level !== newLevel) {
       await prisma.userExp.update({ where: { userId }, data: { level: newLevel } });
     }
+
+    // 检查并授予签到相关徽章
+    await checkBadges(userId);
 
     reply.send({
       success: true,
