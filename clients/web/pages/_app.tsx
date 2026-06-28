@@ -14,7 +14,7 @@ export default function App({ Component, pageProps }: AppProps) {
   const router = useRouter();
   const currentPath = router.pathname;
 
-  // 登录页不显示底部导航
+  // 登录页不显示底部导航和居中容器
   if (currentPath === '/') {
     return (
       <>
@@ -27,29 +27,27 @@ export default function App({ Component, pageProps }: AppProps) {
   }
 
   return (
-    <>
+    <div className="max-w-5xl mx-auto h-dvh flex flex-col shadow-2xl bg-white relative">
       <Head>
         <link rel="icon" href="data:," />
       </Head>
-      <div className="flex flex-col h-screen">
-        <div className="flex-1 overflow-y-auto">
-          <Component {...pageProps} />
-        </div>
-        <nav className="flex bg-white border-t shadow-lg">
-          {tabs.map((tab) => (
-            <button
-              key={tab.path}
-              onClick={() => router.push(tab.path)}
-              className={`flex-1 py-3 flex flex-col items-center text-xs ${
-                currentPath.startsWith(tab.path) ? 'text-blue-500' : 'text-gray-500'
-              }`}
-            >
-              <span className="text-xl">{tab.icon}</span>
-              <span className="mt-1">{tab.name}</span>
-            </button>
-          ))}
-        </nav>
+      <div className="flex-1 min-h-0 overflow-hidden">
+        <Component {...pageProps} />
       </div>
-    </>
+      <nav className="flex bg-white border-t shadow-lg flex-shrink-0">
+        {tabs.map((tab) => (
+          <button
+            key={tab.path}
+            onClick={() => router.push(tab.path)}
+            className={`flex-1 py-3 flex flex-col items-center text-xs ${
+              currentPath.startsWith(tab.path) ? 'text-blue-500' : 'text-gray-500'
+            }`}
+          >
+            <span className="text-xl">{tab.icon}</span>
+            <span className="mt-1">{tab.name}</span>
+          </button>
+        ))}
+      </nav>
+    </div>
   );
 }
