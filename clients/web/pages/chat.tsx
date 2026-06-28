@@ -708,6 +708,21 @@ export default function Chat() {
     }
   };
 
+  // 合并会话列表并按最后消息时间排序
+  const allConversations = [
+    ...sessions.map((s: any) => ({
+      type: 'friend',
+      data: s.friend,
+      lastTime: s.lastMessage?.createdAt || 0,
+      unreadCount: s.unreadCount || 0,
+    })),
+    ...groups.map((g: any) => ({
+      type: 'group',
+      data: g,
+      lastTime: g.lastMessage?.createdAt || g.createdAt || 0,
+    })),
+  ].sort((a, b) => new Date(b.lastTime).getTime() - new Date(a.lastTime).getTime());
+
   return (
     <div
       className="flex bg-gray-100 overflow-hidden"
@@ -778,27 +793,45 @@ export default function Chat() {
         )}
 
         <div className="flex-1 overflow-y-auto">
-          <div className="p-2 bg-gray-100 text-sm font-bold">群聊</div>
-          {groups.map((g: any) => (
-            <div key={g.id} onClick={() => selectChat('group', g)} className={`p-3 cursor-pointer hover:bg-gray-50 border-b ${selectedChat?.data?.id === g.id && selectedChat?.type === 'group' ? 'bg-blue-50' : ''}`}>
-              <span className="font-medium text-sm"># {g.name}</span>
-            </div>
-          ))}
-          <div className="p-2 bg-gray-100 text-sm font-bold">好友</div>
-          {sessions.map((s: any) => (
-            <div key={s.friend.id} onClick={() => selectChat('friend', s.friend)} className={`flex items-center gap-3 p-3 cursor-pointer hover:bg-gray-50 border-b ${selectedChat?.data?.id === s.friend.id && selectedChat?.type === 'friend' ? 'bg-blue-50' : ''}`}>
-              <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold">{(s.friend.nickname || s.friend.username)[0]}</div>
-              <div className="flex-1 min-w-0">
-                <div className="flex justify-between">
-                  <span className="font-medium text-sm truncate">{s.friend.nickname || s.friend.username}</span>
-                  {s.lastMessage && <span className="text-xs text-gray-400">{new Date(s.lastMessage.createdAt).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' })}</span>}
+          {allConversations.map((conv: any) => (
+            <div
+              key={conv.type + conv.data.id}
+              onClick={() => selectChat(conv.type, conv.data)}
+              className={`p-3 cursor-pointer hover:bg-gray-50 border-b ${
+                selectedChat?.data?.id === conv.data.id && selectedChat?.type === conv.type ? 'bg-blue-50' : ''
+              }`}
+            >
+              {conv.type === 'group' ? (
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-gray-300 rounded-full flex items-center justify-center text-white text-sm font-bold">#</div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex justify-between">
+                      <span className="font-medium text-sm truncate">{conv.data.name}</span>
+                      {conv.lastTime && <span className="text-xs text-gray-400">{new Date(conv.lastTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>}
+                    </div>
+                    <p className="text-xs text-gray-500 mt-0.5">群聊</p>
+                  </div>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-xs text-gray-500 truncate">{s.lastMessage?.type === 'image' ? '[图片]' : s.lastMessage?.type === 'voice' ? '[语音]' : s.lastMessage?.content || ''}</span>
-                  {s.unreadCount > 0 && <span className="bg-red-500 text-white text-xs rounded-full px-1.5 py-0.5">{s.unreadCount}</span>}
+              ) : (
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold">
+                    {(conv.data.nickname || conv.data.username)[0]}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex justify-between">
+                      <span className="font-medium text-sm truncate">{conv.data.nickname || conv.data.username}</span>
+                      {conv.lastTime && <span className="text-xs text-gray-400">{new Date(conv.lastTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>}
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-xs text-gray-500 truncate">
+                        {conv.lastMessage?.type === 'image' ? '[图片]' : conv.lastMessage?.type === 'voice' ? '[语音]' : conv.lastMessage?.content || ''}
+                      </span>
+                      {conv.unreadCount > 0 && <span className="bg-red-500 text-white text-xs rounded-full px-1.5 py-0.5">{conv.unreadCount}</span>}
+                    </div>
+                    <p className="text-xs text-gray-500 mt-0.5">{getLastSeenText(conv.data)}</p>
+                  </div>
                 </div>
-                <p className="text-xs text-gray-500 mt-0.5">{getLastSeenText(s.friend)}</p>
-              </div>
+              )}
             </div>
           ))}
         </div>
