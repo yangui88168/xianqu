@@ -1,5 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import jwt from 'jsonwebtoken';
+import bcrypt from 'bcryptjs';
 import { prisma } from '../../db';
 
 function authMiddleware(request: any, reply: any, done: any) {
@@ -32,6 +33,24 @@ export async function userRoutes(fastify: FastifyInstance) {
       where: { id: userId },
       data: { nickname, signature, avatar },
     });
+    reply.send({ success: true });
+  });
+
+  // 修改密码
+  fastify.put('/password', { preHandler: authMiddleware }, async (request, reply) => {
+    const userId = (request as any).userId;
+    const { oldPassword, newPassword } = request.body as any;
+    if (!oldPassword || !newPassword) return reply.status(400).send({ error: '请输入旧密码和新密码' });
+    if (newPassword.length < 6) return reply.status(400).send({ error: '新密码至少6位' });
+
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) return reply.status(404).send({ error: '用户不存在' });
+
+    const valid = await bcrypt.compare(oldPassword, user.password);
+    if (!valid) return reply.status(403).send({ error: '旧密码错误' });
+
+    const hash = await bcrypt.hash(newPassword, 10);
+    await prisma.user.update({ where: { id: userId }, data: { password: hash } });
     reply.send({ success: true });
   });
 
