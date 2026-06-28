@@ -192,7 +192,7 @@ export default function Profile() {
   if (!user) return <div className="p-8 text-center text-gray-400">加载中...</div>;
 
   return (
-    <div className="flex flex-col h-full overflow-y-auto bg-gray-50">
+    <div style={{ height: 'calc(100dvh - 56px)', overflowY: 'auto' }} className="bg-gray-50">
       {/* 头部信息 */}
       <div className="bg-white p-6 border-b">
         <div className="flex items-center gap-4">
