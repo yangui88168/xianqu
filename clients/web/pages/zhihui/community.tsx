@@ -10,12 +10,13 @@ function CommunityList({ onSelect }: { onSelect: (id: string) => void }) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
 
-  useEffect(() => {
+  const loadCommunities = async () => {
     const token = localStorage.getItem('token');
-    fetch(`${API}/community/list`, { headers: { Authorization: `Bearer ${token}` } })
-      .then(res => res.json())
-      .then(setCommunities);
-  }, []);
+    const res = await fetch(`${API}/community/list`, { headers: { Authorization: `Bearer ${token}` } });
+    if (res.ok) setCommunities(await res.json());
+  };
+
+  useEffect(() => { loadCommunities(); }, []);
 
   const createCommunity = async () => {
     const token = localStorage.getItem('token');
@@ -28,8 +29,7 @@ function CommunityList({ onSelect }: { onSelect: (id: string) => void }) {
       setShowCreate(false);
       setName('');
       setDescription('');
-      const listRes = await fetch(`${API}/community/list`, { headers: { Authorization: `Bearer ${token}` } });
-      if (listRes.ok) setCommunities(await listRes.json());
+      loadCommunities();
     }
   };
 
@@ -37,7 +37,7 @@ function CommunityList({ onSelect }: { onSelect: (id: string) => void }) {
     <div className="p-4">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-bold">社区列表</h2>
-        <button onClick={() => setShowCreate(!showCreate)} className="text-sm bg-blue-500 text-white px-3 py-1 rounded-full">创建社区</button>
+        <button onClick={() => setShowCreate(!showCreate)} className="text-sm bg-blue-500 text-white px-3 py-1 rounded-full">+ 新社区</button>
       </div>
       {showCreate && (
         <div className="bg-white rounded-xl shadow p-4 mb-4">
@@ -54,20 +54,20 @@ function CommunityList({ onSelect }: { onSelect: (id: string) => void }) {
         >
           <p className="font-bold text-sm">{c.name}</p>
           <p className="text-xs text-gray-500">{c.description || '暂无简介'}</p>
-          <p className="text-xs text-gray-400 mt-1">{c._count?.channels} 个频道</p>
+          <p className="text-xs text-gray-400 mt-1">{c._count?.homesteads} 个家园</p>
         </button>
       ))}
     </div>
   );
 }
 
-// 社区详情（频道列表）
+// 社区详情（家园列表）
 function CommunityDetail({ communityId, onBack }: { communityId: string; onBack: () => void }) {
   const [community, setCommunity] = useState<any>(null);
-  const [showCreateChannel, setShowCreateChannel] = useState(false);
-  const [channelName, setChannelName] = useState('');
-  const [channelDesc, setChannelDesc] = useState('');
-  const [selectedChannel, setSelectedChannel] = useState<string | null>(null);
+  const [showCreate, setShowCreate] = useState(false);
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [selectedHomestead, setSelectedHomestead] = useState<string | null>(null);
 
   const loadCommunity = async () => {
     const token = localStorage.getItem('token');
@@ -77,50 +77,49 @@ function CommunityDetail({ communityId, onBack }: { communityId: string; onBack:
 
   useEffect(() => { loadCommunity(); }, [communityId]);
 
-  const createChannel = async () => {
+  const createHomestead = async () => {
     const token = localStorage.getItem('token');
-    await fetch(`${API}/community/${communityId}/channel`, {
+    await fetch(`${API}/community/${communityId}/homestead`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ name: channelName, description: channelDesc }),
+      body: JSON.stringify({ name, description }),
     });
-    setShowCreateChannel(false);
-    setChannelName('');
-    setChannelDesc('');
+    setShowCreate(false);
+    setName('');
+    setDescription('');
     loadCommunity();
   };
 
-  // 如果选中了频道，进入频道帖子视图（复用频道详情）
-  if (selectedChannel) {
-    return <ChannelView channelId={selectedChannel} onBack={() => setSelectedChannel(null)} />;
+  if (selectedHomestead) {
+    return <HomesteadDetail homesteadId={selectedHomestead} communityId={communityId} onBack={() => setSelectedHomestead(null)} />;
   }
 
   return (
     <div className="h-full flex flex-col">
       <div className="p-3 border-b bg-white flex items-center justify-between">
-        <button onClick={onBack} className="text-blue-500 text-sm">← 返回社区列表</button>
+        <button onClick={onBack} className="text-blue-500 text-sm">← 返回</button>
         <h2 className="font-bold text-lg">{community?.name}</h2>
-        <button onClick={() => setShowCreateChannel(!showCreateChannel)} className="text-sm text-blue-500">创建频道</button>
+        <button onClick={() => setShowCreate(!showCreate)} className="text-sm text-blue-500">+ 家园</button>
       </div>
-      {showCreateChannel && (
+      {showCreate && (
         <div className="p-4 bg-white border-b">
-          <input className="w-full border p-2 rounded mb-2 text-sm" placeholder="频道名称" value={channelName} onChange={e => setChannelName(e.target.value)} />
-          <input className="w-full border p-2 rounded mb-2 text-sm" placeholder="简介" value={channelDesc} onChange={e => setChannelDesc(e.target.value)} />
-          <button onClick={createChannel} className="bg-green-500 text-white px-4 py-1 rounded-full text-sm">确认</button>
+          <input className="w-full border p-2 rounded mb-2 text-sm" placeholder="家园名称" value={name} onChange={e => setName(e.target.value)} />
+          <input className="w-full border p-2 rounded mb-2 text-sm" placeholder="简介" value={description} onChange={e => setDescription(e.target.value)} />
+          <button onClick={createHomestead} className="bg-green-500 text-white px-4 py-1 rounded-full text-sm">确认</button>
         </div>
       )}
       <div className="flex-1 overflow-y-auto p-4">
-        {community?.channels?.map((ch: any) => (
+        {community?.homesteads?.map((h: any) => (
           <button
-            key={ch.id}
-            onClick={() => setSelectedChannel(ch.id)}
+            key={h.id}
+            onClick={() => setSelectedHomestead(h.id)}
             className="w-full text-left bg-white rounded-xl shadow p-4 mb-3 flex justify-between items-center"
           >
             <div>
-              <p className="font-bold text-sm"># {ch.name}</p>
-              <p className="text-xs text-gray-500">{ch.description || '暂无简介'}</p>
+              <p className="font-bold text-sm">{h.name}</p>
+              <p className="text-xs text-gray-500">{h.description || '暂无简介'}</p>
             </div>
-            <span className="text-xs text-gray-400">{ch._count?.posts} 帖子</span>
+            <span className="text-xs text-gray-400">{h._count?.posts} 帖子</span>
           </button>
         ))}
       </div>
@@ -128,26 +127,53 @@ function CommunityDetail({ communityId, onBack }: { communityId: string; onBack:
   );
 }
 
-// 频道帖子视图（简化版，复用频道系统逻辑，但这里为避免冲突，简单展示帖子列表）
-function ChannelView({ channelId, onBack }: { channelId: string; onBack: () => void }) {
-  const [posts, setPosts] = useState<any[]>([]);
+// 家园详情（帖子列表 + 发帖）
+function HomesteadDetail({ homesteadId, communityId, onBack }: { homesteadId: string; communityId: string; onBack: () => void }) {
+  const [homestead, setHomestead] = useState<any>(null);
+  const [content, setContent] = useState('');
 
-  useEffect(() => {
+  const loadHomestead = async () => {
     const token = localStorage.getItem('token');
-    fetch(`${API}/channel/${channelId}/posts`, { headers: { Authorization: `Bearer ${token}` } })
-      .then(res => res.json())
-      .then(setPosts);
-  }, [channelId]);
+    const res = await fetch(`${API}/community/${communityId}/homestead/${homesteadId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (res.ok) setHomestead(await res.json());
+  };
+
+  useEffect(() => { loadHomestead(); }, [homesteadId]);
+
+  const publishPost = async () => {
+    if (!content.trim()) return;
+    const token = localStorage.getItem('token');
+    await fetch(`${API}/community/${communityId}/homestead/${homesteadId}/post`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ content }),
+    });
+    setContent('');
+    loadHomestead();
+  };
 
   return (
     <div className="h-full flex flex-col">
-      <div className="p-3 border-b bg-white">
-        <button onClick={onBack} className="text-blue-500 text-sm">← 返回频道列表</button>
+      <div className="p-3 border-b bg-white flex items-center">
+        <button onClick={onBack} className="text-blue-500 text-sm mr-3">← 返回</button>
+        <h2 className="font-bold text-lg">{homestead?.name}</h2>
+      </div>
+      <div className="p-4 bg-white border-b">
+        <textarea
+          className="w-full border rounded p-2 text-sm"
+          rows={2}
+          placeholder="发帖..."
+          value={content}
+          onChange={e => setContent(e.target.value)}
+        />
+        <button onClick={publishPost} className="mt-2 bg-blue-500 text-white px-4 py-1 rounded-full text-sm">发布</button>
       </div>
       <div className="flex-1 overflow-y-auto p-4">
-        {posts.map((post: any) => (
+        {homestead?.posts?.map((post: any) => (
           <div key={post.id} className="bg-white rounded-xl shadow p-4 mb-3">
-            <p className="text-sm font-medium">{post.author?.nickname}</p>
+            <p className="text-sm font-medium">{post.author?.nickname || post.author?.username}</p>
             <p className="text-sm mt-1">{post.content}</p>
           </div>
         ))}
@@ -156,7 +182,7 @@ function ChannelView({ channelId, onBack }: { channelId: string; onBack: () => v
   );
 }
 
-// 主社区页面
+// 主页面
 export default function CommunityPage() {
   const [selectedCommunity, setSelectedCommunity] = useState<string | null>(null);
 
