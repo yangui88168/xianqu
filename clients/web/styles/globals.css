@@ -18,3 +18,23 @@ html, body, #__next {
   height: 100%;
   overflow: hidden;
 }
+
+/* 基础元素圆润化 */
+input, textarea, select, button {
+  border-radius: 0.5rem !important;
+}
+
+/* 卡片容器使用柔和阴影 */
+.bg-white {
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+}
+
+/* 聊天消息气泡调整 */
+.rounded-2xl {
+  border-radius: 1rem;
+}
+
+/* 输入框聚焦时使用更柔和的环 */
+.focus\:ring-2:focus {
+  --tw-ring-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2) !important;
+}
