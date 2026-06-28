@@ -103,6 +103,9 @@ export default function Chat() {
   const [searchMode, setSearchMode] = useState(false);
   const [searchMessageResults, setSearchMessageResults] = useState<any[]>([]);
 
+  // 最外层容器引用，用于动态设置高度
+  const containerRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (!token) { router.push('/'); return; }
@@ -110,6 +113,18 @@ export default function Chat() {
       const payload = JSON.parse(atob(token.split('.')[1]));
       setUserId(payload.userId);
     } catch { router.push('/'); }
+  }, []);
+
+  // 动态设置聊天页面高度
+  useEffect(() => {
+    const setHeight = () => {
+      if (containerRef.current) {
+        containerRef.current.style.height = `${window.innerHeight - 56}px`;
+      }
+    };
+    setHeight();
+    window.addEventListener('resize', setHeight);
+    return () => window.removeEventListener('resize', setHeight);
   }, []);
 
   const loadSessions = useCallback(async () => {
@@ -695,8 +710,8 @@ export default function Chat() {
 
   return (
     <div
+      ref={containerRef}
       className="flex bg-gray-100 relative overflow-hidden"
-      style={{ height: 'calc(100dvh - 56px)' }}
       onClick={() => { setContextMenu(null); setShowMentionList(false); }}
     >
       {/* 左侧栏 */}
