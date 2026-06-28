@@ -192,7 +192,7 @@ export default function Profile() {
   if (!user) return <div className="p-8 text-center text-gray-400">加载中...</div>;
 
   return (
-    <div className="min-h-screen overflow-y-auto bg-gray-50" style={{ paddingBottom: '56px' }}>
+    <div className="h-full overflow-y-auto bg-gray-50">
       {/* 头部信息 */}
       <div className="bg-white p-6 border-b">
         <div className="flex items-center gap-4">
