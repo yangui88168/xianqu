@@ -43,6 +43,9 @@ model User {
   // 黑名单
   blockedUsers     Blocked[]       @relation("Blocker")
   blockedBy        Blocked[]       @relation("Blocked")
+
+  // 签到记录
+  signins          UserSignin[]
 }
 
 model Message {
@@ -208,4 +211,15 @@ model Blocked {
   blocked   User     @relation("Blocked", fields: [blockedId], references: [id])
 
   @@id([userId, blockedId])
+}
+
+// 用户签到
+model UserSignin {
+  id        String   @id @default(cuid())
+  userId    String
+  date      DateTime @default(now()) @db.Date
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@unique([userId, date])
 }
