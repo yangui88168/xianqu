@@ -14,6 +14,11 @@ export default function Profile() {
   const [newPassword, setNewPassword] = useState('');
   const router = useRouter();
 
+  // 签到相关
+  const [signinStatus, setSigninStatus] = useState<any>(null);
+  const [showSigninModal, setShowSigninModal] = useState(false);
+  const [signinResult, setSigninResult] = useState<any>(null);
+
   // Cloudinary Widget 引用
   const cloudinaryRef = useRef<any>();
   const widgetRef = useRef<any>();
@@ -21,6 +26,7 @@ export default function Profile() {
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (!token) { router.push('/'); return; }
+    // 获取用户资料
     fetch(`${API}/user/profile`, { headers: { Authorization: `Bearer ${token}` } })
       .then(res => res.json())
       .then(data => {
@@ -30,7 +36,31 @@ export default function Profile() {
         setAvatar(data.avatar || '');
       })
       .catch(() => router.push('/'));
+    // 获取签到状态
+    fetch(`${API}/user/signin/status`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(res => res.json())
+      .then(data => setSigninStatus(data))
+      .catch(() => {});
   }, [router]);
+
+  // 签到
+  const handleSignin = async () => {
+    const token = localStorage.getItem('token');
+    const res = await fetch(`${API}/user/signin`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    });
+    if (res.ok) {
+      const data = await res.json();
+      setSigninResult(data);
+      setShowSigninModal(true);
+      // 刷新签到状态
+      const statusRes = await fetch(`${API}/user/signin/status`, { headers: { Authorization: `Bearer ${token}` } });
+      if (statusRes.ok) setSigninStatus(await statusRes.json());
+    } else {
+      alert('签到失败，可能已经签到过了');
+    }
+  };
 
   // 初始化 Cloudinary Widget（用于上传头像）
   useEffect(() => {
@@ -144,6 +174,28 @@ export default function Profile() {
         )}
       </div>
 
+      {/* 签到卡片 */}
+      <div className="bg-white mt-3 px-6 py-4">
+        <div className="flex justify-between items-center mb-2">
+          <span className="text-sm font-medium">每日签到</span>
+          {signinStatus?.signedToday ? (
+            <span className="text-gray-400 text-xs">今日已签到</span>
+          ) : (
+            <button onClick={handleSignin} className="bg-blue-500 text-white px-4 py-1 rounded-full text-sm">签到领经验</button>
+          )}
+        </div>
+        {/* 连续签到进度 */}
+        <div className="flex items-center gap-1 mt-2">
+          {Array.from({ length: 7 }).map((_, i) => (
+            <div
+              key={i}
+              className={`flex-1 h-2 rounded-full ${i < (signinStatus?.streak || 0) ? 'bg-blue-500' : 'bg-gray-200'}`}
+            ></div>
+          ))}
+        </div>
+        <p className="text-xs text-gray-500 mt-1 text-right">连续签到 {signinStatus?.streak || 0} 天</p>
+      </div>
+
       {/* 成长值 */}
       <div className="bg-white mt-3 px-6 py-4">
         <div className="flex justify-between items-center">
@@ -188,6 +240,20 @@ export default function Profile() {
               <button onClick={() => setShowPasswordModal(false)} className="px-3 py-1 bg-gray-300 rounded text-sm">取消</button>
               <button onClick={changePassword} className="px-3 py-1 bg-blue-500 text-white rounded text-sm">确定</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* 签到结果弹窗 */}
+      {showSigninModal && signinResult && (
+        <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50" onClick={() => setShowSigninModal(false)}>
+          <div className="bg-white p-5 rounded shadow-lg w-80 text-center" onClick={e => e.stopPropagation()}>
+            <div className="text-4xl mb-3">✅</div>
+            <h3 className="font-bold mb-1">签到成功！</h3>
+            <p className="text-gray-500 text-sm mb-2">连续签到 {signinResult.streak} 天</p>
+            <p className="text-blue-500 text-lg font-bold">+{signinResult.expGain} 经验</p>
+            <p className="text-xs text-gray-400 mt-1">总经验 {signinResult.totalExp}</p>
+            <button onClick={() => setShowSigninModal(false)} className="mt-4 w-full bg-blue-500 text-white py-2 rounded">确定</button>
           </div>
         </div>
       )}
