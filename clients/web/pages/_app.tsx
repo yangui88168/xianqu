@@ -44,10 +44,10 @@ export default function App({ Component, pageProps }: AppProps) {
         }
       `}</style>
       <div className="h-dvh flex flex-col max-w-5xl mx-auto shadow-2xl bg-white overflow-hidden">
-        <div className="flex-1 min-h-0">
+        <div className="flex-1 min-h-0 relative">
           <Component {...pageProps} />
         </div>
-        <nav className="flex-shrink-0 flex items-center justify-around bg-white border-t shadow-lg" style={{ height: '56px' }}>
+        <nav className="flex-shrink-0 flex items-center justify-around bg-white border-t" style={{ height: '56px' }}>
           {tabs.map((tab) => (
             <button
               key={tab.path}
