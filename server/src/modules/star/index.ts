@@ -27,7 +27,11 @@ export async function starRoutes(fastify: FastifyInstance) {
         imageUrl,
         permission: permission || 'public',
       },
-      include: { user: { select: { id: true, nickname: true, username: true, avatar: true } } },
+      include: {
+        user: { select: { id: true, nickname: true, username: true, avatar: true } },
+        likes: { select: { userId: true } },
+        _count: { select: { likes: true, comments: true } },
+      },
     });
 
     await progressTask(userId, 'publish_post');
