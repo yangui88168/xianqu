@@ -289,7 +289,7 @@ export default function Chat() {
       }).catch(() => {});
       setSessions(prev => prev.map(s => s.friend.id === data.id ? { ...s, unreadCount: 0 } : s));
     }
-    // 如果是群聊，预加载群信息（包括成员），以便@功能使用
+    // 如果是群聊，预加载群信息
     if (type === 'group') {
       loadGroupInfoById(data.id);
     }
@@ -704,7 +704,7 @@ export default function Chat() {
     if (groupInfo?.inviteCode) {
       const link = `https://xianqu.pages.dev/join?code=${groupInfo.inviteCode}`;
       navigator.clipboard.writeText(link);
-      alert('邀请链接已复制');
+      alert('链接已复制');
     }
   };
 
@@ -991,7 +991,7 @@ export default function Chat() {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                     </svg>
                   </button>
-                  {/* 群聊 @ 按钮与下拉菜单 */}
+                  {/* 群聊 @ 按钮 */}
                   {selectedChat?.type === 'group' && (
                     <div className="relative">
                       <button
@@ -1112,15 +1112,30 @@ export default function Chat() {
             </div>
             <p className="font-medium">群名称：{groupInfo.name}</p>
             <p className="text-sm text-gray-500 mt-1">成员 {groupInfo.members?.length} 人</p>
+
+            {/* 邀请链接 - 输入框 + 复制按钮 */}
             {groupInfo.inviteCode && (
-              <div className="mt-3 bg-gray-50 p-3 rounded flex items-center justify-between">
-                <div>
-                  <p className="text-xs text-gray-500">邀请码</p>
-                  <p className="font-mono text-sm">{groupInfo.inviteCode}</p>
+              <div className="mt-3">
+                <label className="text-sm font-medium">群邀请链接</label>
+                <div className="flex items-center gap-2 mt-1">
+                  <input
+                    readOnly
+                    value={`https://xianqu.pages.dev/join?code=${groupInfo.inviteCode}`}
+                    className="flex-1 text-xs border p-1 rounded bg-gray-50"
+                  />
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(`https://xianqu.pages.dev/join?code=${groupInfo.inviteCode}`);
+                      alert('链接已复制');
+                    }}
+                    className="text-xs bg-blue-500 text-white px-3 py-1 rounded"
+                  >
+                    复制
+                  </button>
                 </div>
-                <button onClick={copyInviteLink} className="text-blue-500 text-sm font-medium hover:underline">复制链接</button>
               </div>
             )}
+
             <button onClick={() => { setInviteGroupId(groupInfo.id); setSelectedFriends([]); setInviteModal(true); }} className="w-full bg-blue-500 text-white py-2 rounded text-sm mt-3">邀请好友加入</button>
             <div className="mt-3">
               <label className="text-sm font-medium">群公告</label>
@@ -1179,7 +1194,7 @@ export default function Chat() {
         </div>
       )}
 
-      {/* 消息操作菜单（增加编辑、转发和收藏） */}
+      {/* 消息操作菜单 */}
       {contextMenu && (
         <div className="fixed bg-white border rounded shadow-lg py-1 z-50" style={{ left: contextMenu.x, top: contextMenu.y }} onClick={() => setContextMenu(null)}>
           <button onClick={() => { copyToClipboard(contextMenu.msg.content); setContextMenu(null); }} className="block w-full text-left px-4 py-2 text-sm hover:bg-gray-100">复制</button>
