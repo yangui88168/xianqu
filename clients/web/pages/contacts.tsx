@@ -31,14 +31,36 @@ export default function Contacts() {
   const [editNote, setEditNote] = useState('');
   const [editGroup, setEditGroup] = useState('');
 
-  // 加载好友列表和请求
+  // 新增状态：共同好友数、推荐用户
+  const [mutualCounts, setMutualCounts] = useState<Record<string, number>>({});
+  const [recommendations, setRecommendations] = useState<any[]>([]);
+
+  // 加载好友列表和请求（同时加载共同好友数）
   const loadFriends = useCallback(async () => {
     const token = localStorage.getItem('token');
     if (!token) return;
     const res = await fetch(`${API}/contacts/friends`, {
       headers: { Authorization: `Bearer ${token}` },
     });
-    if (res.ok) setFriends(await res.json());
+    if (res.ok) {
+      const friends = await res.json();
+      setFriends(friends);
+      // 加载共同好友数
+      const mutualPromises = friends.map(async (f: any) => {
+        const mRes = await fetch(`${API}/contacts/mutual/${f.id}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (mRes.ok) {
+          const mutual = await mRes.json();
+          return { id: f.id, count: mutual.length };
+        }
+        return { id: f.id, count: 0 };
+      });
+      const results = await Promise.all(mutualPromises);
+      const counts: Record<string, number> = {};
+      results.forEach(r => { counts[r.id] = r.count; });
+      setMutualCounts(counts);
+    }
   }, []);
 
   const loadRequests = useCallback(async () => {
@@ -50,11 +72,21 @@ export default function Contacts() {
     if (res.ok) setRequests(await res.json());
   }, []);
 
+  // 加载推荐用户
+  const loadRecommendations = useCallback(async () => {
+    const token = localStorage.getItem('token');
+    const res = await fetch(`${API}/contacts/recommend`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (res.ok) setRecommendations(await res.json());
+  }, []);
+
   useEffect(() => {
     loadFriends();
     loadRequests();
+    loadRecommendations();
     setLoading(false);
-  }, [loadFriends, loadRequests]);
+  }, [loadFriends, loadRequests, loadRecommendations]);
 
   // 搜索用户
   const searchUsers = async () => {
@@ -219,6 +251,24 @@ export default function Contacts() {
         </div>
       )}
 
+      {/* 推荐用户区域 */}
+      {recommendations.length > 0 && (
+        <div className="bg-white mt-3 px-4 py-3">
+          <h3 className="text-sm font-medium mb-2">推荐用户</h3>
+          {recommendations.map((user: any) => (
+            <div key={user.id} className="flex items-center justify-between py-2 border-b">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 bg-gray-400 rounded-full flex items-center justify-center text-white text-xs">
+                  {(user.nickname || user.username)[0]}
+                </div>
+                <span className="text-sm">{user.nickname || user.username}</span>
+              </div>
+              <button onClick={() => sendFriendRequest(user.id)} className="text-xs bg-green-500 text-white px-2 py-1 rounded">添加</button>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* 好友列表 */}
       <div className="flex-1 overflow-y-auto mt-4">
         {loading ? (
@@ -244,8 +294,12 @@ export default function Contacts() {
                     <p className="font-medium text-sm">{friend.nickname || friend.username}</p>
                     {friend.note && <span className="text-xs text-gray-400 bg-gray-100 px-1 rounded">备注：{friend.note}</span>}
                   </div>
-                  {/* 替换为动态时间描述 */}
-                  <p className="text-xs text-gray-500">{friend.groupName || '未分组'} · {getLastSeenText(friend)}</p>
+                  {/* 显示共同好友数和状态 */}
+                  <p className="text-xs text-gray-400">
+                    {mutualCounts[friend.id] > 0 && `${mutualCounts[friend.id]}个共同好友 · `}
+                    {friend.status === 'online' ? '在线' : getLastSeenText(friend)}
+                  </p>
+                  <p className="text-xs text-gray-500">{friend.groupName || '未分组'}</p>
                 </div>
               </div>
               <div className="flex gap-2" onClick={e => e.stopPropagation()}>
