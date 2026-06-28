@@ -3,7 +3,6 @@ import { useRouter } from 'next/router';
 
 const API = 'https://xianqu-server.onrender.com';
 
-// 任务类型描述（与后端一致，保留以防后续扩展）
 const TASK_CONFIG: any = {
   send_message: { desc: '发送一条消息' },
   add_friend: { desc: '添加一个好友' },
@@ -12,21 +11,12 @@ const TASK_CONFIG: any = {
   publish_post: { desc: '发布一条动态' },
 };
 
-// 状态配置
 const STATUS_LIST = ['online', 'busy', 'dnd', 'away', 'invisible'];
 const STATUS_ICON: Record<string, string> = {
-  online: '🟢',
-  busy: '🟠',
-  dnd: '🔴',
-  away: '🟡',
-  invisible: '⚫',
+  online: '🟢', busy: '🟠', dnd: '🔴', away: '🟡', invisible: '⚫',
 };
 const STATUS_TEXT: Record<string, string> = {
-  online: '在线',
-  busy: '忙碌',
-  dnd: '勿扰',
-  away: '离开',
-  invisible: '隐身',
+  online: '在线', busy: '忙碌', dnd: '勿扰', away: '离开', invisible: '隐身',
 };
 
 export default function Profile() {
@@ -39,27 +29,20 @@ export default function Profile() {
   const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
 
-  // 签到相关
   const [signedToday, setSignedToday] = useState(false);
   const [streak, setStreak] = useState(0);
   const [exp, setExp] = useState(0);
   const [level, setLevel] = useState(1);
 
-  // 勋章
   const [badges, setBadges] = useState<any[]>([]);
-
-  // 收藏
   const [favorites, setFavorites] = useState<any[]>([]);
   const [showFavorites, setShowFavorites] = useState(false);
-
-  // 在线状态
   const [currentStatus, setCurrentStatus] = useState('online');
 
   const router = useRouter();
   const cloudinaryRef = useRef<any>();
   const widgetRef = useRef<any>();
 
-  // 切换在线状态（循环切换）
   const cycleStatus = async () => {
     const idx = STATUS_LIST.indexOf(currentStatus);
     const nextIdx = (idx + 1) % STATUS_LIST.length;
@@ -70,15 +53,12 @@ export default function Profile() {
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ status: newStatus }),
     });
-    if (res.ok) {
-      setCurrentStatus(newStatus);
-    }
+    if (res.ok) setCurrentStatus(newStatus);
   };
 
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (!token) { router.push('/'); return; }
-    // 获取用户资料
     fetch(`${API}/user/profile`, { headers: { Authorization: `Bearer ${token}` } })
       .then(res => res.json())
       .then(data => {
@@ -89,7 +69,6 @@ export default function Profile() {
         setCurrentStatus(data.status || 'online');
       })
       .catch(() => router.push('/'));
-    // 获取签到状态
     fetch(`${API}/user/signin/status`, { headers: { Authorization: `Bearer ${token}` } })
       .then(res => res.json())
       .then(data => {
@@ -98,11 +77,9 @@ export default function Profile() {
         setExp(data.exp);
         setLevel(data.level);
       });
-    // 获取勋章
     loadBadges();
   }, [router]);
 
-  // 初始化 Cloudinary Widget
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const script = document.createElement('script');
@@ -204,9 +181,7 @@ export default function Profile() {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${token}` },
     });
-    if (res.ok) {
-      setFavorites(prev => prev.filter(fav => fav.id !== favoriteId));
-    }
+    if (res.ok) setFavorites(prev => prev.filter(fav => fav.id !== favoriteId));
   };
 
   const logout = () => {
@@ -217,7 +192,7 @@ export default function Profile() {
   if (!user) return <div className="p-8 text-center text-gray-400">加载中...</div>;
 
   return (
-    <div className="flex flex-col h-full overflow-y-auto bg-gray-50">
+    <div className="h-full overflow-y-auto bg-gray-50">
       {/* 头部信息 */}
       <div className="bg-white p-6 border-b">
         <div className="flex items-center gap-4">
@@ -246,12 +221,8 @@ export default function Profile() {
                 <h2 className="text-xl font-bold">{user.nickname || user.username}</h2>
                 <p className="text-gray-500 text-sm">{user.signature || '这个人很懒，什么都没写'}</p>
                 <p className="text-gray-400 text-xs mt-1">UID: {user.id}</p>
-                {/* 状态切换按钮 */}
                 <div className="mt-2">
-                  <button
-                    onClick={cycleStatus}
-                    className="flex items-center gap-1 px-3 py-1 bg-gray-100 rounded-full text-xs hover:bg-gray-200"
-                  >
+                  <button onClick={cycleStatus} className="flex items-center gap-1 px-3 py-1 bg-gray-100 rounded-full text-xs hover:bg-gray-200">
                     <span>{STATUS_ICON[currentStatus]}</span>
                     <span>{STATUS_TEXT[currentStatus]}</span>
                     <svg className="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -344,12 +315,7 @@ export default function Profile() {
               favorites.map((fav: any) => (
                 <div key={fav.id} className="flex items-center justify-between px-5 py-2 border-b text-sm">
                   <span className="text-gray-600 truncate flex-1">{fav.content || fav.targetId}</span>
-                  <button
-                    onClick={() => deleteFavorite(fav.id)}
-                    className="text-red-500 text-xs ml-2 hover:underline"
-                  >
-                    删除
-                  </button>
+                  <button onClick={() => deleteFavorite(fav.id)} className="text-red-500 text-xs ml-2 hover:underline">删除</button>
                 </div>
               ))
             )}
@@ -359,10 +325,7 @@ export default function Profile() {
 
       {/* 设置中心 */}
       <div className="bg-white mt-3">
-        <button
-          onClick={() => setShowPasswordModal(true)}
-          className="w-full flex items-center justify-between px-5 py-3 border-b border-gray-100 hover:bg-gray-50"
-        >
+        <button onClick={() => setShowPasswordModal(true)} className="w-full flex items-center justify-between px-5 py-3 border-b border-gray-100 hover:bg-gray-50">
           <div className="flex items-center gap-3">
             <span className="text-lg">🔒</span>
             <span className="text-sm text-gray-700">修改密码</span>
@@ -371,11 +334,7 @@ export default function Profile() {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
           </svg>
         </button>
-
-        <button
-          onClick={() => alert('隐私设置开发中')}
-          className="w-full flex items-center justify-between px-5 py-3 border-b border-gray-100 hover:bg-gray-50"
-        >
+        <button onClick={() => alert('隐私设置开发中')} className="w-full flex items-center justify-between px-5 py-3 border-b border-gray-100 hover:bg-gray-50">
           <div className="flex items-center gap-3">
             <span className="text-lg">🔐</span>
             <span className="text-sm text-gray-700">隐私设置</span>
@@ -384,11 +343,7 @@ export default function Profile() {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
           </svg>
         </button>
-
-        <button
-          onClick={() => alert('通知设置开发中')}
-          className="w-full flex items-center justify-between px-5 py-3 hover:bg-gray-50"
-        >
+        <button onClick={() => alert('通知设置开发中')} className="w-full flex items-center justify-between px-5 py-3 hover:bg-gray-50">
           <div className="flex items-center gap-3">
             <span className="text-lg">🔔</span>
             <span className="text-sm text-gray-700">通知设置</span>
@@ -399,14 +354,12 @@ export default function Profile() {
         </button>
       </div>
 
-      {/* 退出登录 */}
       <div className="mt-3 bg-white">
         <button onClick={logout} className="w-full px-5 py-3 text-red-500 text-sm font-medium hover:bg-gray-50">
           退出登录
         </button>
       </div>
 
-      {/* 密码修改弹窗 */}
       {showPasswordModal && (
         <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50" onClick={() => setShowPasswordModal(false)}>
           <div className="bg-white p-5 rounded shadow-lg w-80" onClick={e => e.stopPropagation()}>
