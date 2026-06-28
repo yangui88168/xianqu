@@ -193,7 +193,7 @@ export default function Contacts() {
   };
 
   return (
-    <div className="flex flex-col h-full bg-gray-50">
+    <div className="flex flex-col h-full overflow-y-auto bg-gray-50">
       {/* 顶部搜索栏 */}
       <div className="p-4 bg-white border-b">
         <div className="flex gap-2">
