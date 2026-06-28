@@ -607,9 +607,7 @@ export default function Chat() {
   const handleSearch = async () => {
     if (!searchQuery.trim()) return;
     setSearchMode(true);
-    // 搜索用户
     await searchUsers();
-    // 搜索消息
     const token = localStorage.getItem('token');
     const res = await fetch(`${API}/search/messages?q=${encodeURIComponent(searchQuery)}`, {
       headers: { Authorization: `Bearer ${token}` },
@@ -832,6 +830,10 @@ export default function Chat() {
                   {!hasMore && messages.length > 0 && <div className="text-center text-gray-400 text-xs py-2">没有更多消息了</div>}
                   {messages.map((msg: any, i: number) => {
                     const isMe = msg.senderId === userId || msg.sender?.id === userId;
+                    // 转发处理：检查内容是否以 [转发] 开头
+                    const isForwarded = msg.content?.startsWith('[转发]');
+                    const displayContent = isForwarded ? msg.content.replace('[转发] ', '') : msg.content;
+
                     if (msg.deleted) return null;
                     if (msg.recalled) return (
                       <div key={msg.id || i} className="text-center text-gray-400 text-xs py-1">
@@ -857,6 +859,11 @@ export default function Chat() {
                                 回复：{msg.replyTo?.content?.substring(0, 30) || '消息'}
                               </div>
                             )}
+                            {/* 转发标识 */}
+                            {isForwarded && (
+                              <div className="text-xs text-gray-400 mb-1">↩ 转发</div>
+                            )}
+                            {/* 编辑消息输入框 */}
                             {editingMessage?.id === msg.id ? (
                               <div className="flex gap-2">
                                 <input
@@ -880,9 +887,11 @@ export default function Chat() {
                                     <source src={msg.content} type="audio/webm" />
                                   </audio>
                                 ) : (
-                                  msg.content
+                                  <>
+                                    {displayContent}
+                                    {msg.edited && <span className="text-xs ml-1 opacity-60">(已编辑)</span>}
+                                  </>
                                 )}
-                                {msg.edited && <span className="text-xs ml-1 opacity-70">(已编辑)</span>}
                               </div>
                             )}
                             <div className={`flex items-center gap-1 mt-1 text-xs ${isMe ? 'justify-end' : 'justify-start'} text-gray-400`}>
