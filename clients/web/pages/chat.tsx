@@ -930,8 +930,8 @@ export default function Chat() {
             )}
 
             {/* 底部输入栏 */}
-            <div className="bg-white border-t flex-shrink-0" style={{ height: '64px' }}>
-              <div className="p-3 h-full flex items-center gap-2">
+            <div className="p-3 bg-white border-t flex-shrink-0">
+              <div className="h-full flex items-center gap-2">
                 <button onClick={() => setInputMode(inputMode === 'text' ? 'voice' : 'text')} className="text-gray-400 hover:text-gray-600 p-2">
                   {inputMode === 'text' ? '🎤' : '⌨️'}
                 </button>
