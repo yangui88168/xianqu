@@ -3,9 +3,18 @@ import { useRouter } from 'next/router';
 
 const API = 'https://xianqu-server.onrender.com';
 
-// 动态时间描述（从 chat.tsx 复用）
+// 更新后的 getLastSeenText 函数（支持多状态）
 const getLastSeenText = (friend: any) => {
-  if (friend.status === 'online') return '在线';
+  if (friend.status === 'invisible') return '离线'; // 隐身视为离线
+  const statusTextMap: Record<string, string> = {
+    online: '在线',
+    busy: '忙碌',
+    dnd: '勿扰',
+    away: '离开',
+  };
+  if (friend.status && statusTextMap[friend.status]) {
+    return statusTextMap[friend.status];
+  }
   if (!friend.lastSeen) return '离线';
   const diff = Date.now() - new Date(friend.lastSeen).getTime();
   const minutes = Math.floor(diff / 60000);
@@ -283,9 +292,14 @@ export default function Contacts() {
                   <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold">
                     {(friend.nickname || friend.username)[0]}
                   </div>
+                  {/* 状态指示点颜色动态映射 */}
                   <span
                     className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-white ${
-                      friend.status === 'online' ? 'bg-green-500' : 'bg-gray-400'
+                      friend.status === 'online' ? 'bg-green-500' :
+                      friend.status === 'busy' ? 'bg-orange-500' :
+                      friend.status === 'dnd' ? 'bg-red-500' :
+                      friend.status === 'away' ? 'bg-yellow-500' :
+                      'bg-gray-400'
                     }`}
                   ></span>
                 </div>
@@ -294,10 +308,10 @@ export default function Contacts() {
                     <p className="font-medium text-sm">{friend.nickname || friend.username}</p>
                     {friend.note && <span className="text-xs text-gray-400 bg-gray-100 px-1 rounded">备注：{friend.note}</span>}
                   </div>
-                  {/* 显示共同好友数和状态 */}
+                  {/* 状态文字直接使用 getLastSeenText */}
                   <p className="text-xs text-gray-400">
                     {mutualCounts[friend.id] > 0 && `${mutualCounts[friend.id]}个共同好友 · `}
-                    {friend.status === 'online' ? '在线' : getLastSeenText(friend)}
+                    {getLastSeenText(friend)}
                   </p>
                   <p className="text-xs text-gray-500">{friend.groupName || '未分组'}</p>
                 </div>
