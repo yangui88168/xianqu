@@ -14,7 +14,7 @@ export default function App({ Component, pageProps }: AppProps) {
   const isActive = (path: string) => router.pathname.startsWith(path);
 
   return (
-    <div className="h-dvh flex flex-col max-w-5xl mx-auto shadow-2xl bg-white overflow-hidden">
+    <div className="max-w-5xl mx-auto h-dvh flex flex-col shadow-soft bg-white overflow-hidden">
       <Head>
         <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/twemoji-colr-font@14.0.2/twemoji.css" />
       </Head>
