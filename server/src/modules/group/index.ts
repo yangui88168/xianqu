@@ -25,14 +25,13 @@ export async function groupRoutes(fastify: FastifyInstance) {
       ? [...new Set([userId, ...memberIds.filter((id: string) => id !== userId)])]
       : [userId];
 
-    // 生成唯一邀请码（简单随机，生产环境可考虑更严谨的生成方式）
     const inviteCode = Math.random().toString(36).substring(2, 10);
 
     const group = await prisma.groupChat.create({
       data: {
         name,
         ownerId: userId,
-        inviteCode, // 新增邀请码
+        inviteCode, // 邀请码
         members: {
           create: initialMembers.map((id: string) => ({
             userId: id,
@@ -83,7 +82,7 @@ export async function groupRoutes(fastify: FastifyInstance) {
     reply.send({ success: true, invited: newMembers.length });
   });
 
-  // 加入群（公开加入）
+  // 公开加入群（通过群 ID）
   fastify.post('/join', { preHandler: authMiddleware }, async (request, reply) => {
     const userId = (request as any).userId;
     const { groupId } = request.body as any;
@@ -93,6 +92,27 @@ export async function groupRoutes(fastify: FastifyInstance) {
     if (existing) return reply.status(400).send({ error: 'Already a member' });
     await prisma.groupMember.create({ data: { groupId, userId } });
     reply.send({ success: true });
+  });
+
+  // 通过邀请码加入群
+  fastify.post('/join-by-code', { preHandler: authMiddleware }, async (request, reply) => {
+    const userId = (request as any).userId;
+    const { inviteCode } = request.body as any;
+    if (!inviteCode) return reply.status(400).send({ error: '缺少邀请码' });
+
+    // 查找群
+    const group = await prisma.groupChat.findUnique({ where: { inviteCode } });
+    if (!group) return reply.status(404).send({ error: '无效的邀请码' });
+
+    // 检查是否已加入
+    const existing = await prisma.groupMember.findUnique({
+      where: { groupId_userId: { groupId: group.id, userId } },
+    });
+    if (existing) return reply.status(400).send({ error: '你已经在群中' });
+
+    // 加入群
+    await prisma.groupMember.create({ data: { groupId: group.id, userId } });
+    reply.send({ success: true, groupId: group.id, groupName: group.name });
   });
 
   // 退出/解散群
