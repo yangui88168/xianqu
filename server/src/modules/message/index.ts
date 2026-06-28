@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import { prisma } from '../../db';
 import { WsEvent } from '../../shared-types';
 import { onlineUsers } from '../../websocket';
+import { progressTask } from '../task'; // 新增：导入任务进度函数
 
 function authMiddleware(request: any, reply: any, done: any) {
   const token = (request.headers.authorization || '').replace('Bearer ', '');
@@ -27,6 +28,9 @@ export async function messageRoutes(fastify: FastifyInstance) {
     if (isBlocked) return reply.status(403).send({ error: '无法发送消息，对方已被拉黑' });
 
     const msg = await prisma.message.create({ data: { senderId, receiverId, content, type, replyToId } });
+
+    // 发送成功后推进任务进度（例如每日发言任务）
+    await progressTask(senderId, 'send_message');
 
     // 实时推送
     const receiverWs = onlineUsers.get(receiverId);
