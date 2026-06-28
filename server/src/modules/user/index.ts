@@ -137,9 +137,6 @@ export async function userRoutes(fastify: FastifyInstance) {
         await prisma.userExp.update({ where: { userId }, data: { level: newLevel } });
       }
 
-      // 暂不检查勋章，确保签到功能稳定
-      // await checkBadges(userId);
-
       reply.send({
         success: true,
         expGain,
@@ -204,5 +201,15 @@ export async function userRoutes(fastify: FastifyInstance) {
       data: { allowFriendRequest, allowSearch, notifyMessage, notifyCall, notifyPost },
     });
     reply.send({ success: true });
+  });
+
+  // 手动切换在线状态
+  fastify.put('/status', { preHandler: authMiddleware }, async (request, reply) => {
+    const userId = (request as any).userId;
+    const { status } = request.body as any;
+    const validStatuses = ['online', 'busy', 'dnd', 'away', 'invisible'];
+    if (!validStatuses.includes(status)) return reply.status(400).send({ error: '无效状态' });
+    await prisma.user.update({ where: { id: userId }, data: { status } });
+    reply.send({ success: true, status });
   });
 }
