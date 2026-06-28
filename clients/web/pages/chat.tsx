@@ -859,10 +859,6 @@ export default function Chat() {
                                 回复：{msg.replyTo?.content?.substring(0, 30) || '消息'}
                               </div>
                             )}
-                            {/* 转发标识 */}
-                            {isForwarded && (
-                              <div className="text-xs text-gray-400 mb-1">↩ 转发</div>
-                            )}
                             {/* 编辑消息输入框 */}
                             {editingMessage?.id === msg.id ? (
                               <div className="flex gap-2">
@@ -896,6 +892,8 @@ export default function Chat() {
                             )}
                             <div className={`flex items-center gap-1 mt-1 text-xs ${isMe ? 'justify-end' : 'justify-start'} text-gray-400`}>
                               {new Date(msg.createdAt).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' })}
+                              {/* 来自转发标记 */}
+                              {isForwarded && <span className="text-gray-400">来自转发</span>}
                               {isMe && (
                                 <span className="ml-1">
                                   {msg.status === 'sent' && <span className="text-gray-400">✓</span>}
