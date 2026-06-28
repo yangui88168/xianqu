@@ -27,39 +27,71 @@ export async function communityRoutes(fastify: FastifyInstance) {
   // 获取所有社区
   fastify.get('/list', { preHandler: authMiddleware }, async (request, reply) => {
     const communities = await prisma.community.findMany({
-      include: { _count: { select: { channels: true } } },
+      include: { _count: { select: { homesteads: true } } },
       orderBy: { createdAt: 'desc' },
     });
     reply.send(communities);
   });
 
-  // 获取社区详情（含频道列表）
+  // 获取社区详情（含家园列表）
   fastify.get('/:communityId', { preHandler: authMiddleware }, async (request, reply) => {
     const { communityId } = request.params as any;
     const community = await prisma.community.findUnique({
       where: { id: communityId },
-      include: { channels: { include: { _count: { select: { posts: true } } } } },
+      include: {
+        homesteads: {
+          include: { _count: { select: { posts: true } } },
+          orderBy: { createdAt: 'desc' },
+        },
+      },
     });
     if (!community) return reply.status(404).send({ error: '社区不存在' });
     reply.send(community);
   });
 
-  // 在社区内创建频道（复用原有频道创建逻辑，但加 communityId）
-  fastify.post('/:communityId/channel', { preHandler: authMiddleware }, async (request, reply) => {
+  // 创建家园
+  fastify.post('/:communityId/homestead', { preHandler: authMiddleware }, async (request, reply) => {
     const userId = (request as any).userId;
     const { communityId } = request.params as any;
     const { name, description } = request.body as any;
-    if (!name) return reply.status(400).send({ error: '频道名不能为空' });
-    // 验证社区存在
+    if (!name) return reply.status(400).send({ error: '家园名不能为空' });
+
     const community = await prisma.community.findUnique({ where: { id: communityId } });
     if (!community) return reply.status(404).send({ error: '社区不存在' });
-    // 检查是否有权限（社区管理员或所有者）
-    if (community.ownerId !== userId) return reply.status(403).send({ error: '只有社区主能创建频道' });
-    const channel = await prisma.channel.create({
-      data: { name, description, ownerId: userId, communityId },
+
+    const homestead = await prisma.homestead.create({
+      data: { communityId, name, description, ownerId: userId },
     });
-    // 创建者自动订阅
-    await prisma.channelSubscriber.create({ data: { channelId: channel.id, userId } });
-    reply.send(channel);
+    reply.send(homestead);
+  });
+
+  // 获取家园详情（含帖子）
+  fastify.get('/:communityId/homestead/:homesteadId', { preHandler: authMiddleware }, async (request, reply) => {
+    const { homesteadId } = request.params as any;
+    const homestead = await prisma.homestead.findUnique({
+      where: { id: homesteadId },
+      include: {
+        posts: {
+          include: { author: { select: { id: true, nickname: true, username: true } } },
+          orderBy: { createdAt: 'desc' },
+        },
+      },
+    });
+    if (!homestead) return reply.status(404).send({ error: '家园不存在' });
+    reply.send(homestead);
+  });
+
+  // 在家园发帖
+  fastify.post('/:communityId/homestead/:homesteadId/post', { preHandler: authMiddleware }, async (request, reply) => {
+    const userId = (request as any).userId;
+    const { homesteadId } = request.params as any;
+    const { content } = request.body as any;
+    if (!content) return reply.status(400).send({ error: '内容不能为空' });
+
+    const post = await prisma.homesteadPost.create({
+      data: { homesteadId, authorId: userId, content },
+      include: { author: { select: { id: true, nickname: true, username: true } } },
+    });
+    reply.send(post);
   });
 }
