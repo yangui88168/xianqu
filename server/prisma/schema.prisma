@@ -58,14 +58,18 @@ model User {
   // 徽章记录
   badges           UserBadge[]
 
-  // 频道订阅系统 (由新增模型反向生成所需的 User 关联字段)
+  // 频道订阅系统
   ownedChannels      Channel[]           @relation("ChannelOwner")
   channelSubscribed  ChannelSubscriber[]
   channelPosts       ChannelPost[]       @relation("ChannelAuthor")
   channelComments    ChannelComment[]
 
-  // 社区系统（新增）
+  // 社区系统
   ownedCommunities   Community[]
+
+  // 家园系统（新增）
+  ownedHomesteads    Homestead[]
+  homesteadPosts     HomesteadPost[]
 }
 
 model Message {
@@ -283,13 +287,14 @@ model UserBadge {
 // ==================== 频道与社区系统 ====================
 
 model Community {
-  id          String    @id @default(cuid())
+  id          String       @id @default(cuid())
   name        String
   description String?
   ownerId     String
-  createdAt   DateTime  @default(now())
-  owner       User      @relation(fields: [ownerId], references: [id])
+  createdAt   DateTime     @default(now())
+  owner       User         @relation(fields: [ownerId], references: [id])
   channels    Channel[]
+  homesteads  Homestead[]  // 新增
 }
 
 model Channel {
@@ -338,4 +343,28 @@ model ChannelComment {
   createdAt DateTime    @default(now())
   post      ChannelPost @relation(fields: [postId], references: [id], onDelete: Cascade)
   user      User        @relation(fields: [userId], references: [id])
+}
+
+// ==================== 家园系统（新增） ====================
+
+model Homestead {
+  id          String          @id @default(cuid())
+  communityId String
+  name        String
+  description String?
+  ownerId     String
+  createdAt   DateTime        @default(now())
+  community   Community       @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  owner       User            @relation(fields: [ownerId], references: [id])
+  posts       HomesteadPost[]
+}
+
+model HomesteadPost {
+  id          String    @id @default(cuid())
+  homesteadId String
+  authorId    String
+  content     String
+  createdAt   DateTime  @default(now())
+  homestead   Homestead @relation(fields: [homesteadId], references: [id], onDelete: Cascade)
+  author      User      @relation(fields: [authorId], references: [id])
 }
