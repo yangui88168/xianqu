@@ -3,6 +3,15 @@ import { useRouter } from 'next/router';
 
 const API = 'https://xianqu-server.onrender.com';
 
+// 任务类型描述（与后端一致）
+const TASK_CONFIG: any = {
+  send_message: { desc: '发送一条消息' },
+  add_friend: { desc: '添加一个好友' },
+  make_call: { desc: '发起一次通话' },
+  create_group: { desc: '创建一个群聊' },
+  publish_post: { desc: '发布一条动态' },
+};
+
 export default function Profile() {
   const [user, setUser] = useState<any>(null);
   const [editing, setEditing] = useState(false);
@@ -18,6 +27,9 @@ export default function Profile() {
   const [streak, setStreak] = useState(0);
   const [exp, setExp] = useState(0);
   const [level, setLevel] = useState(1);
+
+  // 每日任务
+  const [tasks, setTasks] = useState<any[]>([]);
 
   const router = useRouter();
   const cloudinaryRef = useRef<any>();
@@ -45,6 +57,8 @@ export default function Profile() {
         setExp(data.exp);
         setLevel(data.level);
       });
+    // 获取每日任务
+    loadTasks();
   }, [router]);
 
   // 初始化 Cloudinary Widget
@@ -127,6 +141,12 @@ export default function Profile() {
     }
   };
 
+  const loadTasks = async () => {
+    const token = localStorage.getItem('token');
+    const res = await fetch(`${API}/task/daily`, { headers: { Authorization: `Bearer ${token}` } });
+    if (res.ok) setTasks(await res.json());
+  };
+
   const logout = () => {
     localStorage.clear();
     router.push('/');
@@ -196,6 +216,27 @@ export default function Profile() {
             {signedToday ? '已签到' : '签到'}
           </button>
         </div>
+      </div>
+
+      {/* 每日任务 */}
+      <div className="bg-white mt-3 px-6 py-4">
+        <h3 className="text-sm font-medium mb-2">每日任务</h3>
+        {tasks.length === 0 ? (
+          <p className="text-sm text-gray-400">暂无任务</p>
+        ) : (
+          tasks.map((task: any) => (
+            <div key={task.id} className="flex items-center justify-between py-1 border-b last:border-b-0">
+              <span className="text-sm">
+                {TASK_CONFIG[task.taskType]?.desc || task.taskType} ({task.progress}/{task.target})
+              </span>
+              {task.completed ? (
+                <span className="text-green-500 text-sm">已完成</span>
+              ) : (
+                <span className="text-gray-400 text-sm">进行中</span>
+              )}
+            </div>
+          ))
+        )}
       </div>
 
       {/* 设置中心 */}
