@@ -2,6 +2,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useRouter } from 'next/router';
 import CallModal from '../components/CallModal';
+import { MessageSound } from '../utils/sound'; // 新增：消息提示音
 
 const API = 'https://xianqu-server.onrender.com';
 const PAGE_SIZE = 10;
@@ -193,6 +194,10 @@ export default function Chat() {
 
         if (msg.event === 'message:receive') {
           const newMsg = msg.data;
+          // 如果不是当前选中的好友发来的消息，播放提示音
+          if (!currentChat || currentChat.type !== 'friend' || currentChat.data.id !== newMsg.senderId) {
+            MessageSound.play();
+          }
           setMessages(prev => {
             if (prev.find(m => m.id === newMsg.id)) return prev;
             return [...prev, newMsg];
@@ -212,6 +217,10 @@ export default function Chat() {
           loadSessions();
         } else if (msg.event === 'group-message:receive') {
           const newMsg = msg.data;
+          // 如果不是当前选中的群聊消息，播放提示音
+          if (!currentChat || currentChat.type !== 'group' || currentChat.data.id !== newMsg.groupId) {
+            MessageSound.play();
+          }
           setMessages(prev => {
             if (prev.find(m => m.id === newMsg.id)) return prev;
             return [...prev, newMsg];
