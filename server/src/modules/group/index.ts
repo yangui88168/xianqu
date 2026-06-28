@@ -1,7 +1,8 @@
 import { FastifyInstance } from 'fastify';
 import jwt from 'jsonwebtoken';
 import { prisma } from '../../db';
-import { progressTask } from '../task'; // 新增：导入任务进度函数
+import { progressTask } from '../task';   // 任务进度
+import { checkBadges } from '../badge';   // 徽章检查
 
 function authMiddleware(request: any, reply: any, done: any) {
   const token = (request.headers.authorization || '').replace('Bearer ', '');
@@ -39,6 +40,8 @@ export async function groupRoutes(fastify: FastifyInstance) {
 
     // 创建群成功后推进任务进度
     await progressTask(userId, 'create_group');
+    // 检查并授予创建群聊相关徽章
+    checkBadges(userId);
 
     reply.send(group);
   });
