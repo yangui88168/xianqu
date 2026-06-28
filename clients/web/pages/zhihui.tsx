@@ -100,7 +100,7 @@ export default function ZhihuiStar() {
   };
 
   return (
-    <div className="h-full overflow-y-auto bg-gray-50">
+    <div className="flex flex-col h-full overflow-y-auto bg-gray-50">
       {/* 发布按钮 */}
       <div className="p-4 bg-white border-b">
         <button onClick={() => setShowPublish(!showPublish)} className="w-full bg-blue-500 text-white py-2 rounded-full text-sm font-medium">
