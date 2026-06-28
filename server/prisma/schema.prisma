@@ -20,6 +20,13 @@ model User {
   lastSeen         DateTime?
   createdAt        DateTime        @default(now())
 
+  // 隐私设置
+  allowFriendRequest Boolean       @default(true)
+  allowSearch        Boolean       @default(true)
+  notifyMessage      Boolean       @default(true)
+  notifyCall         Boolean       @default(true)
+  notifyPost         Boolean       @default(true)
+
   // 原有关系
   sentMessages     Message[]       @relation("SentMessages")
   receivedMessages Message[]       @relation("ReceivedMessages")
