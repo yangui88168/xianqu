@@ -57,6 +57,12 @@ model User {
   tasks            UserTask[]
   // 徽章记录
   badges           UserBadge[]
+
+  // 频道订阅系统 (由新增模型反向生成所需的 User 关联字段)
+  ownedChannels      Channel[]           @relation("ChannelOwner")
+  channelSubscribed  ChannelSubscriber[]
+  channelPosts       ChannelPost[]       @relation("ChannelAuthor")
+  channelComments    ChannelComment[]
 }
 
 model Message {
@@ -269,4 +275,52 @@ model UserBadge {
   badge     Badge    @relation(fields: [badgeId], references: [id])
 
   @@unique([userId, badgeId])
+}
+
+// ==================== 新增频道系统模型 ====================
+
+model Channel {
+  id          String              @id @default(cuid())
+  name        String
+  description String?
+  ownerId     String
+  createdAt   DateTime            @default(now())
+  owner       User                @relation("ChannelOwner", fields: [ownerId], references: [id])
+  subscribers ChannelSubscriber[]
+  posts       ChannelPost[]
+}
+
+model ChannelSubscriber {
+  channelId String
+  userId    String
+  createdAt DateTime @default(now())
+  channel   Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@id([channelId, userId])
+}
+
+model ChannelPost {
+  id          String           @id @default(cuid())
+  channelId   String
+  authorId    String
+  content     String
+  imageUrl    String?
+  pinned      Boolean          @default(false)
+  pollOptions String?
+  pollVotes   String?
+  createdAt   DateTime         @default(now())
+  channel     Channel          @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  author      User             @relation("ChannelAuthor", fields: [authorId], references: [id])
+  comments    ChannelComment[]
+}
+
+model ChannelComment {
+  id        String      @id @default(cuid())
+  postId    String
+  userId    String
+  content   String
+  createdAt DateTime    @default(now())
+  post      ChannelPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user      User        @relation(fields: [userId], references: [id])
 }
