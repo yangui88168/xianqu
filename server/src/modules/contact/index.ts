@@ -1,6 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import jwt from 'jsonwebtoken';
 import { prisma } from '../../db';
+import { progressTask } from '../task'; // 新增：导入任务进度函数
 
 function authMiddleware(request: any, reply: any, done: any) {
   const token = (request.headers.authorization || '').replace('Bearer ', '');
@@ -84,6 +85,11 @@ export async function contactRoutes(fastify: FastifyInstance) {
         { userId: req.receiverId, friendId: req.senderId },
       ],
     });
+
+    // 好友关系建立成功后，推进双方“添加好友”任务进度
+    await progressTask(userId, 'add_friend');
+    await progressTask(req.senderId, 'add_friend');
+
     reply.send({ success: true });
   });
 
