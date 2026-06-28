@@ -48,6 +48,8 @@ model User {
   signins          UserSignin[]
   // 任务记录
   tasks            UserTask[]
+  // 徽章记录
+  badges           UserBadge[]
 }
 
 model Message {
@@ -237,4 +239,26 @@ model UserTask {
   date      DateTime @default(now()) @db.Date
   createdAt DateTime @default(now())
   user      User     @relation(fields: [userId], references: [id])
+}
+
+// 徽章定义
+model Badge {
+  id          String      @id
+  name        String
+  description String?
+  icon        String?
+  condition   String
+  userBadges  UserBadge[]
+}
+
+// 用户徽章
+model UserBadge {
+  id        String   @id @default(cuid())
+  userId    String
+  badgeId   String
+  awardedAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+  badge     Badge    @relation(fields: [badgeId], references: [id])
+
+  @@unique([userId, badgeId])
 }
