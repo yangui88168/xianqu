@@ -193,12 +193,12 @@ export default function Chat() {
 
         if (msg.event === 'message:receive') {
           const newMsg = msg.data;
-          // 如果不是当前选中的好友发来的消息，播放提示音
-          if (!currentChat || currentChat.type !== 'friend' || currentChat.data.id !== newMsg.senderId) {
-            if (typeof window !== 'undefined') {
-              import('../utils/sound').then(mod => mod.MessageSound.play());
-            }
-          }
+          // 如果不是当前选中的好友发来的消息，播放提示音（已暂时移除）
+          // if (!currentChat || currentChat.type !== 'friend' || currentChat.data.id !== newMsg.senderId) {
+          //   if (typeof window !== 'undefined') {
+          //     import('../utils/sound').then(mod => mod.MessageSound.play());
+          //   }
+          // }
           setMessages(prev => {
             if (prev.find(m => m.id === newMsg.id)) return prev;
             return [...prev, newMsg];
@@ -218,12 +218,12 @@ export default function Chat() {
           loadSessions();
         } else if (msg.event === 'group-message:receive') {
           const newMsg = msg.data;
-          // 如果不是当前选中的群聊消息，播放提示音
-          if (!currentChat || currentChat.type !== 'group' || currentChat.data.id !== newMsg.groupId) {
-            if (typeof window !== 'undefined') {
-              import('../utils/sound').then(mod => mod.MessageSound.play());
-            }
-          }
+          // 如果不是当前选中的群聊消息，播放提示音（已暂时移除）
+          // if (!currentChat || currentChat.type !== 'group' || currentChat.data.id !== newMsg.groupId) {
+          //   if (typeof window !== 'undefined') {
+          //     import('../utils/sound').then(mod => mod.MessageSound.play());
+          //   }
+          // }
           setMessages(prev => {
             if (prev.find(m => m.id === newMsg.id)) return prev;
             return [...prev, newMsg];
