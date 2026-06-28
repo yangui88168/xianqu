@@ -3,7 +3,8 @@ import { FastifyRequest } from 'fastify';
 import jwt from 'jsonwebtoken';
 import { prisma } from '../db';
 import { WsEvent } from '../shared-types';
-import { progressTask } from '../modules/task'; // 修正导入路径
+import { progressTask } from '../modules/task';     // 任务进度
+import { checkBadges } from '../modules/badge';    // 徽章检查
 
 export const onlineUsers = new Map<string, SocketStream['socket']>();
 
@@ -158,6 +159,8 @@ export const wsHandler = (connection: SocketStream, req: FastifyRequest) => {
         case 'call-offer': {
           // 推进发起通话任务
           await progressTask(userId, 'make_call');
+          // 检查并授予通话相关徽章
+          checkBadges(userId);
 
           // 转发呼叫请求
           const targetId = parsed.data.targetId;
