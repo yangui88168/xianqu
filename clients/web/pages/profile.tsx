@@ -31,6 +31,9 @@ export default function Profile() {
   // 每日任务
   const [tasks, setTasks] = useState<any[]>([]);
 
+  // 勋章
+  const [badges, setBadges] = useState<any[]>([]);
+
   const router = useRouter();
   const cloudinaryRef = useRef<any>();
   const widgetRef = useRef<any>();
@@ -59,6 +62,8 @@ export default function Profile() {
       });
     // 获取每日任务
     loadTasks();
+    // 获取勋章
+    loadBadges();
   }, [router]);
 
   // 初始化 Cloudinary Widget
@@ -145,6 +150,12 @@ export default function Profile() {
     const token = localStorage.getItem('token');
     const res = await fetch(`${API}/task/daily`, { headers: { Authorization: `Bearer ${token}` } });
     if (res.ok) setTasks(await res.json());
+  };
+
+  const loadBadges = async () => {
+    const token = localStorage.getItem('token');
+    const res = await fetch(`${API}/badge/my`, { headers: { Authorization: `Bearer ${token}` } });
+    if (res.ok) setBadges(await res.json());
   };
 
   const logout = () => {
@@ -236,6 +247,23 @@ export default function Profile() {
               )}
             </div>
           ))
+        )}
+      </div>
+
+      {/* 我的勋章 */}
+      <div className="bg-white mt-3 px-6 py-4">
+        <h3 className="text-sm font-medium mb-2">我的勋章</h3>
+        {badges.length === 0 ? (
+          <p className="text-sm text-gray-400">暂无勋章，快去完成目标吧</p>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {badges.map((badge: any) => (
+              <div key={badge.id} className="flex flex-col items-center bg-gray-100 rounded-lg p-2 w-16">
+                <span className="text-xl">{badge.badge?.icon || '🎖️'}</span>
+                <span className="text-xs text-center mt-1">{badge.badge?.name || badge.badgeId}</span>
+              </div>
+            ))}
+          </div>
         )}
       </div>
 
