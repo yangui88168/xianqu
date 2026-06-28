@@ -2,7 +2,7 @@ import { FastifyInstance } from 'fastify';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import { prisma } from '../../db';
-import { checkBadges } from '../badge'; // 新增：导入徽章检查函数
+import { checkBadges } from '../badge'; // 导入徽章检查函数
 
 function authMiddleware(request: any, reply: any, done: any) {
   const token = (request.headers.authorization || '').replace('Bearer ', '');
@@ -71,6 +71,16 @@ export async function userRoutes(fastify: FastifyInstance) {
     const userId = (request as any).userId;
     const { type, targetId, content } = request.body as any;
     await prisma.favorite.create({ data: { userId, type, targetId, content } });
+    reply.send({ success: true });
+  });
+
+  // 删除收藏
+  fastify.delete('/favorite/:favoriteId', { preHandler: authMiddleware }, async (request, reply) => {
+    const userId = (request as any).userId;
+    const { favoriteId } = request.params as any;
+    const fav = await prisma.favorite.findUnique({ where: { id: favoriteId } });
+    if (!fav || fav.userId !== userId) return reply.status(404).send({ error: '未找到或无权操作' });
+    await prisma.favorite.delete({ where: { id: favoriteId } });
     reply.send({ success: true });
   });
 
