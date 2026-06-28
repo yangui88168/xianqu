@@ -3,7 +3,7 @@ import { FastifyRequest } from 'fastify';
 import jwt from 'jsonwebtoken';
 import { prisma } from '../db';
 import { WsEvent } from '../shared-types';
-import { progressTask } from '../task'; // 新增：导入任务进度函数
+import { progressTask } from '../task'; // 任务进度函数
 
 export const onlineUsers = new Map<string, SocketStream['socket']>();
 
@@ -154,8 +154,22 @@ export const wsHandler = (connection: SocketStream, req: FastifyRequest) => {
           break;
         }
 
-        // WebRTC 信令转发（事件名统一为 call-accepted）
-        case 'call-offer':
+        // WebRTC 信令转发
+        case 'call-offer': {
+          // 推进发起通话任务
+          await progressTask(userId, 'make_call');
+
+          // 转发呼叫请求
+          const targetId = parsed.data.targetId;
+          const targetWs = onlineUsers.get(targetId);
+          if (targetWs) {
+            targetWs.send(JSON.stringify({
+              event: parsed.event,
+              data: { ...parsed.data, from: userId },
+            }));
+          }
+          break;
+        }
         case 'call-accepted':
         case 'call-answer':
         case 'ice-candidate':
