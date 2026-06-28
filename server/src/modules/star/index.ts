@@ -15,7 +15,7 @@ function authMiddleware(request: any, reply: any, done: any) {
 }
 
 export async function starRoutes(fastify: FastifyInstance) {
-  // 发布动态 - 确认已接受 permission
+  // 发布动态
   fastify.post('/post', { preHandler: authMiddleware }, async (request, reply) => {
     const userId = (request as any).userId;
     const { content, imageUrl, permission } = request.body as any;
@@ -25,7 +25,7 @@ export async function starRoutes(fastify: FastifyInstance) {
         userId,
         content,
         imageUrl,
-        permission: permission || 'public', // 默认公开
+        permission: permission || 'public',
       },
       include: { user: { select: { id: true, nickname: true, username: true, avatar: true } } },
     });
@@ -36,26 +36,25 @@ export async function starRoutes(fastify: FastifyInstance) {
     reply.send(post);
   });
 
-  // 获取动态流 - 已修改权限过滤
+  // 获取动态流
   fastify.get('/feed', { preHandler: authMiddleware }, async (request, reply) => {
     const userId = (request as any).userId;
     const skip = parseInt((request.query as any).skip || '0', 10);
     const take = Math.min(parseInt((request.query as any).take || '20', 10), 50);
 
-    // 获取关注者的 ID 列表
     const followings = await prisma.follow.findMany({
       where: { followerId: userId },
       select: { followingId: true },
     });
     const followingIds = followings.map(f => f.followingId);
-    followingIds.push(userId); // 也包含自己
+    followingIds.push(userId);
 
     const posts = await prisma.starPost.findMany({
       where: {
         OR: [
-          { permission: 'public' },                           // 公开动态所有人可见
-          { userId },                                         // 自己的动态全部可见
-          { permission: 'friends', userId: { in: followingIds } }, // 好友可见且是好友（含自己）
+          { permission: 'public' },
+          { userId },
+          { permission: 'friends', userId: { in: followingIds } },
         ],
       },
       include: {
@@ -75,7 +74,7 @@ export async function starRoutes(fastify: FastifyInstance) {
     reply.send(posts);
   });
 
-  // 点赞/取消点赞（保持不变）
+  // 点赞/取消点赞
   fastify.post('/like', { preHandler: authMiddleware }, async (request, reply) => {
     const userId = (request as any).userId;
     const { postId } = request.body as any;
@@ -89,7 +88,7 @@ export async function starRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // 评论（保持不变）
+  // 评论
   fastify.post('/comment', { preHandler: authMiddleware }, async (request, reply) => {
     const userId = (request as any).userId;
     const { postId, content } = request.body as any;
@@ -101,7 +100,7 @@ export async function starRoutes(fastify: FastifyInstance) {
     reply.send(comment);
   });
 
-  // 关注用户（保持不变）
+  // 关注用户
   fastify.post('/follow', { preHandler: authMiddleware }, async (request, reply) => {
     const followerId = (request as any).userId;
     const { followingId } = request.body as any;
@@ -116,7 +115,7 @@ export async function starRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // 获取推荐用户（保持不变）
+  // 获取推荐用户
   fastify.get('/users', { preHandler: authMiddleware }, async (request, reply) => {
     const users = await prisma.user.findMany({
       select: { id: true, nickname: true, username: true, avatar: true },
@@ -124,5 +123,22 @@ export async function starRoutes(fastify: FastifyInstance) {
       orderBy: { createdAt: 'desc' },
     });
     reply.send(users);
+  });
+
+  // 删除动态（仅作者可删除）
+  fastify.delete('/post/:postId', { preHandler: authMiddleware }, async (request, reply) => {
+    const userId = (request as any).userId;
+    const { postId } = request.params as any;
+
+    const post = await prisma.starPost.findUnique({ where: { id: postId } });
+    if (!post) return reply.status(404).send({ error: '动态不存在' });
+    if (post.userId !== userId) return reply.status(403).send({ error: '只能删除自己的动态' });
+
+    // 删除关联的点赞和评论
+    await prisma.starLike.deleteMany({ where: { postId } });
+    await prisma.starComment.deleteMany({ where: { postId } });
+    await prisma.starPost.delete({ where: { id: postId } });
+
+    reply.send({ success: true });
   });
 }
