@@ -1,4 +1,3 @@
-// 仅在客户端环境下运行
 let MessageSound: any = {
   audioCtx: null as AudioContext | null,
   init() {
@@ -34,6 +33,7 @@ let MessageSound: any = {
   }
 };
 
+// ✅ 将事件监听器包裹在客户端函数中，不在模块顶层执行
 if (typeof window !== 'undefined') {
   const activateAudio = () => {
     MessageSound.init();
