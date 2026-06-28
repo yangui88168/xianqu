@@ -91,6 +91,7 @@ function CommunityList({ onSelect }: { onSelect: (id: string) => void }) {
 // 社区详情（家园列表）
 function CommunityDetail({ communityId, onBack }: { communityId: string; onBack: () => void }) {
   const [community, setCommunity] = useState<any>(null);
+  const [userId, setUserId] = useState('');
   const [showCreate, setShowCreate] = useState(false);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -102,7 +103,16 @@ function CommunityDetail({ communityId, onBack }: { communityId: string; onBack:
     if (res.ok) setCommunity(await res.json());
   };
 
-  useEffect(() => { loadCommunity(); }, [communityId]);
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        setUserId(payload.userId || '');
+      } catch {}
+    }
+    loadCommunity();
+  }, [communityId]);
 
   const createHomestead = async () => {
     const token = localStorage.getItem('token');
@@ -137,17 +147,33 @@ function CommunityDetail({ communityId, onBack }: { communityId: string; onBack:
       )}
       <div className="flex-1 overflow-y-auto p-4">
         {community?.homesteads?.map((h: any) => (
-          <button
-            key={h.id}
-            onClick={() => setSelectedHomestead(h.id)}
-            className="w-full text-left bg-white rounded-xl shadow p-4 mb-3 flex justify-between items-center"
-          >
-            <div>
+          <div key={h.id} className="bg-white rounded-xl shadow p-4 mb-3 flex justify-between items-center">
+            <button onClick={() => setSelectedHomestead(h.id)} className="text-left flex-1">
               <p className="font-bold text-sm">{h.name}</p>
               <p className="text-xs text-gray-500">{h.description || '暂无简介'}</p>
+            </button>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-400">{h._count?.posts} 帖子</span>
+              {h.ownerId === userId && (
+                <button
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    if (confirm('确定删除这个家园吗？所有帖子将被删除')) {
+                      const token = localStorage.getItem('token');
+                      await fetch(`${API}/community/${communityId}/homestead/${h.id}`, {
+                        method: 'DELETE',
+                        headers: { Authorization: `Bearer ${token}` },
+                      });
+                      loadCommunity();
+                    }
+                  }}
+                  className="text-red-500 text-xs px-2"
+                >
+                  删除
+                </button>
+              )}
             </div>
-            <span className="text-xs text-gray-400">{h._count?.posts} 帖子</span>
-          </button>
+          </div>
         ))}
       </div>
     </div>
