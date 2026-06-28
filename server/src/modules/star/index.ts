@@ -1,6 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import jwt from 'jsonwebtoken';
 import { prisma } from '../../db';
+import { progressTask } from '../task'; // 新增：导入任务进度函数
 
 function authMiddleware(request: any, reply: any, done: any) {
   const token = (request.headers.authorization || '').replace('Bearer ', '');
@@ -22,6 +23,10 @@ export async function starRoutes(fastify: FastifyInstance) {
       data: { userId, content, imageUrl, permission: permission || 'public' },
       include: { user: { select: { id: true, nickname: true, username: true, avatar: true } } },
     });
+
+    // 发布动态成功后推进任务进度
+    await progressTask(userId, 'publish_post');
+
     reply.send(post);
   });
 
