@@ -821,7 +821,7 @@ export default function Chat() {
               </div>
             </div>
 
-            {/* 消息列表 - 绝对定位，在顶部栏和输入框（含回复栏）之间 */}
+            {/* 消息列表 - 绝对定位在顶部栏和输入框之间，根据是否有回复栏动态调整底部距离 */}
             <div
               ref={scrollContainerRef}
               onScroll={handleScroll}
@@ -922,7 +922,7 @@ export default function Chat() {
               )}
             </div>
 
-            {/* 回复提示栏 - 紧贴在输入框上方 */}
+            {/* 回复提示栏 - 绝对定位在输入框上方 */}
             {replyingTo && (
               <div className="absolute left-0 right-0 z-10 bg-gray-200 px-4 py-2 text-sm flex justify-between items-center" style={{ bottom: '60px' }}>
                 <span>回复 {(replyingTo.sender?.nickname || replyingTo.sender?.username || '用户')}：{replyingTo.content?.substring(0, 50)}</span>
