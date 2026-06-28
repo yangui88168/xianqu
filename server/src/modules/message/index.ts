@@ -3,7 +3,8 @@ import jwt from 'jsonwebtoken';
 import { prisma } from '../../db';
 import { WsEvent } from '../../shared-types';
 import { onlineUsers } from '../../websocket';
-import { progressTask } from '../task'; // 新增：导入任务进度函数
+import { progressTask } from '../task';
+import { checkBadges } from '../badge'; // 新增：导入徽章检查函数
 
 function authMiddleware(request: any, reply: any, done: any) {
   const token = (request.headers.authorization || '').replace('Bearer ', '');
@@ -31,6 +32,9 @@ export async function messageRoutes(fastify: FastifyInstance) {
 
     // 发送成功后推进任务进度（例如每日发言任务）
     await progressTask(senderId, 'send_message');
+
+    // 检查并授予相关徽章（异步调用，不阻塞回复）
+    checkBadges(senderId);
 
     // 实时推送
     const receiverWs = onlineUsers.get(receiverId);
