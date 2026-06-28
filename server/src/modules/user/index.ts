@@ -2,7 +2,6 @@ import { FastifyInstance } from 'fastify';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import { prisma } from '../../db';
-import { checkBadges } from '../badge'; // 导入徽章检查函数
 
 function authMiddleware(request: any, reply: any, done: any) {
   const token = (request.headers.authorization || '').replace('Bearer ', '');
@@ -84,7 +83,7 @@ export async function userRoutes(fastify: FastifyInstance) {
     reply.send({ success: true });
   });
 
-  // 每日签到（已添加错误处理）
+  // 每日签到（简化稳定版）
   fastify.post('/signin', { preHandler: authMiddleware }, async (request, reply) => {
     const userId = (request as any).userId;
     try {
@@ -121,21 +120,25 @@ export async function userRoutes(fastify: FastifyInstance) {
         }
       }
 
+      // 计算经验
       const expGain = 10 + streak * 2;
+
+      // 更新经验值
       await prisma.userExp.upsert({
         where: { userId },
         update: { exp: { increment: expGain } },
         create: { userId, exp: expGain },
       });
 
+      // 更新等级
       const userExp = await prisma.userExp.findUnique({ where: { userId } });
       const newLevel = Math.floor((userExp?.exp || 0) / 100) + 1;
       if (userExp && userExp.level !== newLevel) {
         await prisma.userExp.update({ where: { userId }, data: { level: newLevel } });
       }
 
-      // 检查勋章
-      await checkBadges(userId);
+      // 暂不检查勋章，确保签到功能稳定
+      // await checkBadges(userId);
 
       reply.send({
         success: true,
