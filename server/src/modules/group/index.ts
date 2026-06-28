@@ -15,7 +15,7 @@ function authMiddleware(request: any, reply: any, done: any) {
 }
 
 export async function groupRoutes(fastify: FastifyInstance) {
-  // 创建群（支持邀请初始成员）
+  // 创建群（自动生成邀请码）
   fastify.post('/create', { preHandler: authMiddleware }, async (request, reply) => {
     const userId = (request as any).userId;
     const { name, memberIds } = request.body as any;
@@ -25,10 +25,14 @@ export async function groupRoutes(fastify: FastifyInstance) {
       ? [...new Set([userId, ...memberIds.filter((id: string) => id !== userId)])]
       : [userId];
 
+    // 生成唯一邀请码（简单随机，生产环境可考虑更严谨的生成方式）
+    const inviteCode = Math.random().toString(36).substring(2, 10);
+
     const group = await prisma.groupChat.create({
       data: {
         name,
         ownerId: userId,
+        inviteCode, // 新增邀请码
         members: {
           create: initialMembers.map((id: string) => ({
             userId: id,
@@ -194,7 +198,7 @@ export async function groupRoutes(fastify: FastifyInstance) {
     reply.send({ success: true });
   });
 
-  // 发送群消息（增加 @all 检测）
+  // 发送群消息（包含 @all 检测）
   fastify.post('/message', { preHandler: authMiddleware }, async (request, reply) => {
     const userId = (request as any).userId;
     const { groupId, content, type = 'text', replyToId } = request.body as any;
@@ -208,7 +212,6 @@ export async function groupRoutes(fastify: FastifyInstance) {
       data: { groupId, senderId: userId, content, type, replyToId },
     });
 
-    // 检测 @all 标记
     if (content.includes('@all')) {
       (msg as any).atAll = true;
     }
@@ -216,7 +219,7 @@ export async function groupRoutes(fastify: FastifyInstance) {
     reply.send(msg);
   });
 
-  // 获取群消息历史（过滤已删除消息）
+  // 获取群消息历史（过滤已删除）
   fastify.get('/:groupId/messages', { preHandler: authMiddleware }, async (request, reply) => {
     const { groupId } = request.params as any;
     const skip = parseInt((request.query as any).skip || '0', 10);
@@ -234,7 +237,7 @@ export async function groupRoutes(fastify: FastifyInstance) {
     reply.send(messages.reverse());
   });
 
-  // 撤回群消息（设置 recalled = true）
+  // 撤回群消息
   fastify.put('/message/recall', { preHandler: authMiddleware }, async (request, reply) => {
     const userId = (request as any).userId;
     const { messageId } = request.body as any;
@@ -250,7 +253,7 @@ export async function groupRoutes(fastify: FastifyInstance) {
     reply.send({ success: true });
   });
 
-  // 删除群消息（发送者或管理员可删除）
+  // 删除群消息
   fastify.delete('/message/delete', { preHandler: authMiddleware }, async (request, reply) => {
     const userId = (request as any).userId;
     const { messageId } = request.body as any;
