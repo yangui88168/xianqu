@@ -110,7 +110,7 @@ export async function messageRoutes(fastify: FastifyInstance) {
     reply.send({ success: true });
   });
 
-  // 编辑消息（无时间限制）
+  // 编辑消息（彻底无时间限制）
   fastify.put('/edit', { preHandler: authMiddleware }, async (request, reply) => {
     const userId = (request as any).userId;
     const { messageId, content } = request.body as any;
@@ -120,6 +120,7 @@ export async function messageRoutes(fastify: FastifyInstance) {
     if (!msg) return reply.status(404).send({ error: '消息不存在' });
     if (msg.senderId !== userId) return reply.status(403).send({ error: '只能编辑自己的消息' });
 
+    // 直接更新，没有任何时间检查
     await prisma.message.update({
       where: { id: messageId },
       data: { content, edited: true, updatedAt: new Date() },
