@@ -88,21 +88,15 @@ export async function userRoutes(fastify: FastifyInstance) {
     const userId = (request as any).userId;
     try {
       const today = new Date().toISOString().slice(0, 10);
-
-      // 检查今日是否已签到
       const existing = await prisma.userSignin.findUnique({
         where: { userId_date: { userId, date: new Date(today) } },
       });
       if (existing) {
         return reply.status(400).send({ error: '今日已签到，明天再来吧' });
       }
-
-      // 创建签到记录
       await prisma.userSignin.create({
         data: { userId, date: new Date(today) },
       });
-
-      // 计算连续签到天数
       const allSignins = await prisma.userSignin.findMany({
         where: { userId },
         orderBy: { date: 'desc' },
@@ -113,30 +107,20 @@ export async function userRoutes(fastify: FastifyInstance) {
       for (const s of allSignins) {
         const sDate = new Date(s.date);
         const diffDays = Math.floor((todayDate.getTime() - sDate.getTime()) / (1000 * 60 * 60 * 24));
-        if (diffDays === streak) {
-          streak++;
-        } else {
-          break;
-        }
+        if (diffDays === streak) streak++;
+        else break;
       }
-
-      // 计算经验
       const expGain = 10 + streak * 2;
-
-      // 更新经验值
       await prisma.userExp.upsert({
         where: { userId },
         update: { exp: { increment: expGain } },
         create: { userId, exp: expGain },
       });
-
-      // 更新等级
       const userExp = await prisma.userExp.findUnique({ where: { userId } });
       const newLevel = Math.floor((userExp?.exp || 0) / 100) + 1;
       if (userExp && userExp.level !== newLevel) {
         await prisma.userExp.update({ where: { userId }, data: { level: newLevel } });
       }
-
       reply.send({
         success: true,
         expGain,
@@ -167,11 +151,8 @@ export async function userRoutes(fastify: FastifyInstance) {
     for (const s of allSignins) {
       const sDate = new Date(s.date);
       const diffDays = Math.floor((todayDate.getTime() - sDate.getTime()) / (1000 * 60 * 60 * 24));
-      if (diffDays === streak) {
-        streak++;
-      } else {
-        break;
-      }
+      if (diffDays === streak) streak++;
+      else break;
     }
     const userExp = await prisma.userExp.findUnique({ where: { userId } });
     reply.send({
@@ -182,7 +163,7 @@ export async function userRoutes(fastify: FastifyInstance) {
     });
   });
 
-  // 获取隐私与通知设置（/settings 路径）
+  // 获取隐私与通知设置
   fastify.get('/settings', { preHandler: authMiddleware }, async (request, reply) => {
     const userId = (request as any).userId;
     const user = await prisma.user.findUnique({
@@ -192,7 +173,7 @@ export async function userRoutes(fastify: FastifyInstance) {
     reply.send(user);
   });
 
-  // 更新隐私与通知设置（/settings 路径）
+  // 更新隐私与通知设置
   fastify.put('/settings', { preHandler: authMiddleware }, async (request, reply) => {
     const userId = (request as any).userId;
     const { allowFriendRequest, allowSearch, notifyMessage, notifyCall, notifyPost } = request.body as any;
@@ -211,5 +192,48 @@ export async function userRoutes(fastify: FastifyInstance) {
     if (!validStatuses.includes(status)) return reply.status(400).send({ error: '无效状态' });
     await prisma.user.update({ where: { id: userId }, data: { status } });
     reply.send({ success: true, status });
+  });
+
+  // ✅ 注销账号（新增）
+  fastify.delete('/account', { preHandler: authMiddleware }, async (request, reply) => {
+    const userId = (request as any).userId;
+    try {
+      await prisma.$transaction(async (tx) => {
+        // 删除该用户相关所有数据（按外键依赖顺序）
+        await tx.userTask.deleteMany({ where: { userId } });
+        await tx.userBadge.deleteMany({ where: { userId } });
+        await tx.userSignin.deleteMany({ where: { userId } });
+        await tx.blocked.deleteMany({ where: { OR: [{ userId }, { blockedId: userId }] } });
+        await tx.follow.deleteMany({ where: { OR: [{ followerId: userId }, { followingId: userId }] } });
+        await tx.starLike.deleteMany({ where: { userId } });
+        await tx.starComment.deleteMany({ where: { userId } });
+        await tx.starPost.deleteMany({ where: { userId } });
+        await tx.favorite.deleteMany({ where: { userId } });
+        // 群组相关
+        const ownedGroups = await tx.groupChat.findMany({ where: { ownerId: userId } });
+        for (const group of ownedGroups) {
+          await tx.groupMessage.deleteMany({ where: { groupId: group.id } });
+          await tx.groupMember.deleteMany({ where: { groupId: group.id } });
+          await tx.groupChat.delete({ where: { id: group.id } });
+        }
+        // 非群主群组：删除成员记录、发送的群消息
+        await tx.groupMessage.deleteMany({ where: { senderId: userId } });
+        await tx.groupMember.deleteMany({ where: { userId } });
+        // 好友关系
+        await tx.friendship.deleteMany({ where: { OR: [{ userId }, { friendId: userId }] } });
+        await tx.friendRequest.deleteMany({ where: { OR: [{ senderId: userId }, { receiverId: userId }] } });
+        // 消息
+        await tx.message.deleteMany({ where: { OR: [{ senderId: userId }, { receiverId: userId }] } });
+        await tx.offlineQueue.deleteMany({ where: { userId } });
+        // 经验
+        await tx.userExp.deleteMany({ where: { userId } });
+        // 最后删除用户记录
+        await tx.user.delete({ where: { id: userId } });
+      });
+      reply.send({ success: true });
+    } catch (err: any) {
+      console.error('注销失败', err);
+      reply.status(500).send({ error: err.message || '注销失败' });
+    }
   });
 }
