@@ -6,6 +6,7 @@ const API = 'https://xianqu-server.onrender.com';
 // 社区列表
 function CommunityList({ onSelect }: { onSelect: (id: string) => void }) {
   const [communities, setCommunities] = useState<any[]>([]);
+  const [userId, setUserId] = useState('');
   const [showCreate, setShowCreate] = useState(false);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -16,7 +17,16 @@ function CommunityList({ onSelect }: { onSelect: (id: string) => void }) {
     if (res.ok) setCommunities(await res.json());
   };
 
-  useEffect(() => { loadCommunities(); }, []);
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        setUserId(payload.userId || '');
+      } catch {}
+    }
+    loadCommunities();
+  }, []);
 
   const createCommunity = async () => {
     const token = localStorage.getItem('token');
@@ -47,15 +57,32 @@ function CommunityList({ onSelect }: { onSelect: (id: string) => void }) {
         </div>
       )}
       {communities.map((c: any) => (
-        <button
-          key={c.id}
-          onClick={() => onSelect(c.id)}
-          className="w-full text-left bg-white rounded-xl shadow p-4 mb-3"
-        >
-          <p className="font-bold text-sm">{c.name}</p>
-          <p className="text-xs text-gray-500">{c.description || '暂无简介'}</p>
-          <p className="text-xs text-gray-400 mt-1">{c._count?.homesteads} 个家园</p>
-        </button>
+        <div key={c.id} className="bg-white rounded-xl shadow p-4 mb-3 flex justify-between items-center">
+          <button onClick={() => onSelect(c.id)} className="text-left flex-1">
+            <p className="font-bold text-sm">{c.name}</p>
+            <p className="text-xs text-gray-500">{c.description || '暂无简介'}</p>
+            <p className="text-xs text-gray-400 mt-1">{c._count?.homesteads} 个家园</p>
+          </button>
+          {/* 删除按钮：仅所有者可见 */}
+          {userId && c.ownerId === userId && (
+            <button
+              onClick={async (e) => {
+                e.stopPropagation();
+                if (confirm('确定删除此社区吗？内部家园也将被删除')) {
+                  const token = localStorage.getItem('token');
+                  await fetch(`${API}/community/${c.id}`, {
+                    method: 'DELETE',
+                    headers: { Authorization: `Bearer ${token}` },
+                  });
+                  loadCommunities();
+                }
+              }}
+              className="text-red-500 text-xs px-2 ml-2"
+            >
+              删除
+            </button>
+          )}
+        </div>
       ))}
     </div>
   );
