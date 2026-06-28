@@ -32,13 +32,9 @@ export default function App({ Component, pageProps }: AppProps) {
     return <Component {...pageProps} />;
   }
 
-  // 服务端或未挂载时返回占位（避免预渲染错误）
+  // 服务端或未挂载时返回最简单的占位，不包含任何组件引用
   if (!mounted) {
-    return (
-      <div className="h-dvh flex items-center justify-center bg-gray-50">
-        <p className="text-gray-400">加载中...</p>
-      </div>
-    );
+    return <div className="h-dvh flex items-center justify-center bg-gray-50"><p>加载中...</p></div>;
   }
 
   const isActive = (path: string) => router.pathname.startsWith(path);
