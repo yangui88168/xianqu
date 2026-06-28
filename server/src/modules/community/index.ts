@@ -94,4 +94,23 @@ export async function communityRoutes(fastify: FastifyInstance) {
     });
     reply.send(post);
   });
+
+  // 删除社区（仅所有者）
+  fastify.delete('/:communityId', { preHandler: authMiddleware }, async (request, reply) => {
+    const userId = (request as any).userId;
+    const { communityId } = request.params as any;
+
+    const community = await prisma.community.findUnique({ where: { id: communityId } });
+    if (!community) return reply.status(404).send({ error: '社区不存在' });
+    if (community.ownerId !== userId) return reply.status(403).send({ error: '只有社区所有者才能删除' });
+
+    // 级联删除：家园、家园帖子（如果已有）、社区本身
+    await prisma.$transaction([
+      prisma.homesteadPost.deleteMany({ where: { homestead: { communityId } } }),
+      prisma.homestead.deleteMany({ where: { communityId } }),
+      prisma.community.delete({ where: { id: communityId } }),
+    ]);
+
+    reply.send({ success: true });
+  });
 }
