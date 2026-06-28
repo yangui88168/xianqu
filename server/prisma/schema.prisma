@@ -63,6 +63,9 @@ model User {
   channelSubscribed  ChannelSubscriber[]
   channelPosts       ChannelPost[]       @relation("ChannelAuthor")
   channelComments    ChannelComment[]
+
+  // 社区系统（新增）
+  ownedCommunities   Community[]
 }
 
 model Message {
@@ -277,17 +280,29 @@ model UserBadge {
   @@unique([userId, badgeId])
 }
 
-// ==================== 新增频道系统模型 ====================
+// ==================== 频道与社区系统 ====================
 
-model Channel {
-  id          String              @id @default(cuid())
+model Community {
+  id          String    @id @default(cuid())
   name        String
   description String?
   ownerId     String
-  createdAt   DateTime            @default(now())
-  owner       User                @relation("ChannelOwner", fields: [ownerId], references: [id])
-  subscribers ChannelSubscriber[]
-  posts       ChannelPost[]
+  createdAt   DateTime  @default(now())
+  owner       User      @relation(fields: [ownerId], references: [id])
+  channels    Channel[]
+}
+
+model Channel {
+  id           String              @id @default(cuid())
+  name         String
+  description  String?
+  ownerId      String
+  communityId  String?
+  createdAt    DateTime            @default(now())
+  owner        User                @relation("ChannelOwner", fields: [ownerId], references: [id])
+  community    Community?          @relation(fields: [communityId], references: [id], onDelete: SetNull)
+  subscribers  ChannelSubscriber[]
+  posts        ChannelPost[]
 }
 
 model ChannelSubscriber {
