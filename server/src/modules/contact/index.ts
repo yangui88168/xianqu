@@ -1,7 +1,8 @@
 import { FastifyInstance } from 'fastify';
 import jwt from 'jsonwebtoken';
 import { prisma } from '../../db';
-import { progressTask } from '../task'; // 新增：导入任务进度函数
+import { progressTask } from '../task';       // 任务进度
+import { checkBadges } from '../badge';       // 徽章检查
 
 function authMiddleware(request: any, reply: any, done: any) {
   const token = (request.headers.authorization || '').replace('Bearer ', '');
@@ -89,6 +90,10 @@ export async function contactRoutes(fastify: FastifyInstance) {
     // 好友关系建立成功后，推进双方“添加好友”任务进度
     await progressTask(userId, 'add_friend');
     await progressTask(req.senderId, 'add_friend');
+
+    // 检查并授予添加好友相关徽章
+    checkBadges(userId);
+    checkBadges(req.senderId);
 
     reply.send({ success: true });
   });
