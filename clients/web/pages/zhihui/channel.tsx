@@ -4,20 +4,10 @@ import { useRouter } from 'next/router';
 
 const API = 'https://xianqu-server.onrender.com';
 
-// 从 JWT 中解析 userId
-function getUserIdFromToken(token: string): string | null {
-  try {
-    const payload = JSON.parse(atob(token.split('.')[1]));
-    return payload.userId || null;
-  } catch {
-    return null;
-  }
-}
-
 // 频道列表组件
 function ChannelList({ onSelect }: { onSelect: (id: string) => void }) {
   const [channels, setChannels] = useState<any[]>([]);
-  const [userId, setUserId] = useState<string | null>(null);
+  const [userId, setUserId] = useState('');
   const [showCreate, setShowCreate] = useState(false);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -25,7 +15,10 @@ function ChannelList({ onSelect }: { onSelect: (id: string) => void }) {
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (token) {
-      setUserId(getUserIdFromToken(token));
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        setUserId(payload.userId || '');
+      } catch {}
     }
     fetch(`${API}/channel/list`, { headers: { Authorization: `Bearer ${token}` } })
       .then(res => res.json())
@@ -48,17 +41,6 @@ function ChannelList({ onSelect }: { onSelect: (id: string) => void }) {
       const listRes = await fetch(`${API}/channel/list`, { headers: { Authorization: `Bearer ${token}` } });
       if (listRes.ok) setChannels(await listRes.json());
     }
-  };
-
-  const deleteChannel = async (channelId: string) => {
-    const token = localStorage.getItem('token');
-    await fetch(`${API}/channel/${channelId}`, {
-      method: 'DELETE',
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    // 刷新列表
-    const listRes = await fetch(`${API}/channel/list`, { headers: { Authorization: `Bearer ${token}` } });
-    if (listRes.ok) setChannels(await listRes.json());
   };
 
   return (
@@ -111,7 +93,14 @@ function ChannelList({ onSelect }: { onSelect: (id: string) => void }) {
               onClick={async (e) => {
                 e.stopPropagation();
                 if (confirm('确定删除此频道吗？相关帖子也将被删除')) {
-                  await deleteChannel(ch.id);
+                  const token = localStorage.getItem('token');
+                  await fetch(`${API}/channel/${ch.id}`, {
+                    method: 'DELETE',
+                    headers: { Authorization: `Bearer ${token}` },
+                  });
+                  // 刷新列表
+                  const res = await fetch(`${API}/channel/list`, { headers: { Authorization: `Bearer ${token}` } });
+                  if (res.ok) setChannels(await res.json());
                 }
               }}
               className="text-red-500 text-xs px-2 ml-2"
@@ -125,7 +114,7 @@ function ChannelList({ onSelect }: { onSelect: (id: string) => void }) {
   );
 }
 
-// 频道详情组件 (无改动)
+// 频道详情组件（无改动）
 function ChannelDetail({ channelId, onBack }: { channelId: string; onBack: () => void }) {
   const [channel, setChannel] = useState<any>(null);
   const [posts, setPosts] = useState<any[]>([]);
@@ -137,17 +126,14 @@ function ChannelDetail({ channelId, onBack }: { channelId: string; onBack: () =>
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (!token) return;
-    // 获取频道信息
     fetch(`${API}/channel/${channelId}`, { headers: { Authorization: `Bearer ${token}` } })
       .then(res => res.json())
       .then(setChannel);
-    // 获取帖子
     fetch(`${API}/channel/${channelId}/posts`, { headers: { Authorization: `Bearer ${token}` } })
       .then(res => res.json())
       .then(setPosts);
   }, [channelId]);
 
-  // 订阅
   const toggleSubscribe = async () => {
     const token = localStorage.getItem('token');
     const res = await fetch(`${API}/channel/${channelId}/subscribe`, {
@@ -160,7 +146,6 @@ function ChannelDetail({ channelId, onBack }: { channelId: string; onBack: () =>
     }
   };
 
-  // 发帖
   const publishPost = async () => {
     if (!content.trim()) return;
     const token = localStorage.getItem('token');
@@ -176,12 +161,10 @@ function ChannelDetail({ channelId, onBack }: { channelId: string; onBack: () =>
     setContent('');
     setShowPoll(false);
     setPollOptions('');
-    // 刷新帖子
     const res = await fetch(`${API}/channel/${channelId}/posts`, { headers: { Authorization: `Bearer ${token}` } });
     if (res.ok) setPosts(await res.json());
   };
 
-  // 投票
   const vote = async (postId: string, optionIndex: number) => {
     const token = localStorage.getItem('token');
     const res = await fetch(`${API}/channel/${channelId}/vote`, {
@@ -195,7 +178,6 @@ function ChannelDetail({ channelId, onBack }: { channelId: string; onBack: () =>
     }
   };
 
-  // 评论
   const commentPost = async (postId: string, text: string) => {
     const token = localStorage.getItem('token');
     await fetch(`${API}/channel/${channelId}/comment`, {
@@ -220,7 +202,6 @@ function ChannelDetail({ channelId, onBack }: { channelId: string; onBack: () =>
         </button>
       </div>
 
-      {/* 发帖区 */}
       <div className="p-4 bg-white border-b">
         <textarea
           className="w-full border rounded p-2 text-sm"
@@ -245,7 +226,6 @@ function ChannelDetail({ channelId, onBack }: { channelId: string; onBack: () =>
         )}
       </div>
 
-      {/* 帖子列表 */}
       <div className="flex-1 overflow-y-auto">
         {posts.map((post: any) => (
           <div key={post.id} className={`bg-white p-4 border-b ${post.pinned ? 'bg-yellow-50' : ''}`}>
