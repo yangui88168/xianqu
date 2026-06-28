@@ -829,10 +829,11 @@ export default function Chat() {
               </div>
             )}
 
-            {/* 消息列表 */}
+            {/* 消息列表 - 添加 data-scroll-container */}
             <div
               ref={scrollContainerRef}
               onScroll={handleScroll}
+              data-scroll-container
               className="flex-1 min-h-0 overflow-y-auto p-4 bg-gray-50"
             >
               {isLoadingChat ? (
