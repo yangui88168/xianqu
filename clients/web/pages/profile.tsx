@@ -12,6 +12,23 @@ const TASK_CONFIG: any = {
   publish_post: { desc: '发布一条动态' },
 };
 
+// 状态配置
+const STATUS_LIST = ['online', 'busy', 'dnd', 'away', 'invisible'];
+const STATUS_ICON: Record<string, string> = {
+  online: '🟢',
+  busy: '🟠',
+  dnd: '🔴',
+  away: '🟡',
+  invisible: '⚫',
+};
+const STATUS_TEXT: Record<string, string> = {
+  online: '在线',
+  busy: '忙碌',
+  dnd: '勿扰',
+  away: '离开',
+  invisible: '隐身',
+};
+
 export default function Profile() {
   const [user, setUser] = useState<any>(null);
   const [editing, setEditing] = useState(false);
@@ -50,6 +67,11 @@ export default function Profile() {
   // 在线状态
   const [currentStatus, setCurrentStatus] = useState('online');
 
+  // 展开/折叠面板
+  const [showGrowth, setShowGrowth] = useState(false);
+  const [showTasks, setShowTasks] = useState(false);
+  const [showBadges, setShowBadges] = useState(false);
+
   const router = useRouter();
   const cloudinaryRef = useRef<any>();
   const widgetRef = useRef<any>();
@@ -73,8 +95,11 @@ export default function Profile() {
     });
   };
 
-  // 切换在线状态
-  const changeStatus = async (newStatus: string) => {
+  // 切换在线状态（循环切换）
+  const cycleStatus = async () => {
+    const idx = STATUS_LIST.indexOf(currentStatus);
+    const nextIdx = (idx + 1) % STATUS_LIST.length;
+    const newStatus = STATUS_LIST[nextIdx];
     const token = localStorage.getItem('token');
     const res = await fetch(`${API}/user/status`, {
       method: 'PUT',
@@ -269,20 +294,18 @@ export default function Profile() {
                 <h2 className="text-xl font-bold">{user.nickname || user.username}</h2>
                 <p className="text-gray-500 text-sm">{user.signature || '这个人很懒，什么都没写'}</p>
                 <p className="text-gray-400 text-xs mt-1">UID: {user.id}</p>
-                {/* 状态切换 */}
-                <div className="flex items-center gap-2 mt-2">
-                  <span className="text-xs text-gray-500">状态：</span>
-                  <select
-                    value={currentStatus}
-                    onChange={(e) => changeStatus(e.target.value)}
-                    className="text-xs border rounded px-2 py-1"
+                {/* 状态切换按钮 */}
+                <div className="mt-2">
+                  <button
+                    onClick={cycleStatus}
+                    className="flex items-center gap-1 px-3 py-1 bg-gray-100 rounded-full text-xs hover:bg-gray-200"
                   >
-                    <option value="online">在线</option>
-                    <option value="busy">忙碌</option>
-                    <option value="dnd">勿扰</option>
-                    <option value="away">离开</option>
-                    <option value="invisible">隐身</option>
-                  </select>
+                    <span>{STATUS_ICON[currentStatus]}</span>
+                    <span>{STATUS_TEXT[currentStatus]}</span>
+                    <svg className="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 10l5 5 5-5" />
+                    </svg>
+                  </button>
                 </div>
               </>
             )}
@@ -295,63 +318,114 @@ export default function Profile() {
         )}
       </div>
 
-      {/* 成长值 + 签到 */}
-      <div className="bg-white mt-3 px-6 py-4">
-        <div className="flex justify-between items-center">
-          <span className="text-sm font-medium">成长值</span>
-          <span className="text-gray-400 text-sm">LV{level} · {exp} 经验值</span>
-        </div>
-        <div className="w-full bg-gray-200 rounded-full h-2 mt-2">
-          <div className="bg-blue-500 h-2 rounded-full" style={{ width: `${Math.min((exp % 100) / 100 * 100, 100)}%` }}></div>
-        </div>
-        <div className="mt-3 flex items-center justify-between">
-          <span className="text-sm text-gray-600">
-            {signedToday ? `已签到 · 连续${streak}天` : '今日未签到'}
-          </span>
-          <button
-            onClick={handleSignin}
-            disabled={signedToday}
-            className={`px-4 py-1 rounded-full text-sm ${signedToday ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-green-500 text-white hover:bg-green-600'}`}
-          >
-            {signedToday ? '已签到' : '签到'}
-          </button>
-        </div>
+      {/* 成长值 & 签到 */}
+      <div className="bg-white mt-3">
+        <button
+          onClick={() => setShowGrowth(!showGrowth)}
+          className="w-full flex items-center justify-between px-5 py-4 border-b border-gray-100 hover:bg-gray-50"
+        >
+          <div className="flex items-center gap-3">
+            <span className="text-lg">⭐</span>
+            <span className="text-sm font-medium text-gray-700">成长值</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <span className="text-xs text-gray-400">LV{level} · {exp} 经验值</span>
+            <svg className={`w-4 h-4 text-gray-300 transition-transform ${showGrowth ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
+            </svg>
+          </div>
+        </button>
+        {showGrowth && (
+          <div className="px-5 py-4 bg-gray-50">
+            <div className="w-full bg-gray-200 rounded-full h-2">
+              <div className="bg-blue-500 h-2 rounded-full" style={{ width: `${Math.min((exp % 100) / 100 * 100, 100)}%` }}></div>
+            </div>
+            <div className="mt-3 flex items-center justify-between">
+              <span className="text-sm text-gray-600">
+                {signedToday ? `已签到 · 连续${streak}天` : '今日未签到'}
+              </span>
+              <button
+                onClick={handleSignin}
+                disabled={signedToday}
+                className={`px-4 py-1 rounded-full text-sm ${signedToday ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-green-500 text-white hover:bg-green-600'}`}
+              >
+                {signedToday ? '已签到' : '签到'}
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* 每日任务 */}
-      <div className="bg-white mt-3 px-6 py-4">
-        <h3 className="text-sm font-medium mb-2">每日任务</h3>
-        {tasks.length === 0 ? (
-          <p className="text-sm text-gray-400">暂无任务</p>
-        ) : (
-          tasks.map((task: any) => (
-            <div key={task.id} className="flex items-center justify-between py-1 border-b last:border-b-0">
-              <span className="text-sm">
-                {TASK_CONFIG[task.taskType]?.desc || task.taskType} ({task.progress}/{task.target})
-              </span>
-              {task.completed ? (
-                <span className="text-green-500 text-sm">已完成</span>
-              ) : (
-                <span className="text-gray-400 text-sm">进行中</span>
-              )}
-            </div>
-          ))
+      <div className="bg-white">
+        <button
+          onClick={() => { setShowTasks(!showTasks); if (!showTasks) loadTasks(); }}
+          className="w-full flex items-center justify-between px-5 py-4 border-b border-gray-100 hover:bg-gray-50"
+        >
+          <div className="flex items-center gap-3">
+            <span className="text-lg">📋</span>
+            <span className="text-sm font-medium text-gray-700">每日任务</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <span className="text-xs text-gray-400">{tasks.filter(t => t.completed).length}/{tasks.length} 完成</span>
+            <svg className={`w-4 h-4 text-gray-300 transition-transform ${showTasks ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
+            </svg>
+          </div>
+        </button>
+        {showTasks && (
+          <div className="px-5 py-3 bg-gray-50">
+            {tasks.length === 0 ? (
+              <p className="text-sm text-gray-400">暂无任务</p>
+            ) : (
+              tasks.map((task: any) => (
+                <div key={task.id} className="flex items-center justify-between py-1">
+                  <span className="text-sm">
+                    {TASK_CONFIG[task.taskType]?.desc || task.taskType} ({task.progress}/{task.target})
+                  </span>
+                  {task.completed ? (
+                    <span className="text-green-500 text-sm">已完成</span>
+                  ) : (
+                    <span className="text-gray-400 text-sm">进行中</span>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
         )}
       </div>
 
       {/* 我的勋章 */}
-      <div className="bg-white mt-3 px-6 py-4">
-        <h3 className="text-sm font-medium mb-2">我的勋章</h3>
-        {badges.length === 0 ? (
-          <p className="text-sm text-gray-400">暂无勋章，快去完成目标吧</p>
-        ) : (
-          <div className="flex flex-wrap gap-2">
-            {badges.map((badge: any) => (
-              <div key={badge.id} className="flex flex-col items-center bg-gray-100 rounded-lg p-2 w-16">
-                <span className="text-xl">{badge.badge?.icon || '🎖️'}</span>
-                <span className="text-xs text-center mt-1">{badge.badge?.name || badge.badgeId}</span>
+      <div className="bg-white">
+        <button
+          onClick={() => { setShowBadges(!showBadges); if (!showBadges) loadBadges(); }}
+          className="w-full flex items-center justify-between px-5 py-4 border-b border-gray-100 hover:bg-gray-50"
+        >
+          <div className="flex items-center gap-3">
+            <span className="text-lg">🏅</span>
+            <span className="text-sm font-medium text-gray-700">我的勋章</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <span className="text-xs text-gray-400">{badges.length} 枚</span>
+            <svg className={`w-4 h-4 text-gray-300 transition-transform ${showBadges ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
+            </svg>
+          </div>
+        </button>
+        {showBadges && (
+          <div className="px-5 py-3 bg-gray-50">
+            {badges.length === 0 ? (
+              <p className="text-sm text-gray-400">暂无勋章，快去完成目标吧</p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {badges.map((badge: any) => (
+                  <div key={badge.id} className="flex flex-col items-center bg-white rounded-lg p-2 w-16 shadow-sm">
+                    <span className="text-xl">{badge.badge?.icon || '🎖️'}</span>
+                    <span className="text-xs text-center mt-1">{badge.badge?.name || badge.badgeId}</span>
+                  </div>
+                ))}
               </div>
-            ))}
+            )}
           </div>
         )}
       </div>
@@ -360,18 +434,26 @@ export default function Profile() {
       <div className="bg-white mt-3">
         <button
           onClick={loadFavorites}
-          className="w-full flex items-center justify-between px-6 py-4 border-b hover:bg-gray-50"
+          className="w-full flex items-center justify-between px-5 py-4 border-b border-gray-100 hover:bg-gray-50"
         >
-          <span className="text-sm">我的收藏</span>
-          <span className="text-gray-400 text-sm">{showFavorites ? `${favorites.length} 条` : '点击查看'}</span>
+          <div className="flex items-center gap-3">
+            <span className="text-lg">❤️</span>
+            <span className="text-sm font-medium text-gray-700">我的收藏</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <span className="text-xs text-gray-400">{showFavorites ? `${favorites.length} 条` : '点击查看'}</span>
+            <svg className="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
+            </svg>
+          </div>
         </button>
         {showFavorites && (
-          <div className="max-h-40 overflow-y-auto">
+          <div className="max-h-40 overflow-y-auto bg-gray-50">
             {favorites.length === 0 ? (
               <p className="text-center text-gray-400 text-sm py-4">暂无收藏</p>
             ) : (
               favorites.map((fav: any) => (
-                <div key={fav.id} className="flex items-center justify-between px-6 py-2 border-b text-sm">
+                <div key={fav.id} className="flex items-center justify-between px-5 py-2 border-b text-sm">
                   <span className="text-gray-600 truncate flex-1">{fav.content || fav.targetId}</span>
                   <button
                     onClick={() => deleteFavorite(fav.id)}
@@ -386,57 +468,97 @@ export default function Profile() {
         )}
       </div>
 
-      {/* 修改密码按钮 */}
+      {/* 修改密码 */}
       <div className="bg-white mt-3">
-        <button onClick={() => setShowPasswordModal(true)} className="w-full flex items-center justify-between px-6 py-4 border-b hover:bg-gray-50">
-          <span className="text-sm">修改密码</span>
-          <span className="text-gray-400 text-sm">建议定期更换</span>
+        <button
+          onClick={() => setShowPasswordModal(true)}
+          className="w-full flex items-center justify-between px-5 py-4 border-b border-gray-100 hover:bg-gray-50"
+        >
+          <div className="flex items-center gap-3">
+            <span className="text-lg">🔒</span>
+            <span className="text-sm font-medium text-gray-700">修改密码</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <span className="text-xs text-gray-400">建议定期更换</span>
+            <svg className="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
+            </svg>
+          </div>
         </button>
       </div>
 
       {/* 隐私设置 */}
-      <div className="bg-white mt-3 px-6 py-4">
-        <h3 className="text-sm font-medium mb-3">隐私设置</h3>
+      <div className="bg-white mt-3 px-5 py-4">
+        <h3 className="text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
+          <span className="text-lg">🔐</span>隐私设置
+        </h3>
         <div className="flex items-center justify-between py-2">
-          <span className="text-sm">允许任何人加我为好友</span>
-          <button onClick={() => updateSetting('allowFriendRequest', !settings.allowFriendRequest)} className={`w-10 h-5 rounded-full ${settings.allowFriendRequest ? 'bg-blue-500' : 'bg-gray-300'}`}>
-            <div className={`w-4 h-4 bg-white rounded-full shadow transform mx-0.5 ${settings.allowFriendRequest ? 'translate-x-5' : ''}`}></div>
+          <span className="text-sm text-gray-600">允许任何人加我为好友</span>
+          <button
+            onClick={() => updateSetting('allowFriendRequest', !settings.allowFriendRequest)}
+            className={`relative w-10 h-5 rounded-full transition-colors ${settings.allowFriendRequest ? 'bg-blue-500' : 'bg-gray-300'}`}
+          >
+            <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${settings.allowFriendRequest ? 'translate-x-5' : ''}`}></div>
           </button>
         </div>
         <div className="flex items-center justify-between py-2">
-          <span className="text-sm">允许通过搜索找到我</span>
-          <button onClick={() => updateSetting('allowSearch', !settings.allowSearch)} className={`w-10 h-5 rounded-full ${settings.allowSearch ? 'bg-blue-500' : 'bg-gray-300'}`}>
-            <div className={`w-4 h-4 bg-white rounded-full shadow transform mx-0.5 ${settings.allowSearch ? 'translate-x-5' : ''}`}></div>
+          <span className="text-sm text-gray-600">允许通过搜索找到我</span>
+          <button
+            onClick={() => updateSetting('allowSearch', !settings.allowSearch)}
+            className={`relative w-10 h-5 rounded-full transition-colors ${settings.allowSearch ? 'bg-blue-500' : 'bg-gray-300'}`}
+          >
+            <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${settings.allowSearch ? 'translate-x-5' : ''}`}></div>
           </button>
         </div>
       </div>
 
       {/* 通知设置 */}
-      <div className="bg-white mt-3 px-6 py-4">
-        <h3 className="text-sm font-medium mb-3">通知设置</h3>
+      <div className="bg-white mt-3 px-5 py-4">
+        <h3 className="text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
+          <span className="text-lg">🔔</span>通知设置
+        </h3>
         <div className="flex items-center justify-between py-2">
-          <span className="text-sm">消息通知</span>
-          <button onClick={() => updateSetting('notifyMessage', !settings.notifyMessage)} className={`w-10 h-5 rounded-full ${settings.notifyMessage ? 'bg-blue-500' : 'bg-gray-300'}`}>
-            <div className={`w-4 h-4 bg-white rounded-full shadow transform mx-0.5 ${settings.notifyMessage ? 'translate-x-5' : ''}`}></div>
+          <span className="text-sm text-gray-600">消息通知</span>
+          <button
+            onClick={() => updateSetting('notifyMessage', !settings.notifyMessage)}
+            className={`relative w-10 h-5 rounded-full transition-colors ${settings.notifyMessage ? 'bg-blue-500' : 'bg-gray-300'}`}
+          >
+            <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${settings.notifyMessage ? 'translate-x-5' : ''}`}></div>
           </button>
         </div>
         <div className="flex items-center justify-between py-2">
-          <span className="text-sm">通话通知</span>
-          <button onClick={() => updateSetting('notifyCall', !settings.notifyCall)} className={`w-10 h-5 rounded-full ${settings.notifyCall ? 'bg-blue-500' : 'bg-gray-300'}`}>
-            <div className={`w-4 h-4 bg-white rounded-full shadow transform mx-0.5 ${settings.notifyCall ? 'translate-x-5' : ''}`}></div>
+          <span className="text-sm text-gray-600">通话通知</span>
+          <button
+            onClick={() => updateSetting('notifyCall', !settings.notifyCall)}
+            className={`relative w-10 h-5 rounded-full transition-colors ${settings.notifyCall ? 'bg-blue-500' : 'bg-gray-300'}`}
+          >
+            <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${settings.notifyCall ? 'translate-x-5' : ''}`}></div>
           </button>
         </div>
         <div className="flex items-center justify-between py-2">
-          <span className="text-sm">动态通知</span>
-          <button onClick={() => updateSetting('notifyPost', !settings.notifyPost)} className={`w-10 h-5 rounded-full ${settings.notifyPost ? 'bg-blue-500' : 'bg-gray-300'}`}>
-            <div className={`w-4 h-4 bg-white rounded-full shadow transform mx-0.5 ${settings.notifyPost ? 'translate-x-5' : ''}`}></div>
+          <span className="text-sm text-gray-600">动态通知</span>
+          <button
+            onClick={() => updateSetting('notifyPost', !settings.notifyPost)}
+            className={`relative w-10 h-5 rounded-full transition-colors ${settings.notifyPost ? 'bg-blue-500' : 'bg-gray-300'}`}
+          >
+            <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${settings.notifyPost ? 'translate-x-5' : ''}`}></div>
           </button>
         </div>
       </div>
 
+      {/* 退出登录 */}
       <div className="mt-3 bg-white">
-        <button onClick={logout} className="w-full text-left px-6 py-4 text-red-500 text-sm hover:bg-gray-50">
-          退出登录
+        <button
+          onClick={logout}
+          className="w-full flex items-center justify-between px-5 py-4 text-red-500 hover:bg-red-50"
+        >
+          <div className="flex items-center gap-3">
+            <span className="text-lg">🚪</span>
+            <span className="text-sm font-medium">退出登录</span>
+          </div>
+          <svg className="w-4 h-4 text-red-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
+          </svg>
         </button>
       </div>
 
