@@ -46,6 +46,8 @@ model User {
 
   // 签到记录
   signins          UserSignin[]
+  // 任务记录
+  tasks            UserTask[]
 }
 
 model Message {
@@ -222,4 +224,17 @@ model UserSignin {
   user      User     @relation(fields: [userId], references: [id])
 
   @@unique([userId, date])
+}
+
+// 用户任务
+model UserTask {
+  id        String   @id @default(cuid())
+  userId    String
+  taskType  String
+  progress  Int      @default(0)
+  target    Int      @default(1)
+  completed Boolean  @default(false)
+  date      DateTime @default(now()) @db.Date
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
 }
