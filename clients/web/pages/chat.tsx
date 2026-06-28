@@ -2,7 +2,6 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useRouter } from 'next/router';
 import CallModal from '../components/CallModal';
-import { MessageSound } from '../utils/sound'; // 新增：消息提示音
 
 const API = 'https://xianqu-server.onrender.com';
 const PAGE_SIZE = 10;
@@ -32,6 +31,12 @@ const getLastSeenText = (friend: any) => {
   if (days < 7) return `${days}天前在线`;
   return new Date(friend.lastSeen).toLocaleDateString();
 };
+
+// 动态导入 MessageSound（仅客户端）
+let MessageSound: any = null;
+if (typeof window !== 'undefined') {
+  import('../utils/sound').then(mod => { MessageSound = mod.MessageSound; });
+}
 
 export default function Chat() {
   const [ws, setWs] = useState<WebSocket | null>(null);
@@ -196,7 +201,7 @@ export default function Chat() {
           const newMsg = msg.data;
           // 如果不是当前选中的好友发来的消息，播放提示音
           if (!currentChat || currentChat.type !== 'friend' || currentChat.data.id !== newMsg.senderId) {
-            MessageSound.play();
+            if (MessageSound) MessageSound.play();
           }
           setMessages(prev => {
             if (prev.find(m => m.id === newMsg.id)) return prev;
@@ -219,7 +224,7 @@ export default function Chat() {
           const newMsg = msg.data;
           // 如果不是当前选中的群聊消息，播放提示音
           if (!currentChat || currentChat.type !== 'group' || currentChat.data.id !== newMsg.groupId) {
-            MessageSound.play();
+            if (MessageSound) MessageSound.play();
           }
           setMessages(prev => {
             if (prev.find(m => m.id === newMsg.id)) return prev;
