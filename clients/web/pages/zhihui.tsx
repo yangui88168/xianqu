@@ -10,6 +10,7 @@ export default function ZhihuiStar() {
   const [imageUrl, setImageUrl] = useState('');
   const [users, setUsers] = useState<any[]>([]);
   const [showPublish, setShowPublish] = useState(false);
+  const [permission, setPermission] = useState('public'); // 新增：可见范围
   const router = useRouter();
 
   useEffect(() => {
@@ -48,10 +49,11 @@ export default function ZhihuiStar() {
     await fetch(`${API}/star/post`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ content, imageUrl, permission: 'public' }),
+      body: JSON.stringify({ content, imageUrl, permission }), // 使用状态变量
     });
     setContent('');
     setImageUrl('');
+    setPermission('public'); // 重置为公开
     setShowPublish(false);
     loadFeed();
   };
@@ -121,6 +123,19 @@ export default function ZhihuiStar() {
               value={imageUrl}
               onChange={e => setImageUrl(e.target.value)}
             />
+            {/* 可见范围选择 */}
+            <div className="flex items-center gap-2 mt-2">
+              <span className="text-xs text-gray-500">可见范围：</span>
+              <select
+                value={permission}
+                onChange={(e) => setPermission(e.target.value)}
+                className="border rounded p-1 text-xs"
+              >
+                <option value="public">公开</option>
+                <option value="friends">好友可见</option>
+                <option value="private">仅自己</option>
+              </select>
+            </div>
             <button onClick={publish} className="mt-2 bg-green-500 text-white px-4 py-2 rounded-full text-sm">发布</button>
           </div>
         )}
@@ -141,6 +156,11 @@ export default function ZhihuiStar() {
             {post.imageUrl && (
               <img src={post.imageUrl} alt="" className="mt-2 rounded max-w-full max-h-60 object-cover" />
             )}
+            {/* 权限标识 */}
+            <div className="text-xs text-gray-400 mt-1">
+              {post.permission === 'private' && '🔒 仅自己可见'}
+              {post.permission === 'friends' && '👥 好友可见'}
+            </div>
             <div className="flex items-center gap-4 mt-3 text-gray-500 text-xs">
               <button onClick={() => toggleLike(post.id)} className="flex items-center gap-1">
                 ❤️ {post._count?.likes || 0}
