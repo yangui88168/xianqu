@@ -100,7 +100,7 @@ export default function ZhihuiStar() {
   };
 
   return (
-    <div style={{ height: 'calc(100dvh - 56px)', overflowY: 'auto' }} className="bg-gray-50">
+    <div className="min-h-screen overflow-y-auto bg-gray-50" style={{ paddingBottom: '56px' }}>
       {/* 发布按钮 */}
       <div className="p-4 bg-white border-b">
         <button onClick={() => setShowPublish(!showPublish)} className="w-full bg-blue-500 text-white py-2 rounded-full text-sm font-medium">
