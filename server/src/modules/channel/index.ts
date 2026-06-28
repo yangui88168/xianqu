@@ -162,4 +162,24 @@ export async function channelRoutes(fastify: FastifyInstance) {
     });
     reply.send({ pinned: !post.pinned });
   });
+
+  // ==================== 新增：删除频道（仅所有者） ====================
+  fastify.delete('/:channelId', { preHandler: authMiddleware }, async (request, reply) => {
+    const userId = (request as any).userId;
+    const { channelId } = request.params as any;
+
+    const channel = await prisma.channel.findUnique({ where: { id: channelId } });
+    if (!channel) return reply.status(404).send({ error: '频道不存在' });
+    if (channel.ownerId !== userId) return reply.status(403).send({ error: '只有频道所有者才能删除' });
+
+    // 级联删除：帖子、评论、订阅记录
+    await prisma.$transaction([
+      prisma.channelComment.deleteMany({ where: { post: { channelId } } }),
+      prisma.channelPost.deleteMany({ where: { channelId } }),
+      prisma.channelSubscriber.deleteMany({ where: { channelId } }),
+      prisma.channel.delete({ where: { id: channelId } }),
+    ]);
+
+    reply.send({ success: true });
+  });
 }
