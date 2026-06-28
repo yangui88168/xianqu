@@ -783,9 +783,6 @@ export default function Chat() {
             </div>
           ))}
         </div>
-        <div className="p-3 border-t">
-          <button onClick={() => { localStorage.clear(); router.push('/'); }} className="w-full bg-gray-200 hover:bg-gray-300 text-sm py-2 rounded">退出登录</button>
-        </div>
       </div>
 
       {/* 右侧聊天窗 - 标准 Flex 布局 */}
@@ -824,11 +821,11 @@ export default function Chat() {
               </div>
             </div>
 
-            {/* 消息列表 - 可滚动区域 */}
+            {/* 消息列表 - 可滚动区域，使用 h-0 flex-1 防止撑开 */}
             <div
               ref={scrollContainerRef}
               onScroll={handleScroll}
-              className="flex-1 min-h-0 overflow-y-auto p-4 bg-gray-50"
+              className="h-0 flex-1 min-h-0 overflow-y-auto p-4 bg-gray-50"
             >
               {isLoadingChat ? (
                 <div className="flex items-center justify-center h-full">
