@@ -3,7 +3,7 @@ import { useRouter } from 'next/router';
 
 const API = 'https://xianqu-server.onrender.com';
 
-// 任务类型描述（与后端一致）
+// 任务类型描述（与后端一致，保留以防后续扩展）
 const TASK_CONFIG: any = {
   send_message: { desc: '发送一条消息' },
   add_friend: { desc: '添加一个好友' },
@@ -45,9 +45,6 @@ export default function Profile() {
   const [exp, setExp] = useState(0);
   const [level, setLevel] = useState(1);
 
-  // 每日任务
-  const [tasks, setTasks] = useState<any[]>([]);
-
   // 勋章
   const [badges, setBadges] = useState<any[]>([]);
 
@@ -55,45 +52,12 @@ export default function Profile() {
   const [favorites, setFavorites] = useState<any[]>([]);
   const [showFavorites, setShowFavorites] = useState(false);
 
-  // 隐私与通知设置
-  const [settings, setSettings] = useState({
-    allowFriendRequest: true,
-    allowSearch: true,
-    notifyMessage: true,
-    notifyCall: true,
-    notifyPost: true,
-  });
-
   // 在线状态
   const [currentStatus, setCurrentStatus] = useState('online');
-
-  // 展开/折叠面板
-  const [showGrowth, setShowGrowth] = useState(false);
-  const [showTasks, setShowTasks] = useState(false);
-  const [showBadges, setShowBadges] = useState(false);
 
   const router = useRouter();
   const cloudinaryRef = useRef<any>();
   const widgetRef = useRef<any>();
-
-  // 加载设置
-  const loadSettings = async () => {
-    const token = localStorage.getItem('token');
-    const res = await fetch(`${API}/user/settings`, { headers: { Authorization: `Bearer ${token}` } });
-    if (res.ok) setSettings(await res.json());
-  };
-
-  // 更新单个设置并同步后端
-  const updateSetting = async (key: string, value: boolean) => {
-    const newSettings = { ...settings, [key]: value };
-    setSettings(newSettings);
-    const token = localStorage.getItem('token');
-    await fetch(`${API}/user/settings`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify(newSettings),
-    });
-  };
 
   // 切换在线状态（循环切换）
   const cycleStatus = async () => {
@@ -134,12 +98,8 @@ export default function Profile() {
         setExp(data.exp);
         setLevel(data.level);
       });
-    // 获取每日任务
-    loadTasks();
     // 获取勋章
     loadBadges();
-    // 获取隐私设置
-    loadSettings();
   }, [router]);
 
   // 初始化 Cloudinary Widget
@@ -208,7 +168,7 @@ export default function Profile() {
     const res = await fetch(`${API}/user/signin`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({}),   // 发送空 JSON 对象
+      body: JSON.stringify({}),
     });
     if (res.ok) {
       const data = await res.json();
@@ -223,19 +183,12 @@ export default function Profile() {
     }
   };
 
-  const loadTasks = async () => {
-    const token = localStorage.getItem('token');
-    const res = await fetch(`${API}/task/daily`, { headers: { Authorization: `Bearer ${token}` } });
-    if (res.ok) setTasks(await res.json());
-  };
-
   const loadBadges = async () => {
     const token = localStorage.getItem('token');
     const res = await fetch(`${API}/badge/my`, { headers: { Authorization: `Bearer ${token}` } });
     if (res.ok) setBadges(await res.json());
   };
 
-  // 加载收藏列表
   const loadFavorites = async () => {
     const token = localStorage.getItem('token');
     const res = await fetch(`${API}/user/favorites`, { headers: { Authorization: `Bearer ${token}` } });
@@ -245,7 +198,6 @@ export default function Profile() {
     }
   };
 
-  // 删除收藏
   const deleteFavorite = async (favoriteId: string) => {
     const token = localStorage.getItem('token');
     const res = await fetch(`${API}/user/favorite/${favoriteId}`, {
@@ -318,123 +270,60 @@ export default function Profile() {
         )}
       </div>
 
-      {/* 成长值 & 签到 */}
-      <div className="bg-white mt-3">
-        <button
-          onClick={() => setShowGrowth(!showGrowth)}
-          className="w-full flex items-center justify-between px-5 py-4 border-b border-gray-100 hover:bg-gray-50"
-        >
-          <div className="flex items-center gap-3">
-            <span className="text-lg">⭐</span>
+      {/* 成长值 */}
+      <div className="bg-white mt-3 px-5 py-3 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <span className="text-lg">⭐</span>
+          <div>
             <span className="text-sm font-medium text-gray-700">成长值</span>
+            <p className="text-xs text-gray-400">LV{level} · {exp} 经验值</p>
           </div>
-          <div className="flex items-center gap-1">
-            <span className="text-xs text-gray-400">LV{level} · {exp} 经验值</span>
-            <svg className={`w-4 h-4 text-gray-300 transition-transform ${showGrowth ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
-            </svg>
-          </div>
-        </button>
-        {showGrowth && (
-          <div className="px-5 py-4 bg-gray-50">
-            <div className="w-full bg-gray-200 rounded-full h-2">
-              <div className="bg-blue-500 h-2 rounded-full" style={{ width: `${Math.min((exp % 100) / 100 * 100, 100)}%` }}></div>
-            </div>
-            <div className="mt-3 flex items-center justify-between">
-              <span className="text-sm text-gray-600">
-                {signedToday ? `已签到 · 连续${streak}天` : '今日未签到'}
-              </span>
-              <button
-                onClick={handleSignin}
-                disabled={signedToday}
-                className={`px-4 py-1 rounded-full text-sm ${signedToday ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-green-500 text-white hover:bg-green-600'}`}
-              >
-                {signedToday ? '已签到' : '签到'}
-              </button>
-            </div>
-          </div>
-        )}
+        </div>
+        <svg className="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
+        </svg>
       </div>
 
-      {/* 每日任务 */}
-      <div className="bg-white">
+      {/* 每日签到 */}
+      <div className="bg-white mt-3 px-5 py-3 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <span className="text-lg">📅</span>
+          <div>
+            <span className="text-sm font-medium text-gray-700">每日签到</span>
+            <p className="text-xs text-gray-400">{signedToday ? `已签到 · 连续${streak}天` : '今日未签到'}</p>
+          </div>
+        </div>
         <button
-          onClick={() => { setShowTasks(!showTasks); if (!showTasks) loadTasks(); }}
-          className="w-full flex items-center justify-between px-5 py-4 border-b border-gray-100 hover:bg-gray-50"
+          onClick={handleSignin}
+          disabled={signedToday}
+          className={`px-3 py-1 rounded-full text-xs font-medium ${signedToday ? 'bg-gray-200 text-gray-400' : 'bg-green-500 text-white'}`}
         >
-          <div className="flex items-center gap-3">
-            <span className="text-lg">📋</span>
-            <span className="text-sm font-medium text-gray-700">每日任务</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <span className="text-xs text-gray-400">{tasks.filter(t => t.completed).length}/{tasks.length} 完成</span>
-            <svg className={`w-4 h-4 text-gray-300 transition-transform ${showTasks ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
-            </svg>
-          </div>
+          {signedToday ? '已签到' : '签到'}
         </button>
-        {showTasks && (
-          <div className="px-5 py-3 bg-gray-50">
-            {tasks.length === 0 ? (
-              <p className="text-sm text-gray-400">暂无任务</p>
-            ) : (
-              tasks.map((task: any) => (
-                <div key={task.id} className="flex items-center justify-between py-1">
-                  <span className="text-sm">
-                    {TASK_CONFIG[task.taskType]?.desc || task.taskType} ({task.progress}/{task.target})
-                  </span>
-                  {task.completed ? (
-                    <span className="text-green-500 text-sm">已完成</span>
-                  ) : (
-                    <span className="text-gray-400 text-sm">进行中</span>
-                  )}
-                </div>
-              ))
-            )}
-          </div>
-        )}
       </div>
 
       {/* 我的勋章 */}
-      <div className="bg-white">
-        <button
-          onClick={() => { setShowBadges(!showBadges); if (!showBadges) loadBadges(); }}
-          className="w-full flex items-center justify-between px-5 py-4 border-b border-gray-100 hover:bg-gray-50"
-        >
-          <div className="flex items-center gap-3">
-            <span className="text-lg">🏅</span>
+      <div className="bg-white mt-3 px-5 py-3 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <span className="text-lg">🏅</span>
+          <div>
             <span className="text-sm font-medium text-gray-700">我的勋章</span>
+            <p className="text-xs text-gray-400">{badges.length > 0 ? `${badges.length} 枚` : '暂无勋章'}</p>
           </div>
-          <div className="flex items-center gap-1">
-            <span className="text-xs text-gray-400">{badges.length} 枚</span>
-            <svg className={`w-4 h-4 text-gray-300 transition-transform ${showBadges ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
-            </svg>
-          </div>
-        </button>
-        {showBadges && (
-          <div className="px-5 py-3 bg-gray-50">
-            {badges.length === 0 ? (
-              <p className="text-sm text-gray-400">暂无勋章，快去完成目标吧</p>
-            ) : (
-              <div className="flex flex-wrap gap-2">
-                {badges.map((badge: any) => (
-                  <div key={badge.id} className="flex flex-col items-center bg-white rounded-lg p-2 w-16 shadow-sm">
-                    <span className="text-xl">{badge.badge?.icon || '🎖️'}</span>
-                    <span className="text-xs text-center mt-1">{badge.badge?.name || badge.badgeId}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
+        </div>
+        <div className="flex -space-x-2">
+          {badges.slice(0, 3).map((badge: any) => (
+            <span key={badge.id} className="text-lg" title={badge.name}>{badge.icon || '🎖️'}</span>
+          ))}
+          {badges.length > 3 && <span className="text-xs text-gray-400 ml-2">+{badges.length - 3}</span>}
+        </div>
       </div>
 
-      {/* 收藏中心 */}
+      {/* 我的收藏 */}
       <div className="bg-white mt-3">
         <button
           onClick={loadFavorites}
-          className="w-full flex items-center justify-between px-5 py-4 border-b border-gray-100 hover:bg-gray-50"
+          className="w-full flex items-center justify-between px-5 py-3 border-b border-gray-100 hover:bg-gray-50"
         >
           <div className="flex items-center gap-3">
             <span className="text-lg">❤️</span>
@@ -468,97 +357,52 @@ export default function Profile() {
         )}
       </div>
 
-      {/* 修改密码 */}
+      {/* 设置中心 */}
       <div className="bg-white mt-3">
         <button
           onClick={() => setShowPasswordModal(true)}
-          className="w-full flex items-center justify-between px-5 py-4 border-b border-gray-100 hover:bg-gray-50"
+          className="w-full flex items-center justify-between px-5 py-3 border-b border-gray-100 hover:bg-gray-50"
         >
           <div className="flex items-center gap-3">
             <span className="text-lg">🔒</span>
-            <span className="text-sm font-medium text-gray-700">修改密码</span>
+            <span className="text-sm text-gray-700">修改密码</span>
           </div>
-          <div className="flex items-center gap-1">
-            <span className="text-xs text-gray-400">建议定期更换</span>
-            <svg className="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
-            </svg>
-          </div>
+          <svg className="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
+          </svg>
         </button>
-      </div>
 
-      {/* 隐私设置 */}
-      <div className="bg-white mt-3 px-5 py-4">
-        <h3 className="text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
-          <span className="text-lg">🔐</span>隐私设置
-        </h3>
-        <div className="flex items-center justify-between py-2">
-          <span className="text-sm text-gray-600">允许任何人加我为好友</span>
-          <button
-            onClick={() => updateSetting('allowFriendRequest', !settings.allowFriendRequest)}
-            className={`relative w-10 h-5 rounded-full transition-colors ${settings.allowFriendRequest ? 'bg-blue-500' : 'bg-gray-300'}`}
-          >
-            <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${settings.allowFriendRequest ? 'translate-x-5' : ''}`}></div>
-          </button>
-        </div>
-        <div className="flex items-center justify-between py-2">
-          <span className="text-sm text-gray-600">允许通过搜索找到我</span>
-          <button
-            onClick={() => updateSetting('allowSearch', !settings.allowSearch)}
-            className={`relative w-10 h-5 rounded-full transition-colors ${settings.allowSearch ? 'bg-blue-500' : 'bg-gray-300'}`}
-          >
-            <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${settings.allowSearch ? 'translate-x-5' : ''}`}></div>
-          </button>
-        </div>
-      </div>
+        <button
+          onClick={() => alert('隐私设置开发中')}
+          className="w-full flex items-center justify-between px-5 py-3 border-b border-gray-100 hover:bg-gray-50"
+        >
+          <div className="flex items-center gap-3">
+            <span className="text-lg">🔐</span>
+            <span className="text-sm text-gray-700">隐私设置</span>
+          </div>
+          <svg className="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
+          </svg>
+        </button>
 
-      {/* 通知设置 */}
-      <div className="bg-white mt-3 px-5 py-4">
-        <h3 className="text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
-          <span className="text-lg">🔔</span>通知设置
-        </h3>
-        <div className="flex items-center justify-between py-2">
-          <span className="text-sm text-gray-600">消息通知</span>
-          <button
-            onClick={() => updateSetting('notifyMessage', !settings.notifyMessage)}
-            className={`relative w-10 h-5 rounded-full transition-colors ${settings.notifyMessage ? 'bg-blue-500' : 'bg-gray-300'}`}
-          >
-            <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${settings.notifyMessage ? 'translate-x-5' : ''}`}></div>
-          </button>
-        </div>
-        <div className="flex items-center justify-between py-2">
-          <span className="text-sm text-gray-600">通话通知</span>
-          <button
-            onClick={() => updateSetting('notifyCall', !settings.notifyCall)}
-            className={`relative w-10 h-5 rounded-full transition-colors ${settings.notifyCall ? 'bg-blue-500' : 'bg-gray-300'}`}
-          >
-            <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${settings.notifyCall ? 'translate-x-5' : ''}`}></div>
-          </button>
-        </div>
-        <div className="flex items-center justify-between py-2">
-          <span className="text-sm text-gray-600">动态通知</span>
-          <button
-            onClick={() => updateSetting('notifyPost', !settings.notifyPost)}
-            className={`relative w-10 h-5 rounded-full transition-colors ${settings.notifyPost ? 'bg-blue-500' : 'bg-gray-300'}`}
-          >
-            <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${settings.notifyPost ? 'translate-x-5' : ''}`}></div>
-          </button>
-        </div>
+        <button
+          onClick={() => alert('通知设置开发中')}
+          className="w-full flex items-center justify-between px-5 py-3 hover:bg-gray-50"
+        >
+          <div className="flex items-center gap-3">
+            <span className="text-lg">🔔</span>
+            <span className="text-sm text-gray-700">通知设置</span>
+          </div>
+          <svg className="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
+          </svg>
+        </button>
       </div>
 
       {/* 退出登录 */}
       <div className="mt-3 bg-white">
-        <button
-          onClick={logout}
-          className="w-full flex items-center justify-between px-5 py-4 text-red-500 hover:bg-red-50"
-        >
-          <div className="flex items-center gap-3">
-            <span className="text-lg">🚪</span>
-            <span className="text-sm font-medium">退出登录</span>
-          </div>
-          <svg className="w-4 h-4 text-red-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
-          </svg>
+        <button onClick={logout} className="w-full px-5 py-3 text-red-500 text-sm font-medium hover:bg-gray-50">
+          退出登录
         </button>
       </div>
 
