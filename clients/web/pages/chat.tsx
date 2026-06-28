@@ -698,6 +698,7 @@ export default function Chat() {
       <div className="flex h-full relative" onClick={() => { setContextMenu(null); setShowMentionList(false); }}>
         {/* 左侧栏 */}
         <div className={`${mobileView === 'sidebar' ? 'block' : 'hidden'} md:block md:w-80 w-full bg-white border-r flex flex-col absolute md:relative z-10 h-full`}>
+          {/* ... 原有左侧栏内容 ... */}
           <div className="p-3 border-b">
             <div className="flex gap-2 mb-2">
               <input
@@ -786,11 +787,11 @@ export default function Chat() {
           </div>
         </div>
 
-        {/* 右侧聊天窗 - 标准 Flex 布局 */}
-        <div className={`${mobileView === 'chat' ? 'block' : 'hidden'} md:block flex-1 flex flex-col h-full`}>
+        {/* 右侧聊天窗 - 独立高度，不依赖 h-full */}
+        <div className={`${mobileView === 'chat' ? 'block' : 'hidden'} md:block flex-1 flex flex-col`} style={{ height: 'calc(100vh - 56px)' }}>
           {selectedChat ? (
             <>
-              {/* 顶部栏 - 固定高度 */}
+              {/* 顶部栏 */}
               <div className="flex-shrink-0 bg-white border-b px-4 py-3 flex items-center gap-3" style={{ height: '56px' }}>
                 <button onClick={goBack} className="md:hidden text-gray-500 mr-2">←</button>
                 <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold">
@@ -830,7 +831,7 @@ export default function Chat() {
                 </div>
               )}
 
-              {/* 消息列表 - 弹性填充剩余空间 */}
+              {/* 消息列表 */}
               <div
                 ref={scrollContainerRef}
                 onScroll={handleScroll}
@@ -930,7 +931,7 @@ export default function Chat() {
                 )}
               </div>
 
-              {/* 输入框 - 固定在底部 */}
+              {/* 输入框 */}
               <div className="flex-shrink-0 p-3 bg-white border-t">
                 <div className="h-full flex items-center gap-2">
                   <button onClick={() => setInputMode(inputMode === 'text' ? 'voice' : 'text')} className="text-gray-400 hover:text-gray-600 p-2">
@@ -1004,6 +1005,7 @@ export default function Chat() {
           )}
         </div>
 
+        {/* 弹窗等保持不变 */}
         {/* 创建群聊弹窗 */}
         {showGroupModal && (
           <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
