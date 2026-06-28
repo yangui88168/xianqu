@@ -100,7 +100,7 @@ export default function Profile() {
     };
     document.body.appendChild(script);
     return () => { document.body.removeChild(script); };
-  }, [widgetPurpose]); // 注意：widgetPurpose 变化时重新创建 Widget 以绑定最新回调
+  }, [widgetPurpose]);
 
   const saveProfile = async () => {
     const token = localStorage.getItem('token');
@@ -323,6 +323,33 @@ export default function Profile() {
 
       {/* 设置中心 */}
       <div className="bg-white mt-3">
+        {/* 新增：我的动态 */}
+        <button onClick={() => router.push('/zhihui/space')} className="w-full flex items-center justify-between px-5 py-3 border-b border-gray-100 hover:bg-gray-50">
+          <div className="flex items-center gap-3">
+            <span className="text-lg">📝</span>
+            <span className="text-sm text-gray-700">我的动态</span>
+          </div>
+          <svg className="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" /></svg>
+        </button>
+
+        {/* 新增：我的频道 */}
+        <button onClick={() => router.push('/zhihui/channel')} className="w-full flex items-center justify-between px-5 py-3 border-b border-gray-100 hover:bg-gray-50">
+          <div className="flex items-center gap-3">
+            <span className="text-lg">📺</span>
+            <span className="text-sm text-gray-700">我的频道</span>
+          </div>
+          <svg className="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" /></svg>
+        </button>
+
+        {/* 新增：我的社区 */}
+        <button onClick={() => router.push('/zhihui/community')} className="w-full flex items-center justify-between px-5 py-3 border-b border-gray-100 hover:bg-gray-50">
+          <div className="flex items-center gap-3">
+            <span className="text-lg">🏘️</span>
+            <span className="text-sm text-gray-700">我的社区</span>
+          </div>
+          <svg className="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" /></svg>
+        </button>
+
         <button onClick={() => setShowPasswordModal(true)} className="w-full flex items-center justify-between px-5 py-3 border-b border-gray-100 hover:bg-gray-50">
           <div className="flex items-center gap-3">
             <span className="text-lg">🔒</span>
