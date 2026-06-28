@@ -3,14 +3,13 @@
 @tailwind utilities;
 
 html {
-  font-size: 14px; /* 缩小基准字体，增加信息密度 */
+  font-size: 14px;
 }
 
 body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* 统一卡片和按钮的轻微圆角 */
 .rounded-card {
   border-radius: 12px;
 }
