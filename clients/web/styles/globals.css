@@ -16,18 +16,5 @@ body {
 
 html, body, #__next {
   height: 100%;
-  overflow: hidden !important;
-}
-
-/* 强制所有容器不产生滚动条 */
-* {
-  overflow-x: hidden !important;
-  overflow-y: visible !important;
-}
-
-/* 但保留消息区域的滚动能力 */
-.chat-messages,
-#message-container,
-[data-scroll-container] {
-  overflow-y: auto !important;
+  /* 移除 overflow: hidden，让各页面自行管理滚动 */
 }
