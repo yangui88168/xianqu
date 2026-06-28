@@ -27,6 +27,9 @@ export default function Profile() {
   // 注销账号相关
   const [showDeleteModal, setShowDeleteModal] = useState(false);
 
+  // 记录当前上传用途：'avatar' 或 'bg'
+  const [widgetPurpose, setWidgetPurpose] = useState<'avatar' | 'bg'>('avatar');
+
   const router = useRouter();
   const cloudinaryRef = useRef<any>();
   const widgetRef = useRef<any>();
@@ -59,7 +62,7 @@ export default function Profile() {
     fetch(`${API}/badge/mine`, { headers: { Authorization: `Bearer ${token}` } }).then(res => res.json()).then(setBadges);
   }, [router]);
 
-  // 初始化 Cloudinary Widget
+  // 初始化 Cloudinary Widget（根据用途切换回调）
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const script = document.createElement('script');
@@ -78,20 +81,26 @@ export default function Profile() {
         (error: any, result: any) => {
           if (!error && result && result.event === 'success') {
             const url = result.info.secure_url;
-            setAvatar(url);
-            const token = localStorage.getItem('token');
-            fetch(`${API}/user/profile`, {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-              body: JSON.stringify({ avatar: url }),
-            });
+            if (widgetPurpose === 'bg') {
+              localStorage.setItem('customBg', url);
+              window.location.reload(); // 刷新应用背景
+            } else {
+              // 默认作为头像处理
+              setAvatar(url);
+              const token = localStorage.getItem('token');
+              fetch(`${API}/user/profile`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify({ avatar: url }),
+              });
+            }
           }
         }
       );
     };
     document.body.appendChild(script);
     return () => { document.body.removeChild(script); };
-  }, []);
+  }, [widgetPurpose]); // 注意：widgetPurpose 变化时重新创建 Widget 以绑定最新回调
 
   const saveProfile = async () => {
     const token = localStorage.getItem('token');
@@ -197,7 +206,7 @@ export default function Profile() {
         <div className="flex items-center gap-4">
           <div
             className="w-16 h-16 rounded-full flex items-center justify-center text-white text-2xl font-bold overflow-hidden cursor-pointer bg-blue-500"
-            onClick={() => widgetRef.current?.open()}
+            onClick={() => { setWidgetPurpose('avatar'); widgetRef.current?.open(); }}
           >
             {avatar ? (
               <img src={avatar} alt="头像" className="w-full h-full object-cover" />
@@ -323,6 +332,21 @@ export default function Profile() {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
           </svg>
         </button>
+
+        {/* 自定义背景上传 */}
+        <button
+          onClick={() => { setWidgetPurpose('bg'); widgetRef.current?.open(); }}
+          className="w-full flex items-center justify-between px-5 py-3 border-b border-gray-100 hover:bg-gray-50"
+        >
+          <div className="flex items-center gap-3">
+            <span className="text-lg">🎨</span>
+            <span className="text-sm text-gray-700">自定义背景</span>
+          </div>
+          <svg className="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
+          </svg>
+        </button>
+
         <button onClick={() => alert('隐私设置开发中')} className="w-full flex items-center justify-between px-5 py-3 border-b border-gray-100 hover:bg-gray-50">
           <div className="flex items-center gap-3">
             <span className="text-lg">🔐</span>
