@@ -16,5 +16,5 @@ body {
 
 html, body, #__next {
   height: 100%;
-  /* 移除 overflow: hidden，让各页面自行管理滚动 */
+  overflow: hidden;
 }
