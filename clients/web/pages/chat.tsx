@@ -785,12 +785,12 @@ export default function Chat() {
         </div>
       </div>
 
-      {/* 右侧聊天窗 - 绝对定位布局 */}
-      <div className={`${mobileView === 'chat' ? 'block' : 'hidden'} md:block flex-1 relative`}>
+      {/* 右侧聊天窗 - 标准 Flex 布局 */}
+      <div className={`${mobileView === 'chat' ? 'block' : 'hidden'} md:block flex-1 flex flex-col h-full`}>
         {selectedChat ? (
           <>
-            {/* 顶部栏 - 绝对定位在顶部 */}
-            <div className="absolute top-0 left-0 right-0 z-10 bg-white border-b px-4 py-3 flex items-center gap-3" style={{ height: '56px' }}>
+            {/* 顶部栏 - 固定高度 */}
+            <div className="flex-shrink-0 bg-white border-b px-4 py-3 flex items-center gap-3" style={{ height: '56px' }}>
               <button onClick={goBack} className="md:hidden text-gray-500 mr-2">←</button>
               <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold">
                 {selectedChat.type === 'group' ? '#' : (selectedChat.data.nickname || selectedChat.data.username)[0]}
@@ -821,12 +821,19 @@ export default function Chat() {
               </div>
             </div>
 
-            {/* 消息列表 - 绝对定位在顶部栏和输入框之间，根据是否有回复栏动态调整底部距离 */}
+            {/* 回复提示栏 */}
+            {replyingTo && (
+              <div className="flex-shrink-0 bg-gray-200 px-4 py-2 text-sm flex justify-between items-center">
+                <span>回复 {(replyingTo.sender?.nickname || replyingTo.sender?.username || '用户')}：{replyingTo.content?.substring(0, 50)}</span>
+                <button onClick={() => setReplyingTo(null)} className="text-red-500">✕</button>
+              </div>
+            )}
+
+            {/* 消息列表 - 弹性填充剩余空间 */}
             <div
               ref={scrollContainerRef}
               onScroll={handleScroll}
-              className="absolute left-0 right-0 overflow-y-auto p-4 bg-gray-50"
-              style={{ top: '56px', bottom: replyingTo ? '100px' : '60px' }}
+              className="flex-1 min-h-0 overflow-y-auto p-4 bg-gray-50"
             >
               {isLoadingChat ? (
                 <div className="flex items-center justify-center h-full">
@@ -922,17 +929,9 @@ export default function Chat() {
               )}
             </div>
 
-            {/* 回复提示栏 - 绝对定位在输入框上方 */}
-            {replyingTo && (
-              <div className="absolute left-0 right-0 z-10 bg-gray-200 px-4 py-2 text-sm flex justify-between items-center" style={{ bottom: '60px' }}>
-                <span>回复 {(replyingTo.sender?.nickname || replyingTo.sender?.username || '用户')}：{replyingTo.content?.substring(0, 50)}</span>
-                <button onClick={() => setReplyingTo(null)} className="text-red-500">✕</button>
-              </div>
-            )}
-
-            {/* 输入框 - 绝对定位在底部 */}
-            <div className="absolute bottom-0 left-0 right-0 z-10 bg-white border-t" style={{ height: '60px' }}>
-              <div className="p-3 h-full flex items-center gap-2">
+            {/* 输入框 - 固定在底部 */}
+            <div className="flex-shrink-0 p-3 bg-white border-t">
+              <div className="h-full flex items-center gap-2">
                 <button onClick={() => setInputMode(inputMode === 'text' ? 'voice' : 'text')} className="text-gray-400 hover:text-gray-600 p-2">
                   {inputMode === 'text' ? '🎤' : '⌨️'}
                 </button>
@@ -995,7 +994,7 @@ export default function Chat() {
             </div>
           </>
         ) : (
-          <div className="flex-1 flex items-center justify-center text-gray-400 h-full">
+          <div className="flex-1 flex items-center justify-center text-gray-400">
             <div className="text-center">
               <div className="text-6xl mb-4">💬</div>
               <p className="text-lg">选择一个会话开始聊天</p>
