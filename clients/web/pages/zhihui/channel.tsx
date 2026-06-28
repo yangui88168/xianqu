@@ -7,6 +7,9 @@ const API = 'https://xianqu-server.onrender.com';
 // 频道列表组件
 function ChannelList({ onSelect }: { onSelect: (id: string) => void }) {
   const [channels, setChannels] = useState<any[]>([]);
+  const [showCreate, setShowCreate] = useState(false);
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -15,9 +18,59 @@ function ChannelList({ onSelect }: { onSelect: (id: string) => void }) {
       .then(setChannels);
   }, []);
 
+  const createChannel = async () => {
+    if (!name.trim()) return;
+    const token = localStorage.getItem('token');
+    const res = await fetch(`${API}/channel/create`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ name, description }),
+    });
+    if (res.ok) {
+      setShowCreate(false);
+      setName('');
+      setDescription('');
+      // 刷新频道列表
+      const listRes = await fetch(`${API}/channel/list`, { headers: { Authorization: `Bearer ${token}` } });
+      if (listRes.ok) setChannels(await listRes.json());
+    }
+  };
+
   return (
     <div className="p-4">
-      <h2 className="text-lg font-bold mb-4">频道列表</h2>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-lg font-bold">频道列表</h2>
+        <button
+          onClick={() => setShowCreate(!showCreate)}
+          className="text-sm bg-blue-500 text-white px-3 py-1 rounded-full"
+        >
+          创建
+        </button>
+      </div>
+
+      {showCreate && (
+        <div className="bg-white rounded-xl shadow p-4 mb-4">
+          <input
+            className="w-full border p-2 rounded mb-2 text-sm"
+            placeholder="频道名称"
+            value={name}
+            onChange={e => setName(e.target.value)}
+          />
+          <input
+            className="w-full border p-2 rounded mb-2 text-sm"
+            placeholder="简介（可选）"
+            value={description}
+            onChange={e => setDescription(e.target.value)}
+          />
+          <button
+            onClick={createChannel}
+            className="bg-green-500 text-white px-4 py-1 rounded-full text-sm"
+          >
+            确认创建
+          </button>
+        </div>
+      )}
+
       {channels.map((ch: any) => (
         <button
           key={ch.id}
