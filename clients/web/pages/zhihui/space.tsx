@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 
-const API = 'https://xianqu-server.onrender.com';
+const API = 'https://onrender.com';
 
 export default function Space() {
   const [userId, setUserId] = useState('');
@@ -16,11 +16,16 @@ export default function Space() {
   // 获取用户ID
   useEffect(() => {
     const token = localStorage.getItem('token');
-    if (!token) { router.push('/'); return; }
+    if (!token) {
+      router.push('/');
+      return;
+    }
     try {
       const payload = JSON.parse(atob(token.split('.')[1]));
       setUserId(payload.userId);
-    } catch { router.push('/'); }
+    } catch {
+      router.push('/');
+    }
   }, [router]);
 
   // 加载动态流
@@ -43,7 +48,10 @@ export default function Space() {
     const token = localStorage.getItem('token');
     await fetch(`${API}/star/post`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`
+      },
       body: JSON.stringify({ content, imageUrl, permission }),
     });
     setContent('');
@@ -57,7 +65,10 @@ export default function Space() {
     const token = localStorage.getItem('token');
     const res = await fetch(`${API}/star/like`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`
+      },
       body: JSON.stringify({ postId }),
     });
     if (res.ok) {
@@ -68,7 +79,10 @@ export default function Space() {
           return {
             ...p,
             likes: liked ? [...likes, { userId }] : likes.filter((l: any) => l.userId !== userId),
-            _count: { ...p._count, likes: liked ? p._count.likes + 1 : Math.max(0, p._count.likes - 1) },
+            _count: {
+              ...p._count,
+              likes: liked ? p._count.likes + 1 : Math.max(0, p._count.likes - 1)
+            },
           };
         }
         return p;
@@ -81,7 +95,10 @@ export default function Space() {
     const token = localStorage.getItem('token');
     await fetch(`${API}/star/comment`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`
+      },
       body: JSON.stringify({ postId, content: text }),
     });
     loadFeed();
@@ -128,7 +145,10 @@ export default function Space() {
                 <option value="friends">好友可见</option>
                 <option value="private">仅自己</option>
               </select>
-              <button onClick={publish} className="ml-auto bg-green-500 text-white px-4 py-1 rounded-full text-sm">
+              <button
+                onClick={publish}
+                className="ml-auto bg-green-500 text-white px-4 py-1 rounded-full text-sm"
+              >
                 发布
               </button>
             </div>
@@ -145,9 +165,10 @@ export default function Space() {
         ) : (
           feed.map((post: any) => (
             <div key={post.id} className="bg-white p-4 border-b">
+              {/* 用户信息栏 */}
               <div className="flex items-center gap-3 mb-2">
                 <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white text-xs">
-                  {(post.user?.nickname || post.user?.username)[0]}
+                  {(post.user?.nickname || post.user?.username || '匿')[0]}
                 </div>
                 <span className="font-medium text-sm">{post.user?.nickname || post.user?.username}</span>
                 <span className="text-xs text-gray-400 ml-auto">
@@ -156,24 +177,54 @@ export default function Space() {
                   {new Date(post.createdAt).toLocaleDateString()}
                 </span>
               </div>
+
+              {/* 动态内容 */}
               <p className="text-sm text-gray-800">{post.content}</p>
               {post.imageUrl && (
                 <img src={post.imageUrl} alt="" className="mt-2 rounded max-w-full max-h-60 object-cover" />
               )}
+
+              {/* 操作栏 */}
               <div className="flex items-center gap-4 mt-3 text-gray-500 text-xs">
                 <button onClick={() => toggleLike(post.id)} className="flex items-center gap-1">
                   ❤️ {post._count?.likes || 0}
                 </button>
+                
+                {/* 删除按钮：仅在动态拥有者为当前登录用户时显示 */}
+                {post.userId === userId && (
+                  <button
+                    onClick={() => {
+                      if (confirm('确定删除这条动态吗？')) {
+                        const token = localStorage.getItem('token');
+                        fetch(`${API}/star/post/${post.id}`, {
+                          method: 'DELETE',
+                          headers: { Authorization: `Bearer ${token}` },
+                        }).then((res) => {
+                          if (res.ok) {
+                            // 从本地状态移除
+                            setFeed(prev => prev.filter(p => p.id !== post.id));
+                          }
+                        });
+                      }
+                    }}
+                    className="text-red-400 hover:text-red-600 text-xs"
+                  >
+                    删除
+                  </button>
+                )}
+
                 <button
                   onClick={() => {
                     const text = prompt('输入评论：');
                     if (text) postComment(post.id, text);
                   }}
-                  className="flex items-center gap-1"
+                  className="flex items-center gap-1 ml-auto"
                 >
                   💬 {post._count?.comments || 0}
                 </button>
               </div>
+
+              {/* 评论列表 */}
               {post.comments?.length > 0 && (
                 <div className="mt-2 bg-gray-50 rounded p-2">
                   {post.comments.map((c: any) => (
