@@ -43,8 +43,8 @@ export default function App({ Component, pageProps }: AppProps) {
           padding: 0;
         }
       `}</style>
-      <div className="max-w-5xl mx-auto h-dvh flex flex-col shadow-2xl bg-white relative overflow-hidden">
-        <div className="flex-1 min-h-0 relative">
+      <div className="h-dvh flex flex-col max-w-5xl mx-auto shadow-2xl bg-white overflow-hidden">
+        <div className="flex-1 min-h-0">
           <Component {...pageProps} />
         </div>
         <nav className="flex-shrink-0 flex items-center justify-around bg-white border-t shadow-lg" style={{ height: '56px' }}>
