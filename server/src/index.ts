@@ -10,7 +10,8 @@ import { starRoutes } from './modules/star';
 import { searchRoutes } from './modules/search';
 import { taskRoutes } from './modules/task';
 import { badgeRoutes } from './modules/badge';
-import { channelRoutes } from './modules/channel'; // 导入新增的频道模块
+import { channelRoutes } from './modules/channel';
+import { communityRoutes } from './modules/community';
 import { wsHandler } from './websocket';
 
 export const app = Fastify({ logger: true });
@@ -26,7 +27,8 @@ app.register(starRoutes, { prefix: '/star' });
 app.register(searchRoutes, { prefix: '/search' });
 app.register(taskRoutes, { prefix: '/task' });
 app.register(badgeRoutes, { prefix: '/badge' });
-app.register(channelRoutes, { prefix: '/channel' }); // 注册频道模块路由
+app.register(channelRoutes, { prefix: '/channel' });
+app.register(communityRoutes, { prefix: '/community' });
 
 app.register(async (fastify) => {
   fastify.get('/ws', { websocket: true }, wsHandler);
