@@ -176,4 +176,25 @@ export async function userRoutes(fastify: FastifyInstance) {
       level: userExp?.level || 1,
     });
   });
+
+  // 获取隐私与通知设置（/settings 路径）
+  fastify.get('/settings', { preHandler: authMiddleware }, async (request, reply) => {
+    const userId = (request as any).userId;
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { allowFriendRequest: true, allowSearch: true, notifyMessage: true, notifyCall: true, notifyPost: true },
+    });
+    reply.send(user);
+  });
+
+  // 更新隐私与通知设置（/settings 路径）
+  fastify.put('/settings', { preHandler: authMiddleware }, async (request, reply) => {
+    const userId = (request as any).userId;
+    const { allowFriendRequest, allowSearch, notifyMessage, notifyCall, notifyPost } = request.body as any;
+    await prisma.user.update({
+      where: { id: userId },
+      data: { allowFriendRequest, allowSearch, notifyMessage, notifyCall, notifyPost },
+    });
+    reply.send({ success: true });
+  });
 }
