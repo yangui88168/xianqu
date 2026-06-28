@@ -14,7 +14,6 @@ export default function App({ Component, pageProps }: AppProps) {
   const router = useRouter();
   const currentPath = router.pathname;
 
-  // 登录页不显示底部导航和居中容器
   if (currentPath === '/') {
     return (
       <>
@@ -33,7 +32,6 @@ export default function App({ Component, pageProps }: AppProps) {
         <link rel="icon" href="data:," />
         <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/twemoji-colr-font@14.0.2/twemoji.css" />
       </Head>
-      {/* 修复高度继承：强制 html、body、#__next 占满全高 */}
       <style jsx global>{`
         html,
         body,
@@ -53,9 +51,7 @@ export default function App({ Component, pageProps }: AppProps) {
               key={tab.path}
               onClick={() => router.push(tab.path)}
               className={`flex-1 py-3 flex flex-col items-center text-xs ${
-                currentPath.startsWith(tab.path)
-                  ? 'text-blue-500'
-                  : 'text-gray-500'
+                currentPath.startsWith(tab.path) ? 'text-blue-500' : 'text-gray-500'
               }`}
             >
               <span className="text-xl">{tab.icon}</span>
