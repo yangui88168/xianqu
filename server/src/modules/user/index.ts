@@ -72,4 +72,94 @@ export async function userRoutes(fastify: FastifyInstance) {
     await prisma.favorite.create({ data: { userId, type, targetId, content } });
     reply.send({ success: true });
   });
+
+  // 每日签到
+  fastify.post('/signin', { preHandler: authMiddleware }, async (request, reply) => {
+    const userId = (request as any).userId;
+    const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+
+    // 检查今日是否已签到
+    const existing = await prisma.userSignin.findUnique({
+      where: { userId_date: { userId, date: new Date(today) } },
+    });
+    if (existing) return reply.status(400).send({ error: '今日已签到' });
+
+    // 创建签到记录
+    await prisma.userSignin.create({
+      data: { userId, date: new Date(today) },
+    });
+
+    // 计算连续签到天数
+    const allSignins = await prisma.userSignin.findMany({
+      where: { userId },
+      orderBy: { date: 'desc' },
+      select: { date: true },
+    });
+    let streak = 0;
+    const todayDate = new Date(today);
+    for (const s of allSignins) {
+      const sDate = new Date(s.date);
+      const diffDays = Math.round((todayDate.getTime() - sDate.getTime()) / (1000 * 60 * 60 * 24));
+      if (diffDays === streak) {
+        streak++;
+      } else {
+        break;
+      }
+    }
+
+    // 获得经验值（基础10，连续签到额外奖励）
+    const expGain = 10 + streak * 2; // 连续签到每天多2点
+    await prisma.userExp.upsert({
+      where: { userId },
+      update: { exp: { increment: expGain } },
+      create: { userId, exp: expGain },
+    });
+
+    // 更新等级（每100经验升1级）
+    const userExp = await prisma.userExp.findUnique({ where: { userId } });
+    const newLevel = Math.floor((userExp?.exp || 0) / 100) + 1;
+    if (userExp && userExp.level !== newLevel) {
+      await prisma.userExp.update({ where: { userId }, data: { level: newLevel } });
+    }
+
+    reply.send({
+      success: true,
+      expGain,
+      streak,
+      totalExp: userExp?.exp || 0,
+      level: newLevel,
+    });
+  });
+
+  // 获取签到状态
+  fastify.get('/signin/status', { preHandler: authMiddleware }, async (request, reply) => {
+    const userId = (request as any).userId;
+    const today = new Date().toISOString().slice(0, 10);
+    const existing = await prisma.userSignin.findUnique({
+      where: { userId_date: { userId, date: new Date(today) } },
+    });
+    const allSignins = await prisma.userSignin.findMany({
+      where: { userId },
+      orderBy: { date: 'desc' },
+      select: { date: true },
+    });
+    let streak = 0;
+    const todayDate = new Date(today);
+    for (const s of allSignins) {
+      const sDate = new Date(s.date);
+      const diffDays = Math.round((todayDate.getTime() - sDate.getTime()) / (1000 * 60 * 60 * 24));
+      if (diffDays === streak) {
+        streak++;
+      } else {
+        break;
+      }
+    }
+    const userExp = await prisma.userExp.findUnique({ where: { userId } });
+    reply.send({
+      signedToday: !!existing,
+      streak,
+      exp: userExp?.exp || 0,
+      level: userExp?.level || 1,
+    });
+  });
 }
