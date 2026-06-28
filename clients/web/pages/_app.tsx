@@ -13,10 +13,12 @@ const tabs = [
 
 export default function App({ Component, pageProps }: AppProps) {
   const router = useRouter();
+  const [mounted, setMounted] = useState(false);
   const [customBg, setCustomBg] = useState('');
 
-  // ✅ 所有 localStorage 操作都在客户端执行，且加保护
+  // ✅ 客户端挂载标志，防止服务端执行任何渲染
   useEffect(() => {
+    setMounted(true);
     if (typeof window !== 'undefined') {
       try {
         const bg = localStorage.getItem('customBg');
@@ -25,15 +27,24 @@ export default function App({ Component, pageProps }: AppProps) {
     }
   }, []);
 
+  // 登录页直接渲染（不影响构建）
   if (router.pathname === '/') {
     return <Component {...pageProps} />;
+  }
+
+  // 服务端或未挂载时返回占位（避免预渲染错误）
+  if (!mounted) {
+    return (
+      <div className="h-dvh flex items-center justify-center bg-gray-50">
+        <p className="text-gray-400">加载中...</p>
+      </div>
+    );
   }
 
   const isActive = (path: string) => router.pathname.startsWith(path);
 
   return (
     <div className="max-w-5xl mx-auto h-dvh flex flex-col shadow-soft bg-white/80 backdrop-blur-md overflow-hidden relative">
-      {/* 自定义背景仅客户端渲染 */}
       {customBg && (
         <div
           className="absolute inset-0 bg-cover bg-center opacity-10 pointer-events-none z-0"
