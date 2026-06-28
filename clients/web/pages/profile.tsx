@@ -3,22 +3,6 @@ import { useRouter } from 'next/router';
 
 const API = 'https://xianqu-server.onrender.com';
 
-const TASK_CONFIG: any = {
-  send_message: { desc: '发送一条消息' },
-  add_friend: { desc: '添加一个好友' },
-  make_call: { desc: '发起一次通话' },
-  create_group: { desc: '创建一个群聊' },
-  publish_post: { desc: '发布一条动态' },
-};
-
-const STATUS_LIST = ['online', 'busy', 'dnd', 'away', 'invisible'];
-const STATUS_ICON: Record<string, string> = {
-  online: '🟢', busy: '🟠', dnd: '🔴', away: '🟡', invisible: '⚫',
-};
-const STATUS_TEXT: Record<string, string> = {
-  online: '在线', busy: '忙碌', dnd: '勿扰', away: '离开', invisible: '隐身',
-};
-
 export default function Profile() {
   const [user, setUser] = useState<any>(null);
   const [editing, setEditing] = useState(false);
@@ -29,11 +13,12 @@ export default function Profile() {
   const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
 
+  // 签到相关
   const [signedToday, setSignedToday] = useState(false);
   const [streak, setStreak] = useState(0);
   const [exp, setExp] = useState(0);
   const [level, setLevel] = useState(1);
-
+  const [tasks, setTasks] = useState<any[]>([]);
   const [badges, setBadges] = useState<any[]>([]);
   const [favorites, setFavorites] = useState<any[]>([]);
   const [showFavorites, setShowFavorites] = useState(false);
@@ -43,22 +28,10 @@ export default function Profile() {
   const cloudinaryRef = useRef<any>();
   const widgetRef = useRef<any>();
 
-  const cycleStatus = async () => {
-    const idx = STATUS_LIST.indexOf(currentStatus);
-    const nextIdx = (idx + 1) % STATUS_LIST.length;
-    const newStatus = STATUS_LIST[nextIdx];
-    const token = localStorage.getItem('token');
-    const res = await fetch(`${API}/user/status`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ status: newStatus }),
-    });
-    if (res.ok) setCurrentStatus(newStatus);
-  };
-
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (!token) { router.push('/'); return; }
+    // 获取用户资料
     fetch(`${API}/user/profile`, { headers: { Authorization: `Bearer ${token}` } })
       .then(res => res.json())
       .then(data => {
@@ -69,6 +42,7 @@ export default function Profile() {
         setCurrentStatus(data.status || 'online');
       })
       .catch(() => router.push('/'));
+    // 获取签到状态
     fetch(`${API}/user/signin/status`, { headers: { Authorization: `Bearer ${token}` } })
       .then(res => res.json())
       .then(data => {
@@ -77,9 +51,12 @@ export default function Profile() {
         setExp(data.exp);
         setLevel(data.level);
       });
-    loadBadges();
+    // 任务、勋章、收藏
+    fetch(`${API}/task/daily`, { headers: { Authorization: `Bearer ${token}` } }).then(res => res.json()).then(setTasks);
+    fetch(`${API}/badge/mine`, { headers: { Authorization: `Bearer ${token}` } }).then(res => res.json()).then(setBadges);
   }, [router]);
 
+  // 初始化 Cloudinary Widget
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const script = document.createElement('script');
@@ -160,10 +137,14 @@ export default function Profile() {
     }
   };
 
-  const loadBadges = async () => {
+  const changeStatus = async (newStatus: string) => {
     const token = localStorage.getItem('token');
-    const res = await fetch(`${API}/badge/mine`, { headers: { Authorization: `Bearer ${token}` } });
-    if (res.ok) setBadges(await res.json());
+    const res = await fetch(`${API}/user/status`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ status: newStatus }),
+    });
+    if (res.ok) setCurrentStatus(newStatus);
   };
 
   const loadFavorites = async () => {
@@ -175,13 +156,13 @@ export default function Profile() {
     }
   };
 
-  const deleteFavorite = async (favoriteId: string) => {
+  const deleteFavorite = async (favId: string) => {
     const token = localStorage.getItem('token');
-    const res = await fetch(`${API}/user/favorite/${favoriteId}`, {
+    await fetch(`${API}/user/favorite/${favId}`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${token}` },
     });
-    if (res.ok) setFavorites(prev => prev.filter(fav => fav.id !== favoriteId));
+    setFavorites(prev => prev.filter(f => f.id !== favId));
   };
 
   const logout = () => {
@@ -192,7 +173,7 @@ export default function Profile() {
   if (!user) return <div className="p-8 text-center text-gray-400">加载中...</div>;
 
   return (
-    <div className="h-full overflow-y-auto bg-gray-50">
+    <div className="flex flex-col h-full overflow-y-auto bg-gray-50">
       {/* 头部信息 */}
       <div className="bg-white p-6 border-b">
         <div className="flex items-center gap-4">
@@ -221,15 +202,6 @@ export default function Profile() {
                 <h2 className="text-xl font-bold">{user.nickname || user.username}</h2>
                 <p className="text-gray-500 text-sm">{user.signature || '这个人很懒，什么都没写'}</p>
                 <p className="text-gray-400 text-xs mt-1">UID: {user.id}</p>
-                <div className="mt-2">
-                  <button onClick={cycleStatus} className="flex items-center gap-1 px-3 py-1 bg-gray-100 rounded-full text-xs hover:bg-gray-200">
-                    <span>{STATUS_ICON[currentStatus]}</span>
-                    <span>{STATUS_TEXT[currentStatus]}</span>
-                    <svg className="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 10l5 5 5-5" />
-                    </svg>
-                  </button>
-                </div>
               </>
             )}
           </div>
@@ -241,27 +213,31 @@ export default function Profile() {
         )}
       </div>
 
-      {/* 成长值 */}
+      {/* 状态切换 */}
+      <div className="bg-white mt-3 px-5 py-3 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <span className="text-lg">🟢</span>
+          <div>
+            <span className="text-sm font-medium text-gray-700">在线状态</span>
+            <p className="text-xs text-gray-400">{currentStatus === 'online' ? '在线' : currentStatus === 'busy' ? '忙碌' : currentStatus === 'dnd' ? '勿扰' : currentStatus === 'away' ? '离开' : '隐身'}</p>
+          </div>
+        </div>
+        <select value={currentStatus} onChange={(e) => changeStatus(e.target.value)} className="text-xs border rounded px-2 py-1">
+          <option value="online">在线</option>
+          <option value="busy">忙碌</option>
+          <option value="dnd">勿扰</option>
+          <option value="away">离开</option>
+          <option value="invisible">隐身</option>
+        </select>
+      </div>
+
+      {/* 成长值 + 签到 */}
       <div className="bg-white mt-3 px-5 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <span className="text-lg">⭐</span>
           <div>
             <span className="text-sm font-medium text-gray-700">成长值</span>
             <p className="text-xs text-gray-400">LV{level} · {exp} 经验值</p>
-          </div>
-        </div>
-        <svg className="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
-        </svg>
-      </div>
-
-      {/* 每日签到 */}
-      <div className="bg-white mt-3 px-5 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <span className="text-lg">📅</span>
-          <div>
-            <span className="text-sm font-medium text-gray-700">每日签到</span>
-            <p className="text-xs text-gray-400">{signedToday ? `已签到 · 连续${streak}天` : '今日未签到'}</p>
           </div>
         </div>
         <button
@@ -273,7 +249,7 @@ export default function Profile() {
         </button>
       </div>
 
-      {/* 我的勋章 */}
+      {/* 勋章 */}
       <div className="bg-white mt-3 px-5 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <span className="text-lg">🏅</span>
@@ -290,38 +266,33 @@ export default function Profile() {
         </div>
       </div>
 
-      {/* 我的收藏 */}
-      <div className="bg-white mt-3">
-        <button
-          onClick={loadFavorites}
-          className="w-full flex items-center justify-between px-5 py-3 border-b border-gray-100 hover:bg-gray-50"
-        >
-          <div className="flex items-center gap-3">
-            <span className="text-lg">❤️</span>
+      {/* 收藏 */}
+      <div className="bg-white mt-3 px-5 py-3 flex items-center justify-between cursor-pointer" onClick={loadFavorites}>
+        <div className="flex items-center gap-3">
+          <span className="text-lg">📌</span>
+          <div>
             <span className="text-sm font-medium text-gray-700">我的收藏</span>
+            <p className="text-xs text-gray-400">{showFavorites ? `${favorites.length} 条` : '点击查看'}</p>
           </div>
-          <div className="flex items-center gap-1">
-            <span className="text-xs text-gray-400">{showFavorites ? `${favorites.length} 条` : '点击查看'}</span>
-            <svg className="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
-            </svg>
-          </div>
-        </button>
-        {showFavorites && (
-          <div className="max-h-40 overflow-y-auto bg-gray-50">
-            {favorites.length === 0 ? (
-              <p className="text-center text-gray-400 text-sm py-4">暂无收藏</p>
-            ) : (
-              favorites.map((fav: any) => (
-                <div key={fav.id} className="flex items-center justify-between px-5 py-2 border-b text-sm">
-                  <span className="text-gray-600 truncate flex-1">{fav.content || fav.targetId}</span>
-                  <button onClick={() => deleteFavorite(fav.id)} className="text-red-500 text-xs ml-2 hover:underline">删除</button>
-                </div>
-              ))
-            )}
-          </div>
-        )}
+        </div>
+        <svg className="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
+        </svg>
       </div>
+      {showFavorites && (
+        <div className="bg-white px-5 py-2 max-h-40 overflow-y-auto border-t">
+          {favorites.length === 0 ? (
+            <p className="text-xs text-gray-400 text-center py-2">暂无收藏</p>
+          ) : (
+            favorites.map((fav: any) => (
+              <div key={fav.id} className="flex justify-between items-center py-1 border-b last:border-b-0">
+                <span className="text-xs text-gray-600 truncate">{fav.content || fav.targetId}</span>
+                <button onClick={() => deleteFavorite(fav.id)} className="text-red-500 text-xs ml-2">删除</button>
+              </div>
+            ))
+          )}
+        </div>
+      )}
 
       {/* 设置中心 */}
       <div className="bg-white mt-3">
@@ -354,12 +325,14 @@ export default function Profile() {
         </button>
       </div>
 
+      {/* 退出登录 */}
       <div className="mt-3 bg-white">
         <button onClick={logout} className="w-full px-5 py-3 text-red-500 text-sm font-medium hover:bg-gray-50">
           退出登录
         </button>
       </div>
 
+      {/* 密码修改弹窗 */}
       {showPasswordModal && (
         <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50" onClick={() => setShowPasswordModal(false)}>
           <div className="bg-white p-5 rounded shadow-lg w-80" onClick={e => e.stopPropagation()}>
