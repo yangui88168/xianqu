@@ -200,4 +200,77 @@ export async function contactRoutes(fastify: FastifyInstance) {
     });
     reply.send(blocked.map(b => b.blocked));
   });
+
+  // 获取共同好友
+  fastify.get('/mutual/:userId', { preHandler: authMiddleware }, async (request, reply) => {
+    const currentUserId = (request as any).userId;
+    const otherUserId = (request.params as any).userId;
+
+    // 我的好友ID列表
+    const myFriends = await prisma.friendship.findMany({
+      where: { userId: currentUserId },
+      select: { friendId: true },
+    });
+    const myFriendIds = myFriends.map(f => f.friendId);
+
+    // 对方的好友ID列表
+    const otherFriends = await prisma.friendship.findMany({
+      where: { userId: otherUserId },
+      select: { friendId: true },
+    });
+    const otherFriendIds = otherFriends.map(f => f.friendId);
+
+    // 交集
+    const mutualIds = myFriendIds.filter(id => otherFriendIds.includes(id));
+
+    // 获取共同好友信息
+    const mutualUsers = await prisma.user.findMany({
+      where: { id: { in: mutualIds } },
+      select: { id: true, nickname: true, username: true, avatar: true },
+    });
+
+    reply.send(mutualUsers);
+  });
+
+  // 好友推荐（简单推荐：有共同好友的用户）
+  fastify.get('/recommend', { preHandler: authMiddleware }, async (request, reply) => {
+    const userId = (request as any).userId;
+
+    // 我的好友ID列表
+    const myFriends = await prisma.friendship.findMany({
+      where: { userId },
+      select: { friendId: true },
+    });
+    const myFriendIds = myFriends.map(f => f.friendId);
+    myFriendIds.push(userId); // 排除自己
+
+    // 我的好友的好友（二级关系）
+    const friendsOfFriends = await prisma.friendship.findMany({
+      where: { userId: { in: myFriendIds } },
+      select: { friendId: true },
+    });
+    const candidateIds = friendsOfFriends.map(f => f.friendId)
+      .filter(id => !myFriendIds.includes(id)); // 排除已经是好友的人
+
+    // 统计每个候选人的出现次数（共同好友越多，推荐优先级越高）
+    const countMap: Record<string, number> = {};
+    candidateIds.forEach(id => { countMap[id] = (countMap[id] || 0) + 1; });
+
+    // 排序并取前10个
+    const topIds = Object.entries(countMap)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10)
+      .map(([id]) => id);
+
+    if (topIds.length === 0) return reply.send([]);
+
+    const recommendedUsers = await prisma.user.findMany({
+      where: { id: { in: topIds } },
+      select: { id: true, nickname: true, username: true, avatar: true },
+    });
+
+    // 按出现次数排序
+    const sorted = topIds.map(id => recommendedUsers.find(u => u.id === id)).filter(Boolean);
+    reply.send(sorted);
+  });
 }
