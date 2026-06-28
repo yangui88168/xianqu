@@ -158,7 +158,7 @@ export default function Chat() {
           uploadPreset: 'xianqu_preset',
           maxFiles: 1,
           clientAllowedFormats: ['image', 'video'],
-          maxFileSize: 5000000,
+          maxFileSize: 10000000,
         },
         (error: any, result: any) => {
           if (!error && result && result.event === 'success') {
