@@ -14,3 +14,8 @@ body {
 .rounded-card {
   border-radius: 12px;
 }
+
+html, body, #__next {
+  height: 100%;
+  overflow: hidden;
+}
