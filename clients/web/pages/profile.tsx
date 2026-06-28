@@ -166,6 +166,7 @@ export default function Profile() {
     const res = await fetch(`${API}/user/signin`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({}),   // 发送空 JSON 对象
     });
     if (res.ok) {
       const data = await res.json();
