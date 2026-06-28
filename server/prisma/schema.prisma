@@ -116,6 +116,7 @@ model GroupChat {
   ownerId      String
   avatar       String?
   announcement String?
+  inviteCode   String?        @unique
   createdAt    DateTime       @default(now())
   owner        User           @relation(fields: [ownerId], references: [id])
   members      GroupMember[]
