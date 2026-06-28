@@ -34,6 +34,10 @@ export default function Profile() {
   // 勋章
   const [badges, setBadges] = useState<any[]>([]);
 
+  // 收藏
+  const [favorites, setFavorites] = useState<any[]>([]);
+  const [showFavorites, setShowFavorites] = useState(false);
+
   const router = useRouter();
   const cloudinaryRef = useRef<any>();
   const widgetRef = useRef<any>();
@@ -158,6 +162,28 @@ export default function Profile() {
     if (res.ok) setBadges(await res.json());
   };
 
+  // 加载收藏列表
+  const loadFavorites = async () => {
+    const token = localStorage.getItem('token');
+    const res = await fetch(`${API}/user/favorites`, { headers: { Authorization: `Bearer ${token}` } });
+    if (res.ok) {
+      setFavorites(await res.json());
+      setShowFavorites(true);
+    }
+  };
+
+  // 删除收藏
+  const deleteFavorite = async (favoriteId: string) => {
+    const token = localStorage.getItem('token');
+    const res = await fetch(`${API}/user/favorite/${favoriteId}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (res.ok) {
+      setFavorites(prev => prev.filter(fav => fav.id !== favoriteId));
+    }
+  };
+
   const logout = () => {
     localStorage.clear();
     router.push('/');
@@ -263,6 +289,36 @@ export default function Profile() {
                 <span className="text-xs text-center mt-1">{badge.badge?.name || badge.badgeId}</span>
               </div>
             ))}
+          </div>
+        )}
+      </div>
+
+      {/* 收藏中心 */}
+      <div className="bg-white mt-3">
+        <button
+          onClick={loadFavorites}
+          className="w-full flex items-center justify-between px-6 py-4 border-b hover:bg-gray-50"
+        >
+          <span className="text-sm">我的收藏</span>
+          <span className="text-gray-400 text-sm">{showFavorites ? `${favorites.length} 条` : '点击查看'}</span>
+        </button>
+        {showFavorites && (
+          <div className="max-h-40 overflow-y-auto">
+            {favorites.length === 0 ? (
+              <p className="text-center text-gray-400 text-sm py-4">暂无收藏</p>
+            ) : (
+              favorites.map((fav: any) => (
+                <div key={fav.id} className="flex items-center justify-between px-6 py-2 border-b text-sm">
+                  <span className="text-gray-600 truncate flex-1">{fav.content || fav.targetId}</span>
+                  <button
+                    onClick={() => deleteFavorite(fav.id)}
+                    className="text-red-500 text-xs ml-2 hover:underline"
+                  >
+                    删除
+                  </button>
+                </div>
+              ))
+            )}
           </div>
         )}
       </div>
