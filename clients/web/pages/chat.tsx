@@ -785,12 +785,12 @@ export default function Chat() {
         </div>
       </div>
 
-      {/* 右侧聊天窗 - 标准 Flex 布局 */}
-      <div className={`${mobileView === 'chat' ? 'block' : 'hidden'} md:block flex-1 flex flex-col`}>
+      {/* 右侧聊天窗 - 标准 Flex 布局，增加 overflow-hidden */}
+      <div className={`${mobileView === 'chat' ? 'block' : 'hidden'} md:block flex-1 flex flex-col overflow-hidden`}>
         {selectedChat ? (
           <>
-            {/* 顶部栏 */}
-            <div className="bg-white border-b px-4 py-3 flex items-center gap-3 flex-shrink-0" style={{ height: '64px' }}>
+            {/* 顶部栏 - flex-shrink-0 */}
+            <div className="flex-shrink-0 bg-white border-b px-4 py-3 flex items-center gap-3">
               <button onClick={goBack} className="md:hidden text-gray-500 mr-2">←</button>
               <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold">
                 {selectedChat.type === 'group' ? '#' : (selectedChat.data.nickname || selectedChat.data.username)[0]}
@@ -821,7 +821,7 @@ export default function Chat() {
               </div>
             </div>
 
-            {/* 消息列表 - 可滚动区域，使用 h-0 flex-1 防止撑开 */}
+            {/* 消息列表 - h-0 flex-1 min-h-0 overflow-y-auto */}
             <div
               ref={scrollContainerRef}
               onScroll={handleScroll}
@@ -929,8 +929,8 @@ export default function Chat() {
               </div>
             )}
 
-            {/* 底部输入栏 */}
-            <div className="p-3 bg-white border-t flex-shrink-0">
+            {/* 底部输入栏 - flex-shrink-0 p-3 */}
+            <div className="flex-shrink-0 p-3 bg-white border-t">
               <div className="h-full flex items-center gap-2">
                 <button onClick={() => setInputMode(inputMode === 'text' ? 'voice' : 'text')} className="text-gray-400 hover:text-gray-600 p-2">
                   {inputMode === 'text' ? '🎤' : '⌨️'}
