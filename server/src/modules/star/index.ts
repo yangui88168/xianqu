@@ -1,8 +1,8 @@
 import { FastifyInstance } from 'fastify';
 import jwt from 'jsonwebtoken';
 import { prisma } from '../../db';
-import { progressTask } from '../task';   // 任务进度
-import { checkBadges } from '../badge';   // 徽章检查
+import { progressTask } from '../task';
+import { checkBadges } from '../badge';
 
 function authMiddleware(request: any, reply: any, done: any) {
   const token = (request.headers.authorization || '').replace('Bearer ', '');
@@ -15,25 +15,28 @@ function authMiddleware(request: any, reply: any, done: any) {
 }
 
 export async function starRoutes(fastify: FastifyInstance) {
-  // 发布动态
+  // 发布动态 - 确认已接受 permission
   fastify.post('/post', { preHandler: authMiddleware }, async (request, reply) => {
     const userId = (request as any).userId;
     const { content, imageUrl, permission } = request.body as any;
     if (!content) return reply.status(400).send({ error: '内容不能为空' });
     const post = await prisma.starPost.create({
-      data: { userId, content, imageUrl, permission: permission || 'public' },
+      data: {
+        userId,
+        content,
+        imageUrl,
+        permission: permission || 'public', // 默认公开
+      },
       include: { user: { select: { id: true, nickname: true, username: true, avatar: true } } },
     });
 
-    // 发布动态成功后推进任务进度
     await progressTask(userId, 'publish_post');
-    // 检查并授予发布动态相关徽章
     checkBadges(userId);
 
     reply.send(post);
   });
 
-  // 获取动态流（公开动态 + 好友动态，按时间倒序，分页）
+  // 获取动态流 - 已修改权限过滤
   fastify.get('/feed', { preHandler: authMiddleware }, async (request, reply) => {
     const userId = (request as any).userId;
     const skip = parseInt((request.query as any).skip || '0', 10);
@@ -45,12 +48,15 @@ export async function starRoutes(fastify: FastifyInstance) {
       select: { followingId: true },
     });
     const followingIds = followings.map(f => f.followingId);
-    followingIds.push(userId); // 也包含自己的动态
+    followingIds.push(userId); // 也包含自己
 
     const posts = await prisma.starPost.findMany({
       where: {
-        userId: { in: followingIds },
-        permission: 'public',
+        OR: [
+          { permission: 'public' },                           // 公开动态所有人可见
+          { userId },                                         // 自己的动态全部可见
+          { permission: 'friends', userId: { in: followingIds } }, // 好友可见且是好友（含自己）
+        ],
       },
       include: {
         user: { select: { id: true, nickname: true, username: true, avatar: true } },
@@ -69,7 +75,7 @@ export async function starRoutes(fastify: FastifyInstance) {
     reply.send(posts);
   });
 
-  // 点赞/取消点赞
+  // 点赞/取消点赞（保持不变）
   fastify.post('/like', { preHandler: authMiddleware }, async (request, reply) => {
     const userId = (request as any).userId;
     const { postId } = request.body as any;
@@ -83,7 +89,7 @@ export async function starRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // 评论
+  // 评论（保持不变）
   fastify.post('/comment', { preHandler: authMiddleware }, async (request, reply) => {
     const userId = (request as any).userId;
     const { postId, content } = request.body as any;
@@ -95,7 +101,7 @@ export async function starRoutes(fastify: FastifyInstance) {
     reply.send(comment);
   });
 
-  // 关注用户
+  // 关注用户（保持不变）
   fastify.post('/follow', { preHandler: authMiddleware }, async (request, reply) => {
     const followerId = (request as any).userId;
     const { followingId } = request.body as any;
@@ -110,7 +116,7 @@ export async function starRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // 获取推荐用户（简单按注册时间排序）
+  // 获取推荐用户（保持不变）
   fastify.get('/users', { preHandler: authMiddleware }, async (request, reply) => {
     const users = await prisma.user.findMany({
       select: { id: true, nickname: true, username: true, avatar: true },
