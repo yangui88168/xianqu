@@ -20,6 +20,7 @@ export default function App({ Component, pageProps }: AppProps) {
       <>
         <Head>
           <link rel="icon" href="data:," />
+          <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/twemoji-colr-font@14.0.2/twemoji.css" />
         </Head>
         <Component {...pageProps} />
       </>
@@ -30,6 +31,7 @@ export default function App({ Component, pageProps }: AppProps) {
     <>
       <Head>
         <link rel="icon" href="data:," />
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/twemoji-colr-font@14.0.2/twemoji.css" />
       </Head>
       {/* 修复高度继承：强制 html、body、#__next 占满全高 */}
       <style jsx global>{`
