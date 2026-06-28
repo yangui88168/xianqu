@@ -44,7 +44,7 @@ export default function App({ Component, pageProps }: AppProps) {
         }
       `}</style>
       <div className="max-w-5xl mx-auto h-dvh flex flex-col shadow-2xl bg-white relative">
-        <div className="flex-1 min-h-0 overflow-hidden">
+        <div className="flex-1 min-h-0 relative">
           <Component {...pageProps} />
         </div>
         <nav className="flex bg-white border-t shadow-lg flex-shrink-0">
