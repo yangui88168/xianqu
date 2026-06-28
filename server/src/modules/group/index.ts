@@ -1,8 +1,8 @@
 import { FastifyInstance } from 'fastify';
 import jwt from 'jsonwebtoken';
 import { prisma } from '../../db';
-import { progressTask } from '../task';   // 任务进度
-import { checkBadges } from '../badge';   // 徽章检查
+import { progressTask } from '../task';
+import { checkBadges } from '../badge';
 
 function authMiddleware(request: any, reply: any, done: any) {
   const token = (request.headers.authorization || '').replace('Bearer ', '');
@@ -38,9 +38,7 @@ export async function groupRoutes(fastify: FastifyInstance) {
       },
     });
 
-    // 创建群成功后推进任务进度
     await progressTask(userId, 'create_group');
-    // 检查并授予创建群聊相关徽章
     checkBadges(userId);
 
     reply.send(group);
@@ -196,7 +194,7 @@ export async function groupRoutes(fastify: FastifyInstance) {
     reply.send({ success: true });
   });
 
-  // 发送群消息（WebSocket方式已替代，保留REST降级）
+  // 发送群消息（增加 @all 检测）
   fastify.post('/message', { preHandler: authMiddleware }, async (request, reply) => {
     const userId = (request as any).userId;
     const { groupId, content, type = 'text', replyToId } = request.body as any;
@@ -205,9 +203,16 @@ export async function groupRoutes(fastify: FastifyInstance) {
     });
     if (!membership) return reply.status(403).send({ error: 'Not a member' });
     if (membership.mutedUntil && membership.mutedUntil > new Date()) return reply.status(403).send({ error: 'You are muted' });
+
     const msg = await prisma.groupMessage.create({
       data: { groupId, senderId: userId, content, type, replyToId },
     });
+
+    // 检测 @all 标记
+    if (content.includes('@all')) {
+      (msg as any).atAll = true;
+    }
+
     reply.send(msg);
   });
 
