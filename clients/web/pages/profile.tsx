@@ -73,7 +73,7 @@ export default function Profile() {
           uploadPreset: 'xianqu_preset',
           maxFiles: 1,
           clientAllowedFormats: ['image'],
-          maxFileSize: 2000000,
+          maxFileSize: 10000000,
         },
         (error: any, result: any) => {
           if (!error && result && result.event === 'success') {
