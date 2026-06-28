@@ -1024,16 +1024,30 @@ export default function Chat() {
                       )}
                     </div>
                   )}
+                  {/* 表情按钮（修复后） */}
                   <div className="relative">
-                    <button onClick={() => setShowEmoji(!showEmoji)} className="text-gray-400 hover:text-gray-600 p-2">
+                    <button
+                      onClick={() => setShowEmoji(!showEmoji)}
+                      className="text-gray-400 hover:text-gray-600 p-2"
+                      type="button"
+                    >
                       <svg className="w-5 h-5 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
                     </button>
                     {showEmoji && (
-                      <div className="absolute bottom-12 left-0 bg-white border rounded-lg shadow-lg p-2 grid grid-cols-6 gap-1 w-56">
-                        {EMOJIS.map(emoji => (
-                          <button key={emoji} onClick={() => { setInput(prev => prev + emoji); setShowEmoji(false); }} className="text-xl hover:bg-gray-100 p-1 rounded">{emoji}</button>
+                      <div className="absolute bottom-10 left-0 bg-white border rounded-xl shadow-lg p-2 grid grid-cols-6 gap-1 w-56 z-50">
+                        {EMOJIS.map((emoji: string) => (
+                          <button
+                            key={emoji}
+                            onClick={() => {
+                              setInput((prev: string) => prev + emoji);
+                              setShowEmoji(false);
+                            }}
+                            className="text-xl hover:bg-gray-100 p-1 rounded"
+                          >
+                            {emoji}
+                          </button>
                         ))}
                       </div>
                     )}
