@@ -8,9 +8,18 @@ const PAGE_SIZE = 10;
 
 const EMOJIS = ['😀', '😂', '❤️', '👍', '😢', '😡', '🎉', '🔥', '💯', '✨', '👋', '🙏'];
 
-// 根据用户状态和 lastSeen 生成描述文字
+// 根据用户状态和 lastSeen 生成描述文字（支持多状态）
 const getLastSeenText = (friend: any) => {
-  if (friend.status === 'online') return '在线';
+  if (friend.status === 'invisible') return '离线'; // 隐身视为离线
+  const statusTextMap: Record<string, string> = {
+    online: '在线',
+    busy: '忙碌',
+    dnd: '勿扰',
+    away: '离开',
+  };
+  if (friend.status && statusTextMap[friend.status]) {
+    return statusTextMap[friend.status];
+  }
   if (!friend.lastSeen) return '离线';
   const diff = Date.now() - new Date(friend.lastSeen).getTime();
   const minutes = Math.floor(diff / 60000);
