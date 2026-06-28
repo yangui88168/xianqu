@@ -47,6 +47,9 @@ export default function Profile() {
     notifyPost: true,
   });
 
+  // 在线状态
+  const [currentStatus, setCurrentStatus] = useState('online');
+
   const router = useRouter();
   const cloudinaryRef = useRef<any>();
   const widgetRef = useRef<any>();
@@ -70,6 +73,19 @@ export default function Profile() {
     });
   };
 
+  // 切换在线状态
+  const changeStatus = async (newStatus: string) => {
+    const token = localStorage.getItem('token');
+    const res = await fetch(`${API}/user/status`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ status: newStatus }),
+    });
+    if (res.ok) {
+      setCurrentStatus(newStatus);
+    }
+  };
+
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (!token) { router.push('/'); return; }
@@ -81,6 +97,7 @@ export default function Profile() {
         setNickname(data.nickname || '');
         setSignature(data.signature || '');
         setAvatar(data.avatar || '');
+        setCurrentStatus(data.status || 'online');
       })
       .catch(() => router.push('/'));
     // 获取签到状态
@@ -252,6 +269,21 @@ export default function Profile() {
                 <h2 className="text-xl font-bold">{user.nickname || user.username}</h2>
                 <p className="text-gray-500 text-sm">{user.signature || '这个人很懒，什么都没写'}</p>
                 <p className="text-gray-400 text-xs mt-1">UID: {user.id}</p>
+                {/* 状态切换 */}
+                <div className="flex items-center gap-2 mt-2">
+                  <span className="text-xs text-gray-500">状态：</span>
+                  <select
+                    value={currentStatus}
+                    onChange={(e) => changeStatus(e.target.value)}
+                    className="text-xs border rounded px-2 py-1"
+                  >
+                    <option value="online">在线</option>
+                    <option value="busy">忙碌</option>
+                    <option value="dnd">勿扰</option>
+                    <option value="away">离开</option>
+                    <option value="invisible">隐身</option>
+                  </select>
+                </div>
               </>
             )}
           </div>
