@@ -289,7 +289,26 @@ export default function Chat() {
       }).catch(() => {});
       setSessions(prev => prev.map(s => s.friend.id === data.id ? { ...s, unreadCount: 0 } : s));
     }
+    // 如果是群聊，预加载群信息（包括成员），以便@功能使用
+    if (type === 'group') {
+      loadGroupInfoById(data.id);
+    }
   }, []);
+
+  const loadGroupInfo = async () => {
+    if (!selectedChat || selectedChat.type !== 'group') return;
+    loadGroupInfoById(selectedChat.data.id);
+  };
+
+  const loadGroupInfoById = async (groupId: string) => {
+    const token = localStorage.getItem('token');
+    const res = await fetch(`${API}/groups/${groupId}`, { headers: { Authorization: `Bearer ${token}` } });
+    if (res.ok) {
+      const data = await res.json();
+      setGroupInfo(data);
+      setGroupAnnouncement(data.announcement || '');
+    }
+  };
 
   const loadMoreMessages = async () => {
     if (!selectedChat || loadingMore || !hasMore) return;
@@ -588,19 +607,6 @@ export default function Chat() {
     if (longPressTimer.current) clearTimeout(longPressTimer.current);
   };
 
-  const loadGroupInfo = async () => {
-    if (!selectedChat || selectedChat.type !== 'group') return;
-    const token = localStorage.getItem('token');
-    const res = await fetch(`${API}/groups/${selectedChat.data.id}`, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    if (res.ok) {
-      const data = await res.json();
-      setGroupInfo(data);
-      setGroupAnnouncement(data.announcement || '');
-    }
-  };
-
   const searchUsers = async () => {
     if (!searchQuery.trim()) return;
     const token = localStorage.getItem('token');
@@ -692,6 +698,15 @@ export default function Chat() {
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
   const goBack = () => setMobileView('sidebar');
+
+  // 复制邀请链接
+  const copyInviteLink = () => {
+    if (groupInfo?.inviteCode) {
+      const link = `https://xianqu.pages.dev/join?code=${groupInfo.inviteCode}`;
+      navigator.clipboard.writeText(link);
+      alert('邀请链接已复制');
+    }
+  };
 
   return (
     <div
@@ -806,7 +821,6 @@ export default function Chat() {
               <div className="flex items-center gap-1">
                 {selectedChat.type === 'friend' && (
                   <>
-                    {/* 语音通话按钮 */}
                     <button onClick={() => {
                       if (!ws) return;
                       ws.send(JSON.stringify({ event: 'call-offer', data: { targetId: selectedChat.data.id, type: 'audio' } }));
@@ -816,7 +830,6 @@ export default function Chat() {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
                       </svg>
                     </button>
-                    {/* 视频通话按钮 */}
                     <button onClick={() => {
                       if (!ws) return;
                       ws.send(JSON.stringify({ event: 'call-offer', data: { targetId: selectedChat.data.id, type: 'video' } }));
@@ -835,7 +848,6 @@ export default function Chat() {
                     </svg>
                   </button>
                 )}
-                {/* 关闭按钮 */}
                 <button onClick={() => { setSelectedChat(null); setMessages([]); }} className="text-gray-400 hover:text-gray-600 p-1 ml-1" title="关闭">
                   <svg className="w-5 h-5 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
@@ -968,7 +980,6 @@ export default function Chat() {
               </button>
               {inputMode === 'text' ? (
                 <>
-                  {/* 图片上传按钮 */}
                   <button onClick={() => widgetRef.current?.open()} className="text-gray-400 hover:text-gray-600 p-2">
                     <svg className="w-5 h-5 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -980,31 +991,53 @@ export default function Chat() {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                     </svg>
                   </button>
+                  {/* 群聊 @ 按钮与下拉菜单 */}
                   {selectedChat?.type === 'group' && (
-                    <button onClick={async () => {
-                      const token = localStorage.getItem('token');
-                      const res = await fetch(`${API}/groups/${selectedChat.data.id}`, { headers: { Authorization: `Bearer ${token}` } });
-                      if (res.ok) {
-                        const g = await res.json();
-                        const member = g.members?.find((m: any) => m.userId !== userId);
-                        if (member) setInput(prev => prev + `@${member.user?.nickname || member.user?.username} `);
-                        else alert('没有其他成员可@');
-                      }
-                    }} className="text-gray-400 hover:text-gray-600 p-2">@</button>
-                  )}
-                  {/* 表情按钮 - 已加 pointer-events-none */}
-                  <button onClick={() => setShowEmoji(!showEmoji)} className="text-gray-400 hover:text-gray-600 p-2">
-                    <svg className="w-5 h-5 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                  </button>
-                  {showEmoji && (
-                    <div className="absolute bottom-12 left-0 bg-white border rounded-lg shadow-lg p-2 grid grid-cols-6 gap-1 w-56">
-                      {EMOJIS.map(emoji => (
-                        <button key={emoji} onClick={() => { setInput(prev => prev + emoji); setShowEmoji(false); }} className="text-xl hover:bg-gray-100 p-1 rounded">{emoji}</button>
-                      ))}
+                    <div className="relative">
+                      <button
+                        onClick={async () => {
+                          if (!groupInfo) await loadGroupInfo();
+                          setShowMentionList(!showMentionList);
+                        }}
+                        className="text-gray-400 hover:text-gray-600 p-2"
+                      >
+                        @
+                      </button>
+                      {showMentionList && (
+                        <div className="absolute bottom-10 left-0 bg-white border rounded shadow p-2 z-10 min-w-[120px]">
+                          <button
+                            onClick={() => { setInput(prev => prev + '@all '); setShowMentionList(false); }}
+                            className="block w-full text-left text-sm hover:bg-gray-100 px-2 py-1 rounded"
+                          >
+                            @全体成员
+                          </button>
+                          {groupInfo?.members?.filter((m: any) => m.userId !== userId).map((m: any) => (
+                            <button
+                              key={m.userId}
+                              onClick={() => { setInput(prev => prev + `@${m.user?.nickname || m.user?.username} `); setShowMentionList(false); }}
+                              className="block w-full text-left text-sm hover:bg-gray-100 px-2 py-1 rounded"
+                            >
+                              {m.user?.nickname || m.user?.username}
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   )}
+                  <div className="relative">
+                    <button onClick={() => setShowEmoji(!showEmoji)} className="text-gray-400 hover:text-gray-600 p-2">
+                      <svg className="w-5 h-5 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </button>
+                    {showEmoji && (
+                      <div className="absolute bottom-12 left-0 bg-white border rounded-lg shadow-lg p-2 grid grid-cols-6 gap-1 w-56">
+                        {EMOJIS.map(emoji => (
+                          <button key={emoji} onClick={() => { setInput(prev => prev + emoji); setShowEmoji(false); }} className="text-xl hover:bg-gray-100 p-1 rounded">{emoji}</button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                   <input
                     className="flex-1 p-2 border rounded-full focus:outline-none focus:ring-2 focus:ring-blue-300 text-sm"
                     value={input}
@@ -1079,6 +1112,15 @@ export default function Chat() {
             </div>
             <p className="font-medium">群名称：{groupInfo.name}</p>
             <p className="text-sm text-gray-500 mt-1">成员 {groupInfo.members?.length} 人</p>
+            {groupInfo.inviteCode && (
+              <div className="mt-3 bg-gray-50 p-3 rounded flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-gray-500">邀请码</p>
+                  <p className="font-mono text-sm">{groupInfo.inviteCode}</p>
+                </div>
+                <button onClick={copyInviteLink} className="text-blue-500 text-sm font-medium hover:underline">复制链接</button>
+              </div>
+            )}
             <button onClick={() => { setInviteGroupId(groupInfo.id); setSelectedFriends([]); setInviteModal(true); }} className="w-full bg-blue-500 text-white py-2 rounded text-sm mt-3">邀请好友加入</button>
             <div className="mt-3">
               <label className="text-sm font-medium">群公告</label>
