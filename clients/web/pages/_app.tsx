@@ -47,7 +47,7 @@ export default function App({ Component, pageProps }: AppProps) {
         <div className="flex-1 min-h-0 relative">
           <Component {...pageProps} />
         </div>
-        <nav className="flex-shrink-0 bg-white border-t shadow-lg">
+        <nav className="flex-shrink-0 flex items-center justify-around bg-white border-t shadow-lg" style={{ height: '56px' }}>
           {tabs.map((tab) => (
             <button
               key={tab.path}
