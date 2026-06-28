@@ -113,4 +113,21 @@ export async function communityRoutes(fastify: FastifyInstance) {
 
     reply.send({ success: true });
   });
+
+  // 删除家园（仅所有者）
+  fastify.delete('/:communityId/homestead/:homesteadId', { preHandler: authMiddleware }, async (request, reply) => {
+    const userId = (request as any).userId;
+    const { homesteadId } = request.params as any;
+
+    const homestead = await prisma.homestead.findUnique({ where: { id: homesteadId } });
+    if (!homestead) return reply.status(404).send({ error: '家园不存在' });
+    if (homestead.ownerId !== userId) return reply.status(403).send({ error: '只能删除自己的家园' });
+
+    await prisma.$transaction([
+      prisma.homesteadPost.deleteMany({ where: { homesteadId } }),
+      prisma.homestead.delete({ where: { id: homesteadId } }),
+    ]);
+
+    reply.send({ success: true });
+  });
 }
