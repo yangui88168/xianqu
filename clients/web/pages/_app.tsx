@@ -15,10 +15,13 @@ export default function App({ Component, pageProps }: AppProps) {
   const router = useRouter();
   const [customBg, setCustomBg] = useState('');
 
-  // 客户端获取自定义背景
+  // ✅ 所有 localStorage 操作都在客户端执行，且加保护
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      setCustomBg(localStorage.getItem('customBg') || '');
+      try {
+        const bg = localStorage.getItem('customBg');
+        if (bg) setCustomBg(bg);
+      } catch (e) {}
     }
   }, []);
 
@@ -30,7 +33,7 @@ export default function App({ Component, pageProps }: AppProps) {
 
   return (
     <div className="max-w-5xl mx-auto h-dvh flex flex-col shadow-soft bg-white/80 backdrop-blur-md overflow-hidden relative">
-      {/* 自定义背景图层（仅客户端生效） */}
+      {/* 自定义背景仅客户端渲染 */}
       {customBg && (
         <div
           className="absolute inset-0 bg-cover bg-center opacity-10 pointer-events-none z-0"
