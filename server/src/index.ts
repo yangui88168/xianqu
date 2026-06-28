@@ -9,6 +9,7 @@ import { userRoutes } from './modules/user';
 import { starRoutes } from './modules/star';
 import { searchRoutes } from './modules/search';
 import { taskRoutes } from './modules/task';
+import { badgeRoutes } from './modules/badge';
 import { wsHandler } from './websocket';
 
 export const app = Fastify({ logger: true });
@@ -23,6 +24,7 @@ app.register(userRoutes, { prefix: '/user' });
 app.register(starRoutes, { prefix: '/star' });
 app.register(searchRoutes, { prefix: '/search' });
 app.register(taskRoutes, { prefix: '/task' });
+app.register(badgeRoutes, { prefix: '/badge' });
 
 app.register(async (fastify) => {
   fastify.get('/ws', { websocket: true }, wsHandler);
