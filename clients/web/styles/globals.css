@@ -38,3 +38,27 @@ input, textarea, select, button {
 .focus\:ring-2:focus {
   --tw-ring-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2) !important;
 }
+
+/* 整体背景柔和渐变 */
+body {
+  background: linear-gradient(135deg, #f5f7fa 0%, #e4e9f2 100%);
+  background-attachment: fixed;
+}
+
+/* 主卡片/容器使用半透明+模糊效果 */
+.bg-white {
+  background-color: rgba(255, 255, 255, 0.85) !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+/* 统一主题色从蓝色改为温暖青色 */
+.bg-blue-500 { background-color: #4a9e8f !important; }
+.bg-blue-600 { background-color: #3d8b7d !important; }
+.text-blue-500 { color: #4a9e8f !important; }
+.border-blue-500 { border-color: #4a9e8f !important; }
+.hover\:bg-blue-600:hover { background-color: #3d8b7d !important; }
+.ring-blue-300 { --tw-ring-color: rgba(74, 158, 143, 0.3) !important; }
+
+/* 导航栏选中态 */
+.text-blue-500 { color: #4a9e8f !important; }
