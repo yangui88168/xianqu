@@ -3,7 +3,7 @@ import { FastifyRequest } from 'fastify';
 import jwt from 'jsonwebtoken';
 import { prisma } from '../db';
 import { WsEvent } from '../shared-types';
-import { progressTask } from '../task'; // 任务进度函数
+import { progressTask } from '../modules/task'; // 修正导入路径
 
 export const onlineUsers = new Map<string, SocketStream['socket']>();
 
