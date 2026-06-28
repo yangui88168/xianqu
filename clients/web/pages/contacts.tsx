@@ -163,7 +163,7 @@ export default function Contacts() {
   };
 
   return (
-    <div className="h-full overflow-y-auto bg-gray-50">
+    <div style={{ height: 'calc(100dvh - 56px)', overflowY: 'auto' }} className="bg-gray-50">
       {/* 搜索栏 */}
       <div className="p-4 bg-white border-b">
         <div className="flex gap-2">
