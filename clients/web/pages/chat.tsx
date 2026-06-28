@@ -696,9 +696,9 @@ export default function Chat() {
   const goBack = () => setMobileView('sidebar');
 
   return (
-    <div className="flex h-dvh bg-gray-100 relative overflow-hidden" onClick={() => { setContextMenu(null); setShowMentionList(false); }}>
+    <div className="flex flex-1 min-h-0 bg-gray-100 relative" onClick={() => { setContextMenu(null); setShowMentionList(false); }}>
       {/* 左侧栏 */}
-      <div className={`${mobileView === 'sidebar' ? 'block' : 'hidden'} md:block md:w-80 w-full bg-white border-r flex flex-col absolute md:relative z-10 h-dvh md:h-full`}>
+      <div className={`${mobileView === 'sidebar' ? 'block' : 'hidden'} md:block md:w-80 w-full bg-white border-r flex flex-col absolute md:relative z-10 h-full`}>
         <div className="p-3 border-b">
           <div className="flex gap-2 mb-2">
             <input
