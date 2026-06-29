@@ -109,6 +109,10 @@ export default function Chat() {
   const [searchMode, setSearchMode] = useState(false);
   const [searchMessageResults, setSearchMessageResults] = useState<any[]>([]);
 
+  // 新增：顶部菜单与搜索折叠
+  const [showMenu, setShowMenu] = useState(false);
+  const [showSearch, setShowSearch] = useState(false);
+
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (!token) { router.push('/'); return; }
@@ -746,23 +750,32 @@ export default function Chat() {
       {/* 左侧栏 */}
       <div className={`${mobileView === 'sidebar' ? 'block' : 'hidden'} md:block md:w-80 w-full bg-white border-r flex flex-col absolute md:relative z-10 h-full`}>
         <div className="p-3 border-b">
-          <div className="flex gap-2 mb-2">
-            <input
-              className="flex-1 p-2 border rounded text-sm"
-              placeholder="搜索用户或消息..."
-              value={searchQuery}
-              onChange={e => {
-                setSearchQuery(e.target.value);
-                if (!e.target.value) {
-                  setSearchMode(false);
-                  setSearchMessageResults([]);
-                  setSearchResults([]);
-                }
-              }}
-              onKeyDown={e => e.key === 'Enter' && handleSearch()}
-            />
-            <button onClick={handleSearch} className="bg-blue-500 text-white px-3 py-1 rounded text-sm">搜索</button>
-          </div>
+          {/* 搜索切换按钮 */}
+          {!showSearch && (
+            <button
+              onClick={() => setShowSearch(true)}
+              className="w-full flex items-center justify-center gap-2 bg-gray-100 rounded-lg py-2 text-sm text-gray-500 hover:bg-gray-200"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              搜索
+            </button>
+          )}
+          {showSearch && (
+            <div className="flex gap-2">
+              <input
+                className="flex-1 p-2 border rounded text-sm"
+                placeholder="搜索用户..."
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleSearch()}
+                autoFocus
+              />
+              <button onClick={handleSearch} className="bg-blue-500 text-white px-3 py-1 rounded text-sm">搜索</button>
+              <button onClick={() => { setShowSearch(false); setSearchQuery(''); setSearchResults([]); }} className="text-gray-500 text-sm">取消</button>
+            </div>
+          )}
 
           {/* 用户搜索结果 */}
           {searchResults.length > 0 && (
@@ -895,6 +908,34 @@ export default function Chat() {
                     </svg>
                   </button>
                 )}
+                {/* + 菜单按钮 */}
+                <div className="relative">
+                  <button
+                    onClick={() => setShowMenu(!showMenu)}
+                    className="text-gray-500 hover:text-gray-700 p-1 ml-1"
+                    title="菜单"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+                    </svg>
+                  </button>
+                  {showMenu && (
+                    <div className="absolute right-0 top-8 bg-white border rounded-xl shadow-lg py-1 w-40 z-50">
+                      <button
+                        onClick={() => { setShowMenu(false); setShowGroupModal(true); }}
+                        className="w-full text-left px-4 py-2 text-sm hover:bg-gray-100"
+                      >
+                        + 创建群聊
+                      </button>
+                      <button
+                        onClick={() => { setShowMenu(false); setSearchMode(true); }}
+                        className="w-full text-left px-4 py-2 text-sm hover:bg-gray-100"
+                      >
+                        🔍 添加好友
+                      </button>
+                    </div>
+                  )}
+                </div>
                 <button onClick={() => { setSelectedChat(null); setMessages([]); }} className="text-gray-400 hover:text-gray-600 p-1 ml-1" title="关闭">
                   <svg className="w-5 h-5 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
@@ -993,9 +1034,9 @@ export default function Chat() {
                                 {isForwarded && <span className="text-gray-400">来自转发</span>}
                                 {isMe && (
                                   <span className="ml-1">
-                                    {msg.status === 'sent' && <span className="text-gray-400">✓</span>}
-                                    {msg.status === 'delivered' && <span className="text-gray-400">✓✓</span>}
-                                    {msg.status === 'read' && <span className="text-blue-500">✓✓</span>}
+                                    {msg.status === 'sent' && <span className="text-gray-400 text-[10px]">✓</span>}
+                                    {msg.status === 'delivered' && <span className="text-gray-400 text-[10px]">✓✓</span>}
+                                    {msg.status === 'read' && <span className="text-blue-500 text-[10px]">✓✓</span>}
                                   </span>
                                 )}
                                 {isMe && msg.status !== 'sending' && <button onClick={() => recallMessage(msg)} className="text-red-400 hover:text-red-600 ml-1" title="撤回">↩</button>}
