@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { useEffect, useRef, useState, useCallback } from 'react';
 
 interface CallModalProps {
@@ -7,13 +6,11 @@ interface CallModalProps {
   friendName: string;
   type: 'audio' | 'video';
   incoming?: boolean;
-  accepted?: boolean;
-  offerSdp?: any;
   onHangup: () => void;
 }
 
 export default function CallModal({
-  ws, friendId, friendName, type, incoming, accepted, offerSdp, onHangup,
+  ws, friendId, friendName, type, incoming, onHangup,
 }: CallModalProps) {
   const [callStatus, setCallStatus] = useState<'calling' | 'connected' | 'ended'>('calling');
   const [duration, setDuration] = useState(0);
@@ -31,6 +28,7 @@ export default function CallModal({
   const isClosedRef = useRef(false);
   const remoteStreamBoundRef = useRef(false);
 
+  // 挂断
   const hangup = useCallback(() => {
     if (isClosedRef.current) return;
     isClosedRef.current = true;
@@ -43,16 +41,21 @@ export default function CallModal({
     onHangup();
   }, [ws, friendId, onHangup]);
 
+  // 静音
   const toggleMute = () => {
     localStreamRef.current?.getAudioTracks().forEach((t) => (t.enabled = !isMuted));
     setIsMuted(!isMuted);
   };
+
+  // 摄像头开关
   const toggleCamera = () => {
     localStreamRef.current?.getVideoTracks().forEach((t) => (t.enabled = !isCameraOff));
     setIsCameraOff(!isCameraOff);
   };
+
   const toggleSpeaker = () => setIsSpeakerOn(!isSpeakerOn);
 
+  // 切换前后摄像头
   const switchCamera = useCallback(async () => {
     const newMode = facingMode === 'user' ? 'environment' : 'user';
     setFacingMode(newMode);
@@ -72,122 +75,98 @@ export default function CallModal({
     }
   }, [facingMode]);
 
-  const bindRemoteStream = useCallback((remoteStream: MediaStream) => {
-    if (isClosedRef.current || remoteStreamBoundRef.current) return;
-    remoteStreamBoundRef.current = true;
-    const playElement = (el: HTMLVideoElement | HTMLAudioElement) => {
-      el.srcObject = remoteStream;
-      el.muted = true;
-      el.play().then(() => {
-        if (!isClosedRef.current && el) el.muted = false;
-      }).catch(() => {});
-    };
-    if (type === 'video' && remoteVideoRef.current) playElement(remoteVideoRef.current);
-    if (type === 'audio' && remoteAudioRef.current) playElement(remoteAudioRef.current);
-    setCallStatus('connected');
-    if (!durationRef.current) {
-      durationRef.current = setInterval(() => setDuration((prev) => prev + 1), 1000);
-    }
-  }, [type]);
-
-  const createPeerConnection = useCallback((stream: MediaStream) => {
-    const pc = new RTCPeerConnection({
-      iceServers: [
-        { urls: 'stun:stun.l.google.com:19302' },
-        {
-          urls: 'turn:openrelay.metered.ca:443',
-          username: 'openrelayproject',
-          credential: 'openrelayproject',
-        },
-        {
-          urls: 'turn:global.relay.metered.ca:443',
-          username: '680a360a85d7aad8037a5be4',
-          credential: 'Uz8+sEjedvuGre/9',
-        },
-      ],
-    });
-    pcRef.current = pc;
-    stream.getTracks().forEach((track) => pc.addTrack(track, stream));
-    pc.ontrack = (event) => {
-      const [remote] = event.streams;
-      if (remote) bindRemoteStream(remote);
-    };
-    pc.onicecandidate = (event) => {
-      if (event.candidate) {
-        ws.send(JSON.stringify({
-          event: 'ice-candidate',
-          data: { targetId: friendId, candidate: event.candidate },
-        }));
-      }
-    };
-  }, [ws, friendId, bindRemoteStream]);
-
   useEffect(() => {
     isClosedRef.current = false;
     remoteStreamBoundRef.current = false;
+
     const init = async () => {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
           audio: true,
           video: type === 'video' ? { facingMode: 'user' } : false,
         });
-        if (isClosedRef.current) {
-          stream.getTracks().forEach((t) => t.stop());
-          return;
-        }
+        if (isClosedRef.current) { stream.getTracks().forEach(t => t.stop()); return; }
         localStreamRef.current = stream;
         if (localVideoRef.current) localVideoRef.current.srcObject = stream;
+
+        const pc = new RTCPeerConnection({
+          iceServers: [
+            { urls: 'stun:stun.l.google.com:19302' },
+            {
+              urls: 'turn:openrelay.metered.ca:443',
+              username: 'openrelayproject',
+              credential: 'openrelayproject',
+            },
+            {
+              urls: 'turn:global.relay.metered.ca:443',
+              username: '680a360a85d7aad8037a5be4',
+              credential: 'Uz8+sEjedvuGre/9',
+            },
+          ],
+        });
+        pcRef.current = pc;
+        stream.getTracks().forEach((track) => pc.addTrack(track, stream));
+
+        pc.ontrack = (event) => {
+          if (isClosedRef.current || remoteStreamBoundRef.current) return;
+          const remoteStream = event.streams[0];
+          if (!remoteStream) return;
+          remoteStreamBoundRef.current = true;
+
+          const playElement = (el: HTMLVideoElement | HTMLAudioElement) => {
+            el.srcObject = remoteStream;
+            el.muted = true;
+            el.play().then(() => {
+              if (!isClosedRef.current && el) el.muted = false;
+            }).catch(() => {});
+          };
+
+          if (type === 'video' && remoteVideoRef.current) playElement(remoteVideoRef.current);
+          if (type === 'audio' && remoteAudioRef.current) playElement(remoteAudioRef.current);
+
+          setCallStatus('connected');
+          if (!durationRef.current) {
+            durationRef.current = setInterval(() => setDuration((prev) => prev + 1), 1000);
+          }
+        };
+
+        pc.onicecandidate = (event) => {
+          if (isClosedRef.current) return;
+          if (event.candidate) {
+            ws.send(JSON.stringify({
+              event: 'ice-candidate',
+              data: { targetId: friendId, candidate: event.candidate },
+            }));
+          }
+        };
 
         const handleSignal = (e: MessageEvent) => {
           if (isClosedRef.current) return;
           const msg = JSON.parse(e.data);
           if (msg.data?.from !== friendId) return;
+
           if (msg.event === 'call-answer') {
-            pcRef.current?.setRemoteDescription(new RTCSessionDescription(msg.data.sdp)).catch(console.error);
+            pc.setRemoteDescription(new RTCSessionDescription(msg.data.sdp)).catch(console.error);
           } else if (msg.event === 'ice-candidate') {
-            pcRef.current?.addIceCandidate(new RTCIceCandidate(msg.data.candidate)).catch(console.error);
+            pc.addIceCandidate(new RTCIceCandidate(msg.data.candidate)).catch(console.error);
           } else if (msg.event === 'call-hangup') {
             hangup();
-          } else if (msg.event === 'call-offer' && incoming) {
-            const pc = pcRef.current;
-            if (pc) {
-              pc.setRemoteDescription(new RTCSessionDescription(msg.data.sdp))
-                .then(() => pc.createAnswer())
-                .then((answer) => {
-                  pc.setLocalDescription(answer);
-                  ws.send(JSON.stringify({ event: 'call-answer', data: { targetId: friendId, sdp: answer } }));
-                })
-                .catch(console.error);
-            }
           }
         };
         ws.addEventListener('message', handleSignal);
 
         if (incoming) {
-          createPeerConnection(stream);
-          if (offerSdp) {
-            const pc = pcRef.current;
-            if (pc) {
-              pc.setRemoteDescription(new RTCSessionDescription(offerSdp))
-                .then(() => pc.createAnswer())
-                .then((answer) => {
-                  pc.setLocalDescription(answer);
-                  ws.send(JSON.stringify({ event: 'call-answer', data: { targetId: friendId, sdp: answer } }));
-                })
-                .catch(console.error);
-            }
-          }
+          // 被叫方：等待主叫方 offer（在 handleSignal 中处理）
         } else {
-          if (accepted) {
-            createPeerConnection(stream);
-            const pc = pcRef.current;
-            if (pc) {
-              const offer = await pc.createOffer();
-              await pc.setLocalDescription(offer);
-              ws.send(JSON.stringify({ event: 'call-offer', data: { targetId: friendId, sdp: offer, type } }));
-            }
-          }
+          // 主叫方：创建 offer
+          const offer = await pc.createOffer();
+          await pc.setLocalDescription(offer);
+          ws.send(JSON.stringify({
+            event: 'call-offer',
+            data: { targetId: friendId, sdp: offer, type },
+          }));
         }
+
         return () => {
           ws.removeEventListener('message', handleSignal);
         };
@@ -197,7 +176,9 @@ export default function CallModal({
         onHangup();
       }
     };
+
     init();
+
     return () => {
       isClosedRef.current = true;
       localStreamRef.current?.getTracks().forEach((t) => t.stop());
@@ -205,19 +186,6 @@ export default function CallModal({
       if (durationRef.current) clearInterval(durationRef.current);
     };
   }, []);
-
-  useEffect(() => {
-    if (!incoming && accepted && localStreamRef.current && !pcRef.current) {
-      createPeerConnection(localStreamRef.current);
-      const pc = pcRef.current;
-      if (pc) {
-        pc.createOffer().then((offer) => {
-          pc.setLocalDescription(offer);
-          ws.send(JSON.stringify({ event: 'call-offer', data: { targetId: friendId, sdp: offer, type } }));
-        }).catch(console.error);
-      }
-    }
-  }, [accepted, incoming, createPeerConnection, ws, friendId, type]);
 
   const formatTime = (sec: number) =>
     `${Math.floor(sec / 60).toString().padStart(2, '0')}:${(sec % 60).toString().padStart(2, '0')}`;
@@ -245,7 +213,7 @@ export default function CallModal({
           )}
           {callStatus === 'calling' && (
             <div className="absolute top-4 left-4 bg-black/50 text-white text-sm px-3 py-1 rounded-full">
-              {incoming ? '等待连接...' : '等待对方接听...'}
+              {incoming ? '等待接听...' : '呼叫中...'}
             </div>
           )}
         </div>
