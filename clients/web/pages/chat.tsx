@@ -741,12 +741,11 @@ export default function Chat() {
 
   return (
     <div
-      className="flex bg-gray-100 overflow-hidden"
-      style={{ height: 'calc(100vh - 56px)' }}
+      className="flex h-full bg-transparent relative overflow-hidden"
       onClick={() => { setContextMenu(null); setShowMentionList(false); }}
     >
       {/* 左侧栏 */}
-      <div className={`${mobileView === 'sidebar' ? 'block' : 'hidden'} md:block md:w-80 w-full bg-white border-r flex flex-col absolute md:relative z-10 h-full`}>
+      <div className={`${mobileView === 'sidebar' ? 'block' : 'hidden'} md:block md:w-80 w-full border-r flex flex-col absolute md:relative z-10 h-full sidebar-bg`}>
         <div className="p-3 border-b">
           {/* 搜索框 + 加号按钮 同行 */}
           <div className="flex items-center gap-2">
@@ -960,7 +959,7 @@ export default function Chat() {
                 ref={scrollContainerRef}
                 onScroll={handleScroll}
                 data-scroll-container
-                className="flex-1 min-h-0 overflow-y-auto bg-gray-50 p-4"
+                className="flex-1 min-h-0 overflow-y-auto chat-messages-bg p-4"
               >
                 {isLoadingChat ? (
                   <div className="flex items-center justify-center h-full">
@@ -1058,7 +1057,7 @@ export default function Chat() {
             </div>
 
             {/* 第三行：输入框 */}
-            <div className="bg-white border-t p-3 flex items-center gap-2">
+            <div className="chat-input-bg border-t p-3 flex items-center gap-2">
               <button onClick={() => setInputMode(inputMode === 'text' ? 'voice' : 'text')} className="text-gray-400 hover:text-gray-600 p-2">
                 {inputMode === 'text' ? (
                   <svg className="w-5 h-5 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
