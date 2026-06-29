@@ -28,7 +28,7 @@ export default function Profile() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   // 记录当前上传用途：'avatar' 或 'bg'
-  const [widgetPurpose, setWidgetPurpose] = useState<'avatar' | 'bg'>('avatar');
+  const [uploadPurpose, setUploadPurpose] = useState<'avatar' | 'bg'>('avatar');
 
   const router = useRouter();
   const cloudinaryRef = useRef<any>();
@@ -71,7 +71,7 @@ export default function Profile() {
     if (saved) setOverlayOpacity(parseFloat(saved));
   }, []);
 
-  // 初始化 Cloudinary Widget（根据用途切换回调）
+  // 初始化 Cloudinary Widget（根据 uploadPurpose 切换回调）
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const script = document.createElement('script');
@@ -85,23 +85,25 @@ export default function Profile() {
           uploadPreset: 'xianqu_preset',
           maxFiles: 1,
           clientAllowedFormats: ['image'],
-          maxFileSize: 10000000,
+          maxFileSize: 5000000,
         },
         (error: any, result: any) => {
           if (!error && result && result.event === 'success') {
             const url = result.info.secure_url;
-            if (widgetPurpose === 'bg') {
-              localStorage.setItem('customBg', url);
-              window.location.reload(); // 刷新应用背景
-            } else {
-              // 默认作为头像处理
+            const token = localStorage.getItem('token');
+
+            if (uploadPurpose === 'avatar') {
+              // 保存头像到服务器
               setAvatar(url);
-              const token = localStorage.getItem('token');
               fetch(`${API}/user/profile`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
                 body: JSON.stringify({ avatar: url }),
               });
+            } else {
+              // 保存背景到 localStorage 并刷新
+              localStorage.setItem('customBg', url);
+              window.location.reload();
             }
           }
         }
@@ -109,7 +111,7 @@ export default function Profile() {
     };
     document.body.appendChild(script);
     return () => { document.body.removeChild(script); };
-  }, [widgetPurpose]);
+  }, [uploadPurpose]);
 
   const saveProfile = async () => {
     const token = localStorage.getItem('token');
@@ -215,7 +217,10 @@ export default function Profile() {
         <div className="flex items-center gap-4">
           <div
             className="w-16 h-16 rounded-full flex items-center justify-center text-white text-2xl font-bold overflow-hidden cursor-pointer bg-blue-500"
-            onClick={() => { setWidgetPurpose('avatar'); widgetRef.current?.open(); }}
+            onClick={() => {
+              setUploadPurpose('avatar');
+              widgetRef.current?.open();
+            }}
           >
             {avatar ? (
               <img src={avatar} alt="头像" className="w-full h-full object-cover" />
@@ -371,7 +376,10 @@ export default function Profile() {
 
         {/* 自定义背景上传 */}
         <button
-          onClick={() => { setWidgetPurpose('bg'); widgetRef.current?.open(); }}
+          onClick={() => {
+            setUploadPurpose('bg');
+            widgetRef.current?.open();
+          }}
           className="w-full flex items-center justify-between px-5 py-3 border-b border-gray-100 hover:bg-gray-50"
         >
           <div className="flex items-center gap-3">
