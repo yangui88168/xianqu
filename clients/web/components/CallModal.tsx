@@ -22,15 +22,15 @@ export default function CallModal({
 
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
-  // 不再使用隐藏的 audio 元素，改用 AudioContext
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
   const remoteStreamRef = useRef<MediaStream | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const durationRef = useRef<NodeJS.Timeout | null>(null);
   const isClosedRef = useRef(false);
+  const remoteStreamBoundRef = useRef(false);
+  const initDoneRef = useRef(false); // 防止严格模式下重复初始化
 
-  // 挂断
   const hangup = useCallback(() => {
     if (isClosedRef.current) return;
     isClosedRef.current = true;
@@ -72,39 +72,32 @@ export default function CallModal({
     }
   }, [facingMode]);
 
-  // 使用 AudioContext 播放远程音频流
+  // 播放远程音频（AudioContext，稳定且不会中断）
   const playRemoteAudio = useCallback((stream: MediaStream) => {
     if (typeof window === 'undefined') return;
     try {
-      // 确保 AudioContext 已创建
       if (!audioContextRef.current) {
         audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
       }
       const ctx = audioContextRef.current;
-      // 如果 AudioContext 处于挂起状态（浏览器自动播放策略），尝试恢复
-      if (ctx.state === 'suspended') {
-        ctx.resume();
-      }
-      // 创建媒体流源并连接到扬声器
+      if (ctx.state === 'suspended') ctx.resume();
       const source = ctx.createMediaStreamSource(stream);
       source.connect(ctx.destination);
-      console.log('🔊 远程音频已通过 AudioContext 播放');
-    } catch (e) {
-      console.error('音频播放失败', e);
-    }
+    } catch (e) { console.error('音频连接失败', e); }
   }, []);
 
-  // 绑定远程流（视频直接绑定，音频用 AudioContext）
+  // 绑定远程流（仅第一次）
   const bindRemoteStream = useCallback((remoteStream: MediaStream) => {
-    if (isClosedRef.current) return;
+    if (isClosedRef.current || remoteStreamBoundRef.current) return;
+    remoteStreamBoundRef.current = true;
     remoteStreamRef.current = remoteStream;
 
-    // 视频绑定
+    // 视频：只设置 srcObject，不调用 play()，靠 autoplay 属性
     if (type === 'video' && remoteVideoRef.current) {
       remoteVideoRef.current.srcObject = remoteStream;
-      remoteVideoRef.current.play().catch(console.error);
+      // 如果需要手动触发，可等待 loadedmetadata，但省略以避开 AbortError
     }
-    // 音频统一用 AudioContext 播放（通话双方都需要听到对方声音）
+    // 音频：始终通过 AudioContext 播放
     playRemoteAudio(remoteStream);
 
     setCallStatus('connected');
@@ -114,7 +107,12 @@ export default function CallModal({
   }, [type, playRemoteAudio]);
 
   useEffect(() => {
+    // 防止严格模式或重复挂载导致多次执行
+    if (initDoneRef.current) return;
+    initDoneRef.current = true;
+
     isClosedRef.current = false;
+    remoteStreamBoundRef.current = false;
 
     const init = async () => {
       try {
@@ -137,6 +135,7 @@ export default function CallModal({
         stream.getTracks().forEach((track) => pc.addTrack(track, stream));
 
         pc.ontrack = (event) => {
+          if (isClosedRef.current || remoteStreamBoundRef.current) return;
           const [remote] = event.streams;
           if (remote) bindRemoteStream(remote);
         };
@@ -154,14 +153,13 @@ export default function CallModal({
           if (msg.data?.from !== friendId) return;
 
           if (msg.event === 'call-answer') {
-            console.log('📩 收到 answer');
             pc.setRemoteDescription(new RTCSessionDescription(msg.data.sdp)).catch(console.error);
           } else if (msg.event === 'ice-candidate') {
             pc.addIceCandidate(new RTCIceCandidate(msg.data.candidate)).catch(console.error);
           } else if (msg.event === 'call-hangup') {
             hangup();
           } else if (msg.event === 'call-offer' && incoming) {
-            console.log('📩 被叫方收到 offer');
+            // 备用：动态接收 offer（通常用 offerSdp）
             pc.setRemoteDescription(new RTCSessionDescription(msg.data.sdp))
               .then(() => pc.createAnswer())
               .then((answer) => {
@@ -175,7 +173,6 @@ export default function CallModal({
 
         if (incoming) {
           if (offerSdp) {
-            console.log('🔑 使用初始 offerSdp 建立连接');
             await pc.setRemoteDescription(new RTCSessionDescription(offerSdp));
             const answer = await pc.createAnswer();
             await pc.setLocalDescription(answer);
@@ -184,7 +181,6 @@ export default function CallModal({
         } else {
           const offer = await pc.createOffer();
           await pc.setLocalDescription(offer);
-          console.log('📤 主叫发送 offer');
           ws.send(JSON.stringify({ event: 'call-offer', data: { targetId: friendId, sdp: offer, type } }));
         }
 
@@ -203,6 +199,7 @@ export default function CallModal({
       localStreamRef.current?.getTracks().forEach((t) => t.stop());
       pcRef.current?.close();
       if (durationRef.current) clearInterval(durationRef.current);
+      initDoneRef.current = false; // 允许下次重新初始化
     };
   }, []);
 
@@ -212,7 +209,6 @@ export default function CallModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black">
       <div className="relative flex flex-col items-center w-full h-full max-w-3xl mx-auto">
-        {/* 大尺寸视频画面 */}
         <div className="relative w-full h-full flex items-center justify-center bg-gray-900">
           {type === 'video' ? (
             <video
@@ -227,8 +223,6 @@ export default function CallModal({
               <p className="text-2xl font-medium">{friendName}</p>
             </div>
           )}
-
-          {/* 自己的小窗（视频通话时） */}
           {type === 'video' && (
             <div className="absolute top-4 right-4 w-32 h-48 bg-gray-700 rounded-xl overflow-hidden border-2 border-white shadow-lg">
               <video
@@ -240,14 +234,10 @@ export default function CallModal({
               />
             </div>
           )}
-
-          {/* 通话时长或状态 */}
           <div className="absolute top-4 left-4 bg-black/50 text-white text-sm px-3 py-1 rounded-full">
             {callStatus === 'connected' ? formatTime(duration) : incoming ? '等待连接...' : '呼叫中...'}
           </div>
         </div>
-
-        {/* 底部控制栏（绝对定位在底部） */}
         <div className="absolute bottom-8 left-0 right-0 flex items-center justify-center gap-4">
           <div className="flex items-center gap-3 bg-gray-800/80 px-6 py-4 rounded-full">
             <button onClick={toggleMute} className={`w-12 h-12 rounded-full flex items-center justify-center text-white ${isMuted ? 'bg-red-500' : 'bg-gray-600 hover:bg-gray-500'}`}>
