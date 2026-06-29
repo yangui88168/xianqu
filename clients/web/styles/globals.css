@@ -56,23 +56,28 @@ body {
 /* 导航栏选中态 */
 .text-blue-500 { color: #4a9e8f !important; }
 
-/* 强制所有主要背景半透明，透出底层背景 */
-.bg-white {
+/* 背景透明化 - 强制覆盖 */
+body .bg-white,
+body .bg-gray-50,
+body .bg-gray-100,
+body .bg-gray-200,
+body .bg-blue-500,
+body .bg-green-500,
+body .bg-red-500 {
   background-color: rgba(255, 255, 255, 0.7) !important;
 }
-.bg-gray-50 {
-  background-color: rgba(249, 250, 251, 0.7) !important;
-}
-.bg-gray-100 {
-  background-color: rgba(243, 244, 246, 0.7) !important;
-}
-.bg-gray-200 {
-  background-color: rgba(229, 231, 235, 0.7) !important;
+
+/* 消息气泡保留一定实色，但略微透出背景 */
+body .bg-blue-500 {
+  background-color: rgba(59, 130, 246, 0.85) !important;
 }
 
-/* 聊天消息气泡也增加一点透明 */
-.bg-blue-500 {
-  background-color: rgba(59, 130, 246, 0.85) !important; /* 自己的气泡保持较实 */
+/* 文字增强对比 */
+body .text-gray-800,
+body .text-gray-700,
+body .text-gray-600,
+body .text-gray-900 {
+  text-shadow: 0 1px 2px rgba(255,255,255,0.8);
 }
 
 /* 卡片和列表项增加轻微模糊 */
@@ -80,14 +85,9 @@ body {
   backdrop-filter: blur(4px);
 }
 
-/* 文字可读性增强 */
-.text-gray-800, .text-gray-700, .text-gray-900, .text-gray-600 {
-  text-shadow: 0 0 3px rgba(255,255,255,0.8);
-}
-
 /* 聊天消息区域背景透明 */
 .chat-messages-bg {
-  background-color: rgba(249, 250, 251, 0.6) !important; /* bg-gray-50 半透明 */
+  background-color: rgba(249, 250, 251, 0.6) !important;
 }
 
 /* 输入框区域背景透明 */
