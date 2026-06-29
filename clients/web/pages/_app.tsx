@@ -39,7 +39,7 @@ export default function App({ Component, pageProps }: AppProps) {
   const isActive = (path: string) => router.pathname.startsWith(path);
 
   return (
-    <div className="max-w-5xl mx-auto h-dvh flex flex-col shadow-2xl bg-white/70 backdrop-blur-sm overflow-hidden relative">
+    <div className="max-w-5xl mx-auto h-dvh flex flex-col shadow-2xl overflow-hidden relative">
       {/* 虚化背景层 */}
       {customBg && (
         <div
@@ -47,7 +47,7 @@ export default function App({ Component, pageProps }: AppProps) {
           style={{
             backgroundImage: `url(${customBg})`,
             filter: 'blur(12px)',
-            transform: 'scale(1.1)', // 防止边缘白边
+            transform: 'scale(1.1)',
           }}
         />
       )}
