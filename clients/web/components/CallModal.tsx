@@ -6,11 +6,12 @@ interface CallModalProps {
   friendName: string;
   type: 'audio' | 'video';
   incoming?: boolean;
+  offerSdp?: any;            // ✅ 被叫方传入的 offer SDP
   onHangup: () => void;
 }
 
 export default function CallModal({
-  ws, friendId, friendName, type, incoming, onHangup,
+  ws, friendId, friendName, type, incoming, offerSdp, onHangup,
 }: CallModalProps) {
   const [callStatus, setCallStatus] = useState<'calling' | 'connected' | 'ended'>('calling');
   const [duration, setDuration] = useState(0);
@@ -126,18 +127,17 @@ export default function CallModal({
         const handleSignal = (e: MessageEvent) => {
           if (isClosedRef.current) return;
           const msg = JSON.parse(e.data);
-          // 只处理来自对方的信令
           if (msg.data?.from !== friendId) return;
 
           if (msg.event === 'call-answer') {
-            console.log('收到 answer', msg.data.sdp);
+            console.log('📩 收到 answer');
             pc.setRemoteDescription(new RTCSessionDescription(msg.data.sdp)).catch(console.error);
           } else if (msg.event === 'ice-candidate') {
             pc.addIceCandidate(new RTCIceCandidate(msg.data.candidate)).catch(console.error);
           } else if (msg.event === 'call-hangup') {
             hangup();
           } else if (msg.event === 'call-offer' && incoming) {
-            console.log('被叫收到 offer', msg.data.sdp);
+            // 仅用于动态接收 offer（备用）
             pc.setRemoteDescription(new RTCSessionDescription(msg.data.sdp))
               .then(() => pc.createAnswer())
               .then((answer) => {
@@ -150,12 +150,19 @@ export default function CallModal({
         ws.addEventListener('message', handleSignal);
 
         if (incoming) {
-          // 被叫方：等待主叫方 offer
+          // 被叫方：优先使用传入的 offerSdp
+          if (offerSdp) {
+            console.log('🔑 使用初始 offerSdp 建立连接');
+            await pc.setRemoteDescription(new RTCSessionDescription(offerSdp));
+            const answer = await pc.createAnswer();
+            await pc.setLocalDescription(answer);
+            ws.send(JSON.stringify({ event: 'call-answer', data: { targetId: friendId, sdp: answer } }));
+          }
         } else {
-          // 主叫方：创建并发送 offer
+          // 主叫方：创建 offer
           const offer = await pc.createOffer();
           await pc.setLocalDescription(offer);
-          console.log('主叫发送 offer', offer);
+          console.log('📤 主叫发送 offer');
           ws.send(JSON.stringify({ event: 'call-offer', data: { targetId: friendId, sdp: offer, type } }));
         }
 
