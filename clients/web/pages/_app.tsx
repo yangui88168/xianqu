@@ -15,12 +15,15 @@ export default function App({ Component, pageProps }: AppProps) {
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
   const [customBg, setCustomBg] = useState('');
+  const [overlayOpacity, setOverlayOpacity] = useState(0.25); // 默认 25% 白色遮罩
 
   useEffect(() => {
     setMounted(true);
     try {
       const bg = localStorage.getItem('customBg');
       if (bg) setCustomBg(bg);
+      const opacity = localStorage.getItem('bgOpacity');
+      if (opacity) setOverlayOpacity(parseFloat(opacity));
     } catch (e) {}
   }, []);
 
@@ -46,13 +49,16 @@ export default function App({ Component, pageProps }: AppProps) {
           className="absolute inset-0 z-0 bg-cover bg-center bg-fixed"
           style={{
             backgroundImage: `url(${customBg})`,
-            filter: 'blur(18px)',
+            filter: 'blur(20px)',      // 增强模糊
             transform: 'scale(1.1)',
           }}
         />
       )}
-      {/* 半透明遮罩，调低透明度让背景更突出 */}
-      <div className="absolute inset-0 z-[1] bg-white/20 pointer-events-none" />
+      {/* 白色遮罩，动态透明度 */}
+      <div
+        className="absolute inset-0 z-[1] pointer-events-none"
+        style={{ backgroundColor: `rgba(255,255,255,${overlayOpacity})` }}
+      />
 
       <div className="relative z-10 flex-1 flex flex-col min-h-0">
         <div className="flex-1 min-h-0 relative">
