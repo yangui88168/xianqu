@@ -203,7 +203,6 @@ export default function Chat() {
 
         if (msg.event === 'message:receive') {
           const newMsg = msg.data;
-          // 如果不是当前选中的好友发来的消息，播放提示音
           if (selectedChat?.data?.id !== newMsg.senderId) {
             MessageSound?.play();
           }
@@ -226,7 +225,6 @@ export default function Chat() {
           loadSessions();
         } else if (msg.event === 'group-message:receive') {
           const newMsg = msg.data;
-          // 如果不是当前选中的群聊消息，播放提示音
           if (selectedChat?.data?.id !== newMsg.groupId) {
             MessageSound?.play();
           }
@@ -241,10 +239,12 @@ export default function Chat() {
           }
           loadGroups();
         } else if (msg.event === 'call-offer') {
+          // ✅ 修改：保存完整的 call-offer 数据（包含 sdp）
           setPendingCall({
             type: msg.data.type || 'audio',
             friendId: msg.data.from,
             friendName: msg.data.fromName || '好友',
+            sdp: msg.data.sdp,
           });
         } else if (msg.event === 'call-accepted') {
           const currentCall = callStateRef.current;
@@ -307,7 +307,6 @@ export default function Chat() {
       }).catch(() => {});
       setSessions(prev => prev.map(s => s.friend.id === data.id ? { ...s, unreadCount: 0 } : s));
     }
-    // 如果是群聊，预加载群信息
     if (type === 'group') {
       loadGroupInfoById(data.id);
     }
@@ -915,7 +914,7 @@ export default function Chat() {
               <div className="flex items-center gap-1">
                 {selectedChat.type === 'friend' && (
                   <>
-                    {/* 语音通话按钮 - 修改为仅打开 CallModal，不发送信令 */}
+                    {/* 语音通话按钮 - 仅打开 CallModal，不发送信令 */}
                     <button onClick={() => {
                       if (!ws) return;
                       setCallState({ type: 'audio', friendId: selectedChat.data.id, friendName: selectedChat.data.nickname || selectedChat.data.username, incoming: false });
@@ -924,7 +923,7 @@ export default function Chat() {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
                       </svg>
                     </button>
-                    {/* 视频通话按钮 - 修改为仅打开 CallModal，不发送信令 */}
+                    {/* 视频通话按钮 - 仅打开 CallModal，不发送信令 */}
                     <button onClick={() => {
                       if (!ws) return;
                       setCallState({ type: 'video', friendId: selectedChat.data.id, friendName: selectedChat.data.nickname || selectedChat.data.username, incoming: false });
@@ -1354,7 +1353,17 @@ export default function Chat() {
             <p className="text-gray-500 text-sm mb-6">邀请你进行{pendingCall.type === 'video' ? '视频' : '语音'}通话</p>
             <div className="flex gap-3 justify-center">
               <button onClick={() => { ws?.send(JSON.stringify({ event: 'call-hangup', data: { targetId: pendingCall.friendId } })); setPendingCall(null); }} className="px-6 py-3 bg-red-500 text-white rounded-full font-medium">拒绝</button>
-              <button onClick={() => { ws?.send(JSON.stringify({ event: 'call-accepted', data: { targetId: pendingCall.friendId } })); setCallState({ type: pendingCall.type, friendId: pendingCall.friendId, friendName: pendingCall.friendName, incoming: true }); setPendingCall(null); }} className="px-6 py-3 bg-green-500 text-white rounded-full font-medium">接听</button>
+              {/* ✅ 修改：接听时传递 offerSdp，不再发送 call-accepted */}
+              <button onClick={() => {
+                setCallState({
+                  type: pendingCall.type,
+                  friendId: pendingCall.friendId,
+                  friendName: pendingCall.friendName,
+                  incoming: true,
+                  offerSdp: pendingCall.sdp,
+                });
+                setPendingCall(null);
+              }} className="px-6 py-3 bg-green-500 text-white rounded-full font-medium">接听</button>
             </div>
           </div>
         </div>
@@ -1413,6 +1422,7 @@ export default function Chat() {
           type={callState.type}
           incoming={callState.incoming}
           accepted={callState.accepted}
+          offerSdp={callState.offerSdp}
           onHangup={() => setCallState(null)}
         />
       )}
