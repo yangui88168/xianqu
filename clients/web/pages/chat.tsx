@@ -800,8 +800,6 @@ export default function Chat() {
               ))}
             </div>
           )}
-
-          <button onClick={() => setShowGroupModal(true)} className="w-full bg-green-500 text-white py-1 rounded text-sm mb-2 mt-2">+ 创建群聊</button>
         </div>
 
         {friendRequests.length > 0 && (
@@ -920,18 +918,24 @@ export default function Chat() {
                     </svg>
                   </button>
                   {showMenu && (
-                    <div className="absolute right-0 top-8 bg-white border rounded-xl shadow-lg py-1 w-40 z-50">
+                    <div className="absolute right-0 top-8 bg-white border rounded-xl shadow-lg py-1 w-44 z-50">
                       <button
                         onClick={() => { setShowMenu(false); setShowGroupModal(true); }}
-                        className="w-full text-left px-4 py-2 text-sm hover:bg-gray-100"
+                        className="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 flex items-center gap-2"
                       >
-                        + 创建群聊
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                        </svg>
+                        创建群聊
                       </button>
                       <button
-                        onClick={() => { setShowMenu(false); setSearchMode(true); }}
-                        className="w-full text-left px-4 py-2 text-sm hover:bg-gray-100"
+                        onClick={() => { setShowMenu(false); setShowSearch(true); }}
+                        className="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 flex items-center gap-2"
                       >
-                        🔍 添加好友
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                        添加好友
                       </button>
                     </div>
                   )}
