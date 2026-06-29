@@ -45,13 +45,6 @@ body {
   background-attachment: fixed;
 }
 
-/* 主卡片/容器使用半透明+模糊效果 */
-.bg-white {
-  background-color: rgba(255, 255, 255, 0.85) !important;
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-}
-
 /* 统一主题色从蓝色改为温暖青色 */
 .bg-blue-500 { background-color: #4a9e8f !important; }
 .bg-blue-600 { background-color: #3d8b7d !important; }
@@ -63,33 +56,28 @@ body {
 /* 导航栏选中态 */
 .text-blue-500 { color: #4a9e8f !important; }
 
-/* 确保内容区域背景有足够对比度 */
+/* 强制所有主要背景半透明，透出底层背景 */
 .bg-white {
-  --tw-bg-opacity: 0.85;
-}
-
-/* 虚化背景下的文字增强 */
-.text-gray-800, .text-gray-700, .text-gray-900 {
-  text-shadow: 0 1px 2px rgba(255,255,255,0.6);
-}
-
-/* 让所有常见的背景色半透明，透出底层背景 */
-.bg-white {
-  background-color: rgba(255, 255, 255, 0.75) !important;
+  background-color: rgba(255, 255, 255, 0.7) !important;
 }
 .bg-gray-50 {
-  background-color: rgba(249, 250, 251, 0.75) !important;
+  background-color: rgba(249, 250, 251, 0.7) !important;
 }
 .bg-gray-100 {
-  background-color: rgba(243, 244, 246, 0.75) !important;
+  background-color: rgba(243, 244, 246, 0.7) !important;
 }
 .bg-gray-200 {
-  background-color: rgba(229, 231, 235, 0.75) !important;
+  background-color: rgba(229, 231, 235, 0.7) !important;
 }
 
-/* 卡片和列表项增加轻微模糊，提升层次感 */
+/* 聊天消息气泡也增加一点透明 */
+.bg-blue-500 {
+  background-color: rgba(59, 130, 246, 0.85) !important; /* 自己的气泡保持较实 */
+}
+
+/* 卡片和列表项增加轻微模糊 */
 .shadow, .shadow-sm, .shadow-md, .shadow-lg, .shadow-xl, .shadow-2xl {
-  backdrop-filter: blur(2px);
+  backdrop-filter: blur(4px);
 }
 
 /* 文字可读性增强 */
