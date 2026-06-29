@@ -16,7 +16,6 @@ export default function App({ Component, pageProps }: AppProps) {
   const [mounted, setMounted] = useState(false);
   const [customBg, setCustomBg] = useState('');
 
-  // ✅ 所有客户端 API 都在 useEffect 中安全访问
   useEffect(() => {
     setMounted(true);
     try {
@@ -25,12 +24,10 @@ export default function App({ Component, pageProps }: AppProps) {
     } catch (e) {}
   }, []);
 
-  // 登录页直接渲染（不影响构建）
   if (router.pathname === '/') {
     return <Component {...pageProps} />;
   }
 
-  // 服务端返回加载占位，避免预渲染错误
   if (!mounted) {
     return (
       <div className="h-dvh flex items-center justify-center bg-gray-50">
@@ -42,19 +39,26 @@ export default function App({ Component, pageProps }: AppProps) {
   const isActive = (path: string) => router.pathname.startsWith(path);
 
   return (
-    <div className="max-w-5xl mx-auto h-dvh flex flex-col shadow-soft bg-white/80 backdrop-blur-md overflow-hidden relative">
-      {/* 自定义背景（仅客户端渲染） */}
+    <div className="max-w-5xl mx-auto h-dvh flex flex-col shadow-2xl bg-white/70 backdrop-blur-sm overflow-hidden relative">
+      {/* 虚化背景层 */}
       {customBg && (
         <div
-          className="absolute inset-0 bg-cover bg-center opacity-10 pointer-events-none z-0"
-          style={{ backgroundImage: `url(${customBg})` }}
+          className="absolute inset-0 z-0 bg-cover bg-center bg-fixed"
+          style={{
+            backgroundImage: `url(${customBg})`,
+            filter: 'blur(12px)',
+            transform: 'scale(1.1)', // 防止边缘白边
+          }}
         />
       )}
+      {/* 半透明遮罩保证文字可读 */}
+      <div className="absolute inset-0 z-[1] bg-white/30 pointer-events-none" />
+
       <div className="relative z-10 flex-1 flex flex-col min-h-0">
         <div className="flex-1 min-h-0 relative">
           <Component {...pageProps} />
         </div>
-        <nav className="flex-shrink-0 flex items-center justify-around bg-white border-t" style={{ height: '56px' }}>
+        <nav className="flex-shrink-0 flex items-center justify-around bg-white/80 backdrop-blur-md border-t" style={{ height: '56px' }}>
           {tabs.map((tab) => (
             <button
               key={tab.path}
