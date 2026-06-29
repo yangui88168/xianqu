@@ -3,53 +3,53 @@
 @tailwind utilities;
 
 html {
-  font-size: 14px;
+font-size: 14px;
 }
 
 body {
-  -webkit-font-smoothing: antialiased;
+-webkit-font-smoothing: antialiased;
 }
 
 .rounded-card {
-  border-radius: 12px;
+border-radius: 12px;
 }
 
 html, body, #__next {
-  height: 100%;
-  overflow: hidden;
+height: 100%;
+overflow: hidden;
 }
 
 /* 基础元素圆润化 */
 input, textarea, select, button {
-  border-radius: 0.5rem !important;
+border-radius: 0.5rem !important;
 }
 
 /* 卡片容器使用柔和阴影 */
 .bg-white {
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
 }
 
 /* 聊天消息气泡调整 */
 .rounded-2xl {
-  border-radius: 1rem;
+border-radius: 1rem;
 }
 
 /* 输入框聚焦时使用更柔和的环 */
-.focus\:ring-2:focus {
-  --tw-ring-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2) !important;
+.focus:ring-2:focus {
+--tw-ring-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2) !important;
 }
 
 /* 整体背景柔和渐变 */
 body {
-  background: linear-gradient(135deg, #f5f7fa 0%, #e4e9f2 100%);
-  background-attachment: fixed;
+background: linear-gradient(135deg, #f5f7fa 0%, #e4e9f2 100%);
+background-attachment: fixed;
 }
 
 /* 主卡片/容器使用半透明+模糊效果 */
 .bg-white {
-  background-color: rgba(255, 255, 255, 0.85) !important;
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+background-color: rgba(255, 255, 255, 0.85) !important;
+backdrop-filter: blur(12px);
+-webkit-backdrop-filter: blur(12px);
 }
 
 /* 统一主题色从蓝色改为温暖青色 */
@@ -57,8 +57,18 @@ body {
 .bg-blue-600 { background-color: #3d8b7d !important; }
 .text-blue-500 { color: #4a9e8f !important; }
 .border-blue-500 { border-color: #4a9e8f !important; }
-.hover\:bg-blue-600:hover { background-color: #3d8b7d !important; }
+.hover:bg-blue-600:hover { background-color: #3d8b7d !important; }
 .ring-blue-300 { --tw-ring-color: rgba(74, 158, 143, 0.3) !important; }
 
 /* 导航栏选中态 */
 .text-blue-500 { color: #4a9e8f !important; }
+
+/* 确保内容区域背景有足够对比度 */
+.bg-white {
+--tw-bg-opacity: 0.85;
+}
+
+/* 虚化背景下的文字增强 */
+.text-gray-800, .text-gray-700, .text-gray-900 {
+text-shadow: 0 1px 2px rgba(255,255,255,0.6);
+}
