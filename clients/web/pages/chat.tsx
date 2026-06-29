@@ -239,11 +239,10 @@ export default function Chat() {
           }
           loadGroups();
         } else if (msg.event === 'call-offer') {
-          // ✅ 修改：保存完整的 call-offer 数据（包含 sdp）
+          // ✅ 只保存 from 和 sdp，昵称在渲染弹窗时动态查找
           setPendingCall({
             type: msg.data.type || 'audio',
             friendId: msg.data.from,
-            friendName: msg.data.fromName || '好友',
             sdp: msg.data.sdp,
           });
         } else if (msg.event === 'call-accepted') {
@@ -1337,37 +1336,46 @@ export default function Chat() {
       )}
 
       {/* 被叫方接听/拒绝弹窗 */}
-      {pendingCall && (
-        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 text-center w-72">
-            <div className="text-4xl mb-3">{pendingCall.type === 'video' ? (
-              <svg className="w-10 h-10 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-              </svg>
-            ) : (
-              <svg className="w-10 h-10 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-              </svg>
-            )}</div>
-            <p className="font-bold text-lg mb-1">{pendingCall.friendName}</p>
-            <p className="text-gray-500 text-sm mb-6">邀请你进行{pendingCall.type === 'video' ? '视频' : '语音'}通话</p>
-            <div className="flex gap-3 justify-center">
-              <button onClick={() => { ws?.send(JSON.stringify({ event: 'call-hangup', data: { targetId: pendingCall.friendId } })); setPendingCall(null); }} className="px-6 py-3 bg-red-500 text-white rounded-full font-medium">拒绝</button>
-              {/* ✅ 修改：接听时传递 offerSdp，不再发送 call-accepted */}
-              <button onClick={() => {
-                setCallState({
-                  type: pendingCall.type,
-                  friendId: pendingCall.friendId,
-                  friendName: pendingCall.friendName,
-                  incoming: true,
-                  offerSdp: pendingCall.sdp,
-                });
-                setPendingCall(null);
-              }} className="px-6 py-3 bg-green-500 text-white rounded-full font-medium">接听</button>
+      {pendingCall && (() => {
+        // ✅ 动态从 sessions 中查找好友昵称
+        const friendSession = sessions.find(s => s.friend.id === pendingCall.friendId);
+        const friendName = friendSession?.friend?.nickname || friendSession?.friend?.username || '好友';
+
+        return (
+          <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
+            <div className="bg-white rounded-xl p-6 text-center w-72">
+              <div className="text-4xl mb-3">{pendingCall.type === 'video' ? (
+                <svg className="w-10 h-10 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                </svg>
+              ) : (
+                <svg className="w-10 h-10 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                </svg>
+              )}</div>
+              <p className="font-bold text-lg mb-1">{friendName}</p>
+              <p className="text-gray-500 text-sm mb-6">邀请你进行{pendingCall.type === 'video' ? '视频' : '语音'}通话</p>
+              <div className="flex gap-3 justify-center">
+                <button onClick={() => {
+                  ws?.send(JSON.stringify({ event: 'call-hangup', data: { targetId: pendingCall.friendId } }));
+                  setPendingCall(null);
+                }} className="px-6 py-3 bg-red-500 text-white rounded-full font-medium">拒绝</button>
+                {/* ✅ 接听时传递 offerSdp，同时动态获取 friendName */}
+                <button onClick={() => {
+                  setCallState({
+                    type: pendingCall.type,
+                    friendId: pendingCall.friendId,
+                    friendName,
+                    incoming: true,
+                    offerSdp: pendingCall.sdp,
+                  });
+                  setPendingCall(null);
+                }} className="px-6 py-3 bg-green-500 text-white rounded-full font-medium">接听</button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* 转发弹窗 */}
       {forwardModal && (
