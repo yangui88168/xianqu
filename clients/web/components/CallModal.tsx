@@ -30,8 +30,10 @@ export default function CallModal({
   const startTimeRef = useRef<number>(0);
   const pauseTimeRef = useRef<number | null>(null);
   const isClosedRef = useRef(false);
-  const pendingCandidatesRef = useRef<Map<number, RTCIceCandidate[]>>(new Map());
+  const pendingCandidatesRef = useRef<RTCIceCandidate[]>([]);
   const audioUnlockedRef = useRef(false);
+  const makingOffer = useRef(false);
+  const ignoreOffer = useRef(false);
   const politeRef = useRef(false);
   const iceRestartCountRef = useRef(0);
   const waitingForAnswerRef = useRef(false);
@@ -39,59 +41,31 @@ export default function CallModal({
   const callTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const callStatusRef = useRef(callStatus);
   const isCleanedUp = useRef(false);
-  const cameraChangeLock = useRef(false);
-  const makingOfferRef = useRef(false);
-  const iceRestartingRef = useRef(false);
   const audioContextRef = useRef<AudioContext | null>(null);
-  const remoteUfragRef = useRef<string | null>(null);
-  const mediaCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const iceGenerationRef = useRef(0);
-  const currentLocalUfragRef = useRef<string | null>(null);
-  const initialOfferSentRef = useRef(false); // 标记初始Offer是否发送
-  const negotiationLock = useRef(false);
-  const remoteMutedRef = useRef(false);
-  const connectedSentRef = useRef(false);
+  const connectionPausedRef = useRef(false);
+  const statsIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => { callStatusRef.current = callStatus; }, [callStatus]);
 
   const removeWsListenersRef = useRef<() => void>(() => {});
 
   const safeSend = useCallback((data: any) => {
-    if (ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify(data));
-    }
+    if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(data));
   }, [ws]);
-
-  const uuid = () => crypto.randomUUID?.() ?? Math.random().toString(36).slice(2);
-
-  const getUfragFromSdp = (sdp: string) => {
-    const match = sdp.match(/ice-ufrag:(\S+)/);
-    return match ? match[1] : null;
-  };
 
   const commonCleanup = useCallback(() => {
     if (isCleanedUp.current) return;
     isCleanedUp.current = true;
-
     localStreamRef.current?.getTracks().forEach(t => t.stop());
-    if (remoteStreamRef.current) {
-      remoteStreamRef.current.getTracks().forEach(t => remoteStreamRef.current?.removeTrack(t));
-      remoteStreamRef.current = null;
-    }
-    if (pcRef.current) {
-      pcRef.current.close();
-      pcRef.current = null;
-    }
-
+    remoteStreamRef.current?.getTracks().forEach(t => t.stop());
+    pcRef.current?.close();
+    pcRef.current = null;
     if (durationTimerRef.current) clearInterval(durationTimerRef.current);
     if (callTimeoutRef.current) clearTimeout(callTimeoutRef.current);
     if (iceRestartTimeoutRef.current) clearTimeout(iceRestartTimeoutRef.current);
-    if (mediaCheckIntervalRef.current) clearInterval(mediaCheckIntervalRef.current);
-    if (audioContextRef.current) {
-      audioContextRef.current.close().catch(() => {});
-      audioContextRef.current = null;
-    }
-    pendingCandidatesRef.current.clear();
+    if (statsIntervalRef.current) clearInterval(statsIntervalRef.current);
+    if (audioContextRef.current) { audioContextRef.current.close().catch(() => {}); audioContextRef.current = null; }
+    pendingCandidatesRef.current.length = 0;
     removeWsListenersRef.current();
   }, []);
 
@@ -112,57 +86,29 @@ export default function CallModal({
     onHangup();
   }, [commonCleanup, onHangup]);
 
-  // 统一协商入口 (替代 onnegotiationneeded)
-  const runNegotiation = useCallback(async (options?: { iceRestart?: boolean }) => {
-    const pc = pcRef.current;
-    if (!pc || isClosedRef.current || negotiationLock.current) return;
-    negotiationLock.current = true;
-    try {
-      const offer = await pc.createOffer({ iceRestart: options?.iceRestart ?? false });
-      if (pc.signalingState !== 'stable') return;
-      await pc.setLocalDescription(offer);
-      if (pc.localDescription?.sdp) {
-        currentLocalUfragRef.current = getUfragFromSdp(pc.localDescription.sdp);
-      }
-      safeSend({ event: 'call-offer', data: { targetId: friendId, sdp: pc.localDescription, type } });
-    } catch (e) {
-      console.error('negotiation error', e);
-    } finally {
-      negotiationLock.current = false;
-    }
-  }, [safeSend, friendId, type]);
-
-  // ICE 重启
+  // ICE restart 独立流程
   const restartIce = useCallback(async () => {
     const pc = pcRef.current;
-    if (!pc || isClosedRef.current || iceRestartingRef.current || iceRestartCountRef.current >= 3) {
+    if (!pc || isClosedRef.current || iceRestartCountRef.current >= 3) {
       if (iceRestartCountRef.current >= 3) hangup();
       return;
     }
-    iceRestartingRef.current = true;
     iceRestartCountRef.current++;
-    iceGenerationRef.current += 1;
     waitingForAnswerRef.current = true;
-
     if (iceRestartTimeoutRef.current) clearTimeout(iceRestartTimeoutRef.current);
     iceRestartTimeoutRef.current = setTimeout(() => {
-      if (pc.signalingState === 'have-local-offer') {
-        pc.setLocalDescription({ type: 'rollback' }).catch(() => {});
-      }
       waitingForAnswerRef.current = false;
-      iceRestartingRef.current = false;
-      iceRestartTimeoutRef.current = null;
+      if (pc.signalingState === 'have-local-offer') pc.setLocalDescription({ type: 'rollback' }).catch(() => {});
     }, 15000);
-
     try {
-      await runNegotiation({ iceRestart: true });
+      const offer = await pc.createOffer({ iceRestart: true });
+      await pc.setLocalDescription(offer);
+      safeSend({ event: 'call-offer', data: { targetId: friendId, sdp: offer, type } });
     } catch (e) {
       console.error('ICE restart failed', e);
       hangup();
-    } finally {
-      iceRestartingRef.current = false;
     }
-  }, [runNegotiation, hangup]);
+  }, [safeSend, friendId, type, hangup]);
 
   const bindRemoteMedia = useCallback((stream: MediaStream) => {
     if (isClosedRef.current) return;
@@ -177,98 +123,38 @@ export default function CallModal({
     else if (type === 'audio' && remoteAudioRef.current) tryPlay(remoteAudioRef.current);
   }, [type]);
 
-  // 处理媒体连接成功
-  const markConnected = useCallback(() => {
-    if (connectedSentRef.current) return;
-    connectedSentRef.current = true;
-    setCallStatus('connected');
-    if (callTimeoutRef.current) clearTimeout(callTimeoutRef.current);
-    if (!durationTimerRef.current) {
-      startTimeRef.current = Date.now();
-      durationTimerRef.current = setInterval(() => {
-        if (!connectionPausedRef.current) {
-          setDuration(Math.floor((Date.now() - startTimeRef.current) / 1000));
-        }
-      }, 1000);
-    }
-  }, []);
-
+  // 处理远程轨道
   const handleRemoteTrack = useCallback((event: RTCTrackEvent) => {
     if (isClosedRef.current) return;
     if (!remoteStreamRef.current) remoteStreamRef.current = new MediaStream();
     const stream = remoteStreamRef.current;
     const track = event.track;
 
-    const oldTracks = stream.getTracks().filter(t => t.kind === track.kind);
-    oldTracks.forEach(t => stream.removeTrack(t));
+    // 每种类型只保留最新 track
+    const old = stream.getTracks().filter(t => t.kind === track.kind);
+    old.forEach(t => stream.removeTrack(t));
     stream.addTrack(track);
 
-    track.onended = () => {
-      if (stream.getTracks().includes(track)) stream.removeTrack(track);
-      bindRemoteMedia(stream);
-    };
-    track.onmute = () => { remoteMutedRef.current = true; };
-    track.onunmute = () => { remoteMutedRef.current = false; };
-
     bindRemoteMedia(stream);
-    markConnected(); // 接收到远程轨道后标记连接成功
+  }, [bindRemoteMedia]);
 
-    // 媒体健康检查
-    if (!mediaCheckIntervalRef.current) {
-      mediaCheckIntervalRef.current = setInterval(async () => {
-        if (isClosedRef.current || !pcRef.current) return;
-        // 简化的健康检查：若超过10秒无数据则重启
-        const stats = await pcRef.current.getStats();
-        let hasData = false;
-        for (const [, r] of stats) {
-          if (r.type === 'inbound-rtp' && (r.bytesReceived > 0 || r.packetsReceived > 0)) {
-            hasData = true;
-            break;
-          }
-        }
-        if (!hasData && !remoteMutedRef.current) {
-          noDataCountRef.current++;
-          if (noDataCountRef.current >= 10) {
-            restartIce();
-            noDataCountRef.current = 0;
-          }
-        } else {
-          noDataCountRef.current = 0;
-        }
-      }, 1000);
-    }
-  }, [bindRemoteMedia, markConnected, restartIce]);
-
-  const noDataCountRef = useRef(0);
-  const connectionPausedRef = useRef(false);
-
+  // 信令处理（单一状态机）
   const handleSignal = useCallback(async (msg: any) => {
     if (isClosedRef.current) return;
     const pc = pcRef.current;
     if (!pc) return;
-
     try {
-      if (msg.event === 'call-hangup') {
-        hangupPassive();
-        return;
-      }
+      if (msg.event === 'call-hangup') { hangupPassive(); return; }
 
-      const description = msg.data?.sdp ? new RTCSessionDescription(msg.data.sdp) : null;
-      const candidate = msg.data?.candidate ? new RTCIceCandidate(msg.data.candidate) : null;
-
-      if (description) {
-        if (description.type === 'answer') {
+      const desc = msg.data?.sdp;
+      const cand = msg.data?.candidate;
+      if (desc) {
+        const sdp = new RTCSessionDescription(desc);
+        if (sdp.type === 'answer') {
           if (pc.signalingState === 'have-local-offer') {
-            await pc.setRemoteDescription(description);
-            if (pc.remoteDescription?.sdp) {
-              remoteUfragRef.current = getUfragFromSdp(pc.remoteDescription.sdp);
-            }
-            // 处理当前代候选
-            const gen = iceGenerationRef.current;
-            const genCands = pendingCandidatesRef.current.get(gen);
-            if (genCands) {
-              for (const cand of genCands) await pc.addIceCandidate(cand);
-              pendingCandidatesRef.current.delete(gen);
+            await pc.setRemoteDescription(sdp);
+            while (pendingCandidatesRef.current.length) {
+              await pc.addIceCandidate(pendingCandidatesRef.current.shift()!);
             }
             waitingForAnswerRef.current = false;
             iceRestartCountRef.current = 0;
@@ -277,50 +163,30 @@ export default function CallModal({
               iceRestartTimeoutRef.current = null;
             }
           }
-        } else if (description.type === 'offer') {
-          const offerCollision = makingOfferRef.current || pc.signalingState !== 'stable';
-          if (!politeRef.current && offerCollision) return;
+        } else if (sdp.type === 'offer') {
+          const offerCollision = makingOffer.current || pc.signalingState !== 'stable';
+          ignoreOffer.current = !politeRef.current && offerCollision;
+          if (ignoreOffer.current) return;
 
           if (offerCollision && politeRef.current && pc.signalingState === 'have-local-offer') {
             await pc.setLocalDescription({ type: 'rollback' });
             waitingForAnswerRef.current = false;
             iceRestartCountRef.current = 0;
           }
-
-          await pc.setRemoteDescription(description);
-          if (pc.remoteDescription?.sdp) {
-            remoteUfragRef.current = getUfragFromSdp(pc.remoteDescription.sdp);
+          await pc.setRemoteDescription(sdp);
+          while (pendingCandidatesRef.current.length) {
+            await pc.addIceCandidate(pendingCandidatesRef.current.shift()!);
           }
-
-          const currentGen = iceGenerationRef.current;
-          const genCands = pendingCandidatesRef.current.get(currentGen);
-          if (genCands) {
-            for (const cand of genCands) await pc.addIceCandidate(cand);
-            pendingCandidatesRef.current.delete(currentGen);
-          }
-
           const answer = await pc.createAnswer();
           await pc.setLocalDescription(answer);
-          safeSend({ event: 'call-answer', data: { targetId: friendId, sdp: pc.localDescription } });
+          safeSend({ event: 'call-answer', data: { targetId: friendId, sdp: answer } });
         }
-      } else if (candidate) {
-        // 候选处理（基于远端ufrag过滤）
-        const candUfrag = msg.data?.ufrag;
-        if (remoteUfragRef.current && candUfrag && candUfrag !== remoteUfragRef.current) {
-          return;
-        }
-        const currentGen = iceGenerationRef.current;
-        if (pc.remoteDescription) {
-          await pc.addIceCandidate(candidate);
-        } else {
-          const arr = pendingCandidatesRef.current.get(currentGen) || [];
-          arr.push(candidate);
-          pendingCandidatesRef.current.set(currentGen, arr);
-        }
+      } else if (cand) {
+        const ice = new RTCIceCandidate(cand);
+        if (pc.remoteDescription) await pc.addIceCandidate(ice);
+        else pendingCandidatesRef.current.push(ice);
       }
-    } catch (err) {
-      console.error('信令处理错误', err);
-    }
+    } catch (err) { console.error('signal error', err); }
   }, [safeSend, friendId, hangupPassive]);
 
   const unlockAudio = useCallback(() => {
@@ -338,11 +204,8 @@ export default function CallModal({
     };
     tryPlay();
     const events = ['pointerdown', 'touchstart', 'keydown'];
-    const unlockHandler = () => {
-      tryPlay();
-      events.forEach(e => document.removeEventListener(e, unlockHandler));
-    };
-    events.forEach(e => document.addEventListener(e, unlockHandler, { once: true }));
+    const handler = () => { tryPlay(); events.forEach(e => document.removeEventListener(e, handler)); };
+    events.forEach(e => document.addEventListener(e, handler, { once: true }));
   }, []);
 
   const toggleMute = useCallback(() => {
@@ -356,15 +219,12 @@ export default function CallModal({
 
   const toggleCamera = useCallback(() => {
     unlockAudio();
-    if (cameraChangeLock.current) return;
-    cameraChangeLock.current = true;
+    const sender = pcRef.current?.getSenders().find(s => s.track?.kind === 'video');
+    if (!sender) return;
     setIsCameraOff(prev => {
       const newOff = !prev;
-      const sender = pcRef.current?.getSenders().find(s => s.track?.kind === 'video');
-      if (!sender) return prev;
       if (newOff) {
         sender.track && (sender.track.enabled = false);
-        cameraChangeLock.current = false;
       } else {
         navigator.mediaDevices.getUserMedia({ video: true })
           .then(async newStream => {
@@ -377,19 +237,13 @@ export default function CallModal({
               params.encodings[0].maxBitrate = 1200000;
               sender.setParameters(params).catch(() => {});
               if (localVideoRef.current) localVideoRef.current.srcObject = newStream;
-              // 更新本地流
               if (localStreamRef.current) {
                 const oldVideo = localStreamRef.current.getVideoTracks()[0];
-                if (oldVideo) {
-                  localStreamRef.current.removeTrack(oldVideo);
-                  oldVideo.stop();
-                }
+                if (oldVideo) { localStreamRef.current.removeTrack(oldVideo); oldVideo.stop(); }
                 localStreamRef.current.addTrack(newTrack);
               }
             }
-          })
-          .catch(err => console.error('摄像头打开失败', err))
-          .finally(() => { cameraChangeLock.current = false; });
+          }).catch(console.error);
       }
       return newOff;
     });
@@ -400,6 +254,7 @@ export default function CallModal({
     setIsSpeakerOn(prev => !prev);
   }, [unlockAudio]);
 
+  // 页面生命周期
   useEffect(() => {
     const handleVisibility = () => {
       if (document.visibilityState === 'visible') {
@@ -409,9 +264,7 @@ export default function CallModal({
         }
         connectionPausedRef.current = false;
       } else {
-        if (callStatusRef.current === 'connected') {
-          pauseTimeRef.current = Date.now();
-        }
+        if (callStatusRef.current === 'connected') pauseTimeRef.current = Date.now();
         connectionPausedRef.current = true;
       }
     };
@@ -424,17 +277,12 @@ export default function CallModal({
     let cancelled = false;
     isClosedRef.current = false;
     isCleanedUp.current = false;
-    pendingCandidatesRef.current.clear();
+    pendingCandidatesRef.current.length = 0;
     audioUnlockedRef.current = false;
-    iceGenerationRef.current = 0;
-    remoteUfragRef.current = null;
-    makingOfferRef.current = false;
-    iceRestartingRef.current = false;
-    negotiationLock.current = false;
-    initialOfferSentRef.current = false;
-    connectedSentRef.current = false;
-    remoteMutedRef.current = false;
-    noDataCountRef.current = 0;
+    makingOffer.current = false;
+    ignoreOffer.current = false;
+    iceRestartCountRef.current = 0;
+    waitingForAnswerRef.current = false;
     politeRef.current = !!incoming;
 
     callTimeoutRef.current = setTimeout(() => {
@@ -460,30 +308,52 @@ export default function CallModal({
             { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
             { urls: 'turn:global.relay.metered.ca:443', username: '680a360a85d7aad8037a5be4', credential: 'Uz8+sEjedvuGre/9' },
           ],
+          iceTransportPolicy: 'all',
+          bundlePolicy: 'max-bundle',
+          rtcpMuxPolicy: 'require',
         });
         pcRef.current = pc;
 
         stream.getTracks().forEach(track => pc.addTrack(track, stream));
+        if (type === 'video') {
+          const sender = pc.getSenders().find(s => s.track?.kind === 'video');
+          if (sender) {
+            const params = sender.getParameters();
+            if (!params.encodings) params.encodings = [{}];
+            params.encodings[0].maxBitrate = 1200000;
+            sender.setParameters(params).catch(() => {});
+          }
+        }
 
         pc.ontrack = handleRemoteTrack;
-        pc.onicecandidate = (event) => {
-          if (isClosedRef.current || !event.candidate) return;
-          safeSend({
-            event: 'ice-candidate',
-            data: { targetId: friendId, candidate: event.candidate, ufrag: currentLocalUfragRef.current }
-          });
+        pc.onicecandidate = (e) => {
+          if (isClosedRef.current || !e.candidate) return;
+          safeSend({ event: 'ice-candidate', data: { targetId: friendId, candidate: e.candidate } });
         };
+
+        // 连接状态作为核心状态机
         pc.onconnectionstatechange = () => {
-          if (pc.connectionState === 'failed') restartIce();
-          else if (pc.connectionState === 'closed') hangupPassive();
-        };
-        pc.oniceconnectionstatechange = () => {
-          if (pc.iceConnectionState === 'failed') restartIce();
+          if (isClosedRef.current) return;
+          console.log('connectionState:', pc.connectionState);
+          if (pc.connectionState === 'connected' || pc.connectionState === 'completed') {
+            if (callStatusRef.current !== 'connected') {
+              setCallStatus('connected');
+              if (callTimeoutRef.current) clearTimeout(callTimeoutRef.current);
+              if (!durationTimerRef.current) {
+                startTimeRef.current = Date.now();
+                durationTimerRef.current = setInterval(() => {
+                  if (!connectionPausedRef.current) setDuration(Math.floor((Date.now() - startTimeRef.current) / 1000));
+                }, 1000);
+              }
+            }
+          } else if (pc.connectionState === 'failed') {
+            restartIce();
+          } else if (pc.connectionState === 'closed') {
+            hangupPassive();
+          }
         };
 
-        // 禁止 onnegotiationneeded 自动触发，统一由 runNegotiation 管理
-        pc.onnegotiationneeded = () => {};
-
+        // 信令监听
         const onWsMessage = (e: MessageEvent) => {
           try {
             const msg = JSON.parse(e.data);
@@ -499,23 +369,24 @@ export default function CallModal({
           ws.removeEventListener('close', onWsClose);
         };
 
-        // 建立呼叫（仅主叫方需要主动创建Offer）
+        // 发起呼叫（主叫）
         if (!incoming) {
-          // 延迟执行确保信令监听已就绪
           setTimeout(() => {
-            if (!cancelled && !isClosedRef.current) {
-              runNegotiation();
+            if (!cancelled && !isClosedRef.current && pc.signalingState === 'stable') {
+              makingOffer.current = true;
+              pc.createOffer().then(async offer => {
+                await pc.setLocalDescription(offer);
+                safeSend({ event: 'call-offer', data: { targetId: friendId, sdp: offer, type } });
+              }).catch(console.error).finally(() => { makingOffer.current = false; });
             }
           }, 50);
         } else if (offerSdp) {
-          // 被叫方设置传入的offer
+          // 被叫
           await pc.setRemoteDescription(new RTCSessionDescription(offerSdp));
-          if (pc.remoteDescription?.sdp) {
-            remoteUfragRef.current = getUfragFromSdp(pc.remoteDescription.sdp);
-          }
+          while (pendingCandidatesRef.current.length) await pc.addIceCandidate(pendingCandidatesRef.current.shift()!);
           const answer = await pc.createAnswer();
           await pc.setLocalDescription(answer);
-          safeSend({ event: 'call-answer', data: { targetId: friendId, sdp: pc.localDescription } });
+          safeSend({ event: 'call-answer', data: { targetId: friendId, sdp: answer } });
         }
       } catch (err) {
         console.error(err);
@@ -540,9 +411,7 @@ export default function CallModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black" onClick={unlockAudio}>
       <div className="relative flex flex-col items-center w-full h-full max-w-3xl mx-auto">
-        {type === 'audio' && (
-          <audio ref={remoteAudioRef} autoPlay playsInline muted={!isSpeakerOn} className="hidden" />
-        )}
+        {type === 'audio' && <audio ref={remoteAudioRef} autoPlay playsInline muted={!isSpeakerOn} className="hidden" />}
         <div className="relative w-full h-full flex items-center justify-center bg-gray-900">
           {type === 'video' ? (
             <video ref={remoteVideoRef} autoPlay playsInline muted={!isSpeakerOn} className="w-full h-full object-cover" />
