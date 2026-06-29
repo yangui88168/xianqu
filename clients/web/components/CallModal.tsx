@@ -6,11 +6,12 @@ interface CallModalProps {
   friendName: string;
   type: 'audio' | 'video';
   incoming?: boolean;
+  offerSdp?: any;
   onHangup: () => void;
 }
 
 export default function CallModal({
-  ws, friendId, friendName, type, incoming, onHangup,
+  ws, friendId, friendName, type, incoming, offerSdp, onHangup,
 }: CallModalProps) {
   const [callStatus, setCallStatus] = useState<'calling' | 'connected' | 'ended'>('calling');
   const [duration, setDuration] = useState(0);
@@ -28,6 +29,7 @@ export default function CallModal({
   const isClosedRef = useRef(false);
   const remoteStreamBoundRef = useRef(false);
 
+  // 挂断
   const hangup = useCallback(() => {
     if (isClosedRef.current) return;
     isClosedRef.current = true;
@@ -135,7 +137,6 @@ export default function CallModal({
           } else if (msg.event === 'call-hangup') {
             hangup();
           } else if (msg.event === 'call-offer' && incoming) {
-            // 被叫方收到主叫方的 SDP
             pc.setRemoteDescription(new RTCSessionDescription(msg.data.sdp))
               .then(() => pc.createAnswer())
               .then((answer) => {
@@ -148,9 +149,18 @@ export default function CallModal({
         ws.addEventListener('message', handleSignal);
 
         if (incoming) {
-          // 被叫方：等待主叫方 offer
+          // 被叫方：如果已有 offer，立即处理
+          if (offerSdp) {
+            pc.setRemoteDescription(new RTCSessionDescription(offerSdp))
+              .then(() => pc.createAnswer())
+              .then((answer) => {
+                pc.setLocalDescription(answer);
+                ws.send(JSON.stringify({ event: 'call-answer', data: { targetId: friendId, sdp: answer } }));
+              })
+              .catch(console.error);
+          }
         } else {
-          // 主叫方：创建并发送 offer
+          // 主叫方：创建 offer
           const offer = await pc.createOffer();
           await pc.setLocalDescription(offer);
           ws.send(JSON.stringify({ event: 'call-offer', data: { targetId: friendId, sdp: offer, type } }));
@@ -200,7 +210,7 @@ export default function CallModal({
           )}
           {callStatus === 'calling' && (
             <div className="absolute top-4 left-4 bg-black/50 text-white text-sm px-3 py-1 rounded-full">
-              {incoming ? '等待接听...' : '呼叫中...'}
+              {incoming ? '等待连接...' : '呼叫中...'}
             </div>
           )}
         </div>
