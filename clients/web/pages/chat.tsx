@@ -808,7 +808,6 @@ export default function Chat() {
                     </svg>
                     添加好友
                   </button>
-                  {/* 未来可扩展更多选项 */}
                 </div>
               )}
             </div>
@@ -916,18 +915,18 @@ export default function Chat() {
               <div className="flex items-center gap-1">
                 {selectedChat.type === 'friend' && (
                   <>
+                    {/* 语音通话按钮 - 修改为仅打开 CallModal，不发送信令 */}
                     <button onClick={() => {
                       if (!ws) return;
-                      ws.send(JSON.stringify({ event: 'call-offer', data: { targetId: selectedChat.data.id, type: 'audio' } }));
                       setCallState({ type: 'audio', friendId: selectedChat.data.id, friendName: selectedChat.data.nickname || selectedChat.data.username, incoming: false });
                     }} className="text-gray-500 hover:text-gray-700 p-1" title="语音通话">
                       <svg className="w-5 h-5 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
                       </svg>
                     </button>
+                    {/* 视频通话按钮 - 修改为仅打开 CallModal，不发送信令 */}
                     <button onClick={() => {
                       if (!ws) return;
-                      ws.send(JSON.stringify({ event: 'call-offer', data: { targetId: selectedChat.data.id, type: 'video' } }));
                       setCallState({ type: 'video', friendId: selectedChat.data.id, friendName: selectedChat.data.nickname || selectedChat.data.username, incoming: false });
                     }} className="text-gray-500 hover:text-gray-700 p-1" title="视频通话">
                       <svg className="w-5 h-5 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
