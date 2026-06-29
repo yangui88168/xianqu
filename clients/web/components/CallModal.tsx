@@ -19,18 +19,16 @@ export default function CallModal({
   const [isCameraOff, setIsCameraOff] = useState(false);
   const [isSpeakerOn, setIsSpeakerOn] = useState(true);
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user');
-  const [audioBlocked, setAudioBlocked] = useState(false);
-  const [remoteStreamReady, setRemoteStreamReady] = useState(false);
 
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
-  const remoteAudioRef = useRef<HTMLAudioElement>(null);
+  // 不再使用隐藏的 audio 元素，改用 AudioContext
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
   const remoteStreamRef = useRef<MediaStream | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
   const durationRef = useRef<NodeJS.Timeout | null>(null);
   const isClosedRef = useRef(false);
-  const remoteStreamBoundRef = useRef(false);
 
   // 挂断
   const hangup = useCallback(() => {
@@ -74,27 +72,49 @@ export default function CallModal({
     }
   }, [facingMode]);
 
-  // 手动播放远程音视频
-  const playRemoteStream = useCallback(() => {
-    const stream = remoteStreamRef.current;
-    if (!stream) return;
+  // 使用 AudioContext 播放远程音频流
+  const playRemoteAudio = useCallback((stream: MediaStream) => {
+    if (typeof window === 'undefined') return;
+    try {
+      // 确保 AudioContext 已创建
+      if (!audioContextRef.current) {
+        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+      }
+      const ctx = audioContextRef.current;
+      // 如果 AudioContext 处于挂起状态（浏览器自动播放策略），尝试恢复
+      if (ctx.state === 'suspended') {
+        ctx.resume();
+      }
+      // 创建媒体流源并连接到扬声器
+      const source = ctx.createMediaStreamSource(stream);
+      source.connect(ctx.destination);
+      console.log('🔊 远程音频已通过 AudioContext 播放');
+    } catch (e) {
+      console.error('音频播放失败', e);
+    }
+  }, []);
 
+  // 绑定远程流（视频直接绑定，音频用 AudioContext）
+  const bindRemoteStream = useCallback((remoteStream: MediaStream) => {
+    if (isClosedRef.current) return;
+    remoteStreamRef.current = remoteStream;
+
+    // 视频绑定
     if (type === 'video' && remoteVideoRef.current) {
-      remoteVideoRef.current.srcObject = stream;
+      remoteVideoRef.current.srcObject = remoteStream;
       remoteVideoRef.current.play().catch(console.error);
     }
-    if (remoteAudioRef.current) {
-      remoteAudioRef.current.srcObject = stream;
-      remoteAudioRef.current.play().then(() => {
-        setAudioBlocked(false);
-      }).catch(() => setAudioBlocked(true));
+    // 音频统一用 AudioContext 播放（通话双方都需要听到对方声音）
+    playRemoteAudio(remoteStream);
+
+    setCallStatus('connected');
+    if (!durationRef.current) {
+      durationRef.current = setInterval(() => setDuration((prev) => prev + 1), 1000);
     }
-    setRemoteStreamReady(true);
-  }, [type]);
+  }, [type, playRemoteAudio]);
 
   useEffect(() => {
     isClosedRef.current = false;
-    remoteStreamBoundRef.current = false;
 
     const init = async () => {
       try {
@@ -117,19 +137,8 @@ export default function CallModal({
         stream.getTracks().forEach((track) => pc.addTrack(track, stream));
 
         pc.ontrack = (event) => {
-          if (isClosedRef.current) return;
           const [remote] = event.streams;
-          if (!remote) return;
-
-          // 保存远程流，但不立即播放
-          remoteStreamRef.current = remote;
-          setRemoteStreamReady(true);
-          setCallStatus('connected');
-          if (!durationRef.current) {
-            durationRef.current = setInterval(() => setDuration((prev) => prev + 1), 1000);
-          }
-          // 尝试自动播放（可能被阻止）
-          playRemoteStream();
+          if (remote) bindRemoteStream(remote);
         };
 
         pc.onicecandidate = (event) => {
@@ -201,51 +210,66 @@ export default function CallModal({
     `${Math.floor(sec / 60).toString().padStart(2, '0')}:${(sec % 60).toString().padStart(2, '0')}`;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90">
-      <div className="relative flex flex-col items-center w-full max-w-sm mx-auto h-full max-h-screen py-4">
-        <audio ref={remoteAudioRef} autoPlay playsInline className="hidden" />
-
-        <div className="relative w-full aspect-video bg-gray-900 rounded-2xl overflow-hidden mb-4 flex items-center justify-center">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black">
+      <div className="relative flex flex-col items-center w-full h-full max-w-3xl mx-auto">
+        {/* 大尺寸视频画面 */}
+        <div className="relative w-full h-full flex items-center justify-center bg-gray-900">
           {type === 'video' ? (
-            <video ref={remoteVideoRef} autoPlay playsInline className="w-full h-full object-cover" />
+            <video
+              ref={remoteVideoRef}
+              autoPlay
+              playsInline
+              className="w-full h-full object-cover"
+            />
           ) : (
             <div className="flex flex-col items-center justify-center h-full text-white">
-              <div className="text-6xl mb-2">🎤</div>
-              <p className="text-lg font-medium">{friendName}</p>
+              <div className="text-8xl mb-4">🎤</div>
+              <p className="text-2xl font-medium">{friendName}</p>
             </div>
           )}
+
+          {/* 自己的小窗（视频通话时） */}
           {type === 'video' && (
-            <div className="absolute bottom-4 right-4 w-24 h-36 bg-gray-700 rounded-xl overflow-hidden border-2 border-white shadow-lg">
-              <video ref={localVideoRef} autoPlay muted playsInline className="w-full h-full object-cover" />
+            <div className="absolute top-4 right-4 w-32 h-48 bg-gray-700 rounded-xl overflow-hidden border-2 border-white shadow-lg">
+              <video
+                ref={localVideoRef}
+                autoPlay
+                muted
+                playsInline
+                className="w-full h-full object-cover"
+              />
             </div>
           )}
-          {callStatus === 'connected' && (
-            <div className="absolute top-4 left-4 bg-black/50 text-white text-sm px-3 py-1 rounded-full">{formatTime(duration)}</div>
-          )}
-          {callStatus === 'calling' && (
-            <div className="absolute top-4 left-4 bg-black/50 text-white text-sm px-3 py-1 rounded-full">
-              {incoming ? '等待连接...' : '呼叫中...'}
-            </div>
-          )}
+
+          {/* 通话时长或状态 */}
+          <div className="absolute top-4 left-4 bg-black/50 text-white text-sm px-3 py-1 rounded-full">
+            {callStatus === 'connected' ? formatTime(duration) : incoming ? '等待连接...' : '呼叫中...'}
+          </div>
         </div>
 
-        {/* 手动播放按钮（当自动播放被阻止时显示） */}
-        {remoteStreamReady && (audioBlocked || (type === 'video' && !remoteVideoRef.current?.srcObject)) && (
-          <button onClick={playRemoteStream} className="mb-4 bg-blue-500 text-white px-4 py-2 rounded-full text-sm">
-            {type === 'audio' ? '点击播放声音' : '点击显示画面'}
-          </button>
-        )}
-
-        <div className="flex items-center gap-3 bg-gray-800/80 px-5 py-3 rounded-full mt-auto mb-6">
-          <button onClick={toggleMute} className={`w-10 h-10 rounded-full flex items-center justify-center text-white ${isMuted ? 'bg-red-500' : 'bg-gray-600 hover:bg-gray-500'}`}>{isMuted ? '🔇' : '🎙️'}</button>
-          <button onClick={hangup} className="w-14 h-14 rounded-full bg-red-600 hover:bg-red-700 flex items-center justify-center text-white text-2xl shadow-lg">📞</button>
-          <button onClick={toggleSpeaker} className={`w-10 h-10 rounded-full flex items-center justify-center text-white ${isSpeakerOn ? 'bg-gray-600 hover:bg-gray-500' : 'bg-blue-500'}`}>{isSpeakerOn ? '🔊' : '🔈'}</button>
-          {type === 'video' && (
-            <>
-              <button onClick={toggleCamera} className={`w-10 h-10 rounded-full flex items-center justify-center text-white ${isCameraOff ? 'bg-red-500' : 'bg-gray-600 hover:bg-gray-500'}`}>{isCameraOff ? '📷❌' : '📷'}</button>
-              <button onClick={switchCamera} className="w-10 h-10 rounded-full flex items-center justify-center text-white bg-gray-600 hover:bg-gray-500">🔄</button>
-            </>
-          )}
+        {/* 底部控制栏（绝对定位在底部） */}
+        <div className="absolute bottom-8 left-0 right-0 flex items-center justify-center gap-4">
+          <div className="flex items-center gap-3 bg-gray-800/80 px-6 py-4 rounded-full">
+            <button onClick={toggleMute} className={`w-12 h-12 rounded-full flex items-center justify-center text-white ${isMuted ? 'bg-red-500' : 'bg-gray-600 hover:bg-gray-500'}`}>
+              {isMuted ? '🔇' : '🎙️'}
+            </button>
+            <button onClick={hangup} className="w-16 h-16 rounded-full bg-red-600 hover:bg-red-700 flex items-center justify-center text-white text-3xl shadow-lg">
+              📞
+            </button>
+            <button onClick={toggleSpeaker} className={`w-12 h-12 rounded-full flex items-center justify-center text-white ${isSpeakerOn ? 'bg-gray-600 hover:bg-gray-500' : 'bg-blue-500'}`}>
+              {isSpeakerOn ? '🔊' : '🔈'}
+            </button>
+            {type === 'video' && (
+              <>
+                <button onClick={toggleCamera} className={`w-12 h-12 rounded-full flex items-center justify-center text-white ${isCameraOff ? 'bg-red-500' : 'bg-gray-600 hover:bg-gray-500'}`}>
+                  {isCameraOff ? '📷❌' : '📷'}
+                </button>
+                <button onClick={switchCamera} className="w-12 h-12 rounded-full flex items-center justify-center text-white bg-gray-600 hover:bg-gray-500">
+                  🔄
+                </button>
+              </>
+            )}
+          </div>
         </div>
       </div>
     </div>
