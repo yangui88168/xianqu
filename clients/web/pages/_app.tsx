@@ -40,19 +40,19 @@ export default function App({ Component, pageProps }: AppProps) {
 
   return (
     <div className="max-w-5xl mx-auto h-dvh flex flex-col shadow-2xl overflow-hidden relative">
-      {/* 虚化背景层 */}
+      {/* 底层虚化背景 */}
       {customBg && (
         <div
           className="absolute inset-0 z-0 bg-cover bg-center bg-fixed"
           style={{
             backgroundImage: `url(${customBg})`,
-            filter: 'blur(12px)',
+            filter: 'blur(18px)',
             transform: 'scale(1.1)',
           }}
         />
       )}
-      {/* 半透明遮罩保证文字可读 */}
-      <div className="absolute inset-0 z-[1] bg-white/30 pointer-events-none" />
+      {/* 半透明遮罩，调低透明度让背景更突出 */}
+      <div className="absolute inset-0 z-[1] bg-white/20 pointer-events-none" />
 
       <div className="relative z-10 flex-1 flex flex-col min-h-0">
         <div className="flex-1 min-h-0 relative">
