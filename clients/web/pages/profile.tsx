@@ -34,6 +34,9 @@ export default function Profile() {
   const cloudinaryRef = useRef<any>();
   const widgetRef = useRef<any>();
 
+  // 背景透明度状态
+  const [overlayOpacity, setOverlayOpacity] = useState(0.25);
+
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (!token) { router.push('/'); return; }
@@ -61,6 +64,12 @@ export default function Profile() {
     fetch(`${API}/task/daily`, { headers: { Authorization: `Bearer ${token}` } }).then(res => res.json()).then(setTasks);
     fetch(`${API}/badge/mine`, { headers: { Authorization: `Bearer ${token}` } }).then(res => res.json()).then(setBadges);
   }, [router]);
+
+  // 读取自定义背景透明度
+  useEffect(() => {
+    const saved = localStorage.getItem('bgOpacity');
+    if (saved) setOverlayOpacity(parseFloat(saved));
+  }, []);
 
   // 初始化 Cloudinary Widget（根据用途切换回调）
   useEffect(() => {
@@ -373,6 +382,26 @@ export default function Profile() {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
           </svg>
         </button>
+
+        {/* 背景透明度调节 */}
+        <div className="mt-3 px-5 py-2 flex items-center gap-3">
+          <span className="text-sm text-gray-600">背景浓度</span>
+          <input
+            type="range"
+            min="0.05"
+            max="0.8"
+            step="0.05"
+            defaultValue={overlayOpacity}
+            onChange={(e) => {
+              const val = parseFloat(e.target.value);
+              localStorage.setItem('bgOpacity', val.toString());
+              // 立即刷新页面使 _app.tsx 重新读取透明度
+              window.location.reload();
+            }}
+            className="flex-1"
+          />
+          <span className="text-xs text-gray-500">{Math.round(overlayOpacity * 100)}%</span>
+        </div>
 
         <button onClick={() => alert('隐私设置开发中')} className="w-full flex items-center justify-between px-5 py-3 border-b border-gray-100 hover:bg-gray-50">
           <div className="flex items-center gap-3">
