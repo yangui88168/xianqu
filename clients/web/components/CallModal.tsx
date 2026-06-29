@@ -32,7 +32,6 @@ export default function CallModal({
   const isClosedRef = useRef(false);
   const pendingCandidatesRef = useRef<RTCIceCandidate[]>([]);
   const audioUnlockedRef = useRef(false);
-  const makingOfferRef = useRef(false);
   const ignoreOfferRef = useRef(false);
   const politeRef = useRef(false);
   const iceRestartCountRef = useRef(0);
@@ -44,9 +43,14 @@ export default function CallModal({
   const cameraChangeLock = useRef(false);
   const isSettingRemoteAnswerPendingRef = useRef(false);
   const makingOffer = useRef(false);
+  const iceRestartingRef = useRef(false);
   const statsIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const mediaCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const bytesReceivedZeroCount = useRef(0);
+  const lastBytesReceivedRef = useRef<{ video: number; audio: number }>({ video: -1, audio: -1 });
+  const lastPacketsReceivedRef = useRef<{ video: number; audio: number }>({ video: -1, audio: -1 });
+  const lastFramesDecodedRef = useRef<number>(-1);
+  const noDataCountRef = useRef(0);
+  const audioContextRef = useRef<AudioContext | null>(null);
 
   useEffect(() => { callStatusRef.current = callStatus; }, [callStatus]);
 
@@ -75,6 +79,10 @@ export default function CallModal({
     if (iceRestartTimeoutRef.current) clearTimeout(iceRestartTimeoutRef.current);
     if (statsIntervalRef.current) clearInterval(statsIntervalRef.current);
     if (mediaCheckIntervalRef.current) clearInterval(mediaCheckIntervalRef.current);
+    if (audioContextRef.current) {
+      audioContextRef.current.close().catch(() => {});
+      audioContextRef.current = null;
+    }
 
     pendingCandidatesRef.current.length = 0;
     removeWsListenersRef.current();
@@ -97,13 +105,24 @@ export default function CallModal({
     onHangup();
   }, [commonCleanup, onHangup]);
 
-  // ICE 重启
+  // ICE 重启（增加锁防止竞争）
   const restartIce = useCallback(async () => {
     const pc = pcRef.current;
-    if (!pc || isClosedRef.current || waitingForAnswerRef.current || iceRestartCountRef.current >= 2) return;
+    if (
+      !pc ||
+      isClosedRef.current ||
+      iceRestartingRef.current ||
+      waitingForAnswerRef.current ||
+      iceRestartCountRef.current >= 3
+    ) {
+      if (iceRestartCountRef.current >= 3) hangup();
+      return;
+    }
 
+    iceRestartingRef.current = true;
     iceRestartCountRef.current++;
     waitingForAnswerRef.current = true;
+    pendingCandidatesRef.current.length = 0;
 
     if (iceRestartTimeoutRef.current) clearTimeout(iceRestartTimeoutRef.current);
     iceRestartTimeoutRef.current = setTimeout(() => {
@@ -112,32 +131,39 @@ export default function CallModal({
     }, 15000);
 
     try {
+      if (typeof (pc as any).restartIce === 'function') {
+        (pc as any).restartIce();
+      }
       const offer = await pc.createOffer({ iceRestart: true });
       await pc.setLocalDescription(offer);
       safeSend({ event: 'call-offer', data: { targetId: friendId, sdp: offer, type } });
     } catch (e) {
       console.error('ICE restart failed', e);
       hangup();
+    } finally {
+      iceRestartingRef.current = false;
     }
   }, [safeSend, friendId, type, hangup]);
 
-  // 绑定远程媒体元素（只第一次设置 srcObject）
-  const bindRemoteMediaIfNeeded = useCallback((stream: MediaStream) => {
+  // 绑定远程媒体元素
+  const bindRemoteMedia = useCallback((stream: MediaStream) => {
     if (isClosedRef.current) return;
-    if (type === 'video' && remoteVideoRef.current && remoteVideoRef.current.srcObject !== stream) {
-      remoteVideoRef.current.srcObject = stream;
-      remoteVideoRef.current.onloadedmetadata = () => {
-        remoteVideoRef.current?.play().catch(() => {});
-      };
-    } else if (type === 'audio' && remoteAudioRef.current && remoteAudioRef.current.srcObject !== stream) {
-      remoteAudioRef.current.srcObject = stream;
-      remoteAudioRef.current.onloadedmetadata = () => {
-        remoteAudioRef.current?.play().catch(() => {});
-      };
+    const tryPlay = (el: HTMLMediaElement) => {
+      if (!el) return;
+      el.srcObject = stream;
+      el.onloadeddata = () => el.play().catch(() => {});
+      el.oncanplay = () => el.play().catch(() => {});
+      el.play().catch(() => {});
+    };
+
+    if (type === 'video' && remoteVideoRef.current) {
+      tryPlay(remoteVideoRef.current);
+    } else if (type === 'audio' && remoteAudioRef.current) {
+      tryPlay(remoteAudioRef.current);
     }
   }, [type]);
 
-  // ontrack 处理：维护每种类型的唯一 track
+  // ontrack：每种类型只保留一个 track，替换时 removeTrack 旧 track（不 stop）
   const handleRemoteTrack = useCallback((event: RTCTrackEvent) => {
     if (isClosedRef.current) return;
 
@@ -145,27 +171,22 @@ export default function CallModal({
       remoteStreamRef.current = new MediaStream();
     }
     const stream = remoteStreamRef.current;
+    const track = event.track;
 
-    // 根据 kind 移除已有旧 track，保证每种类型只有一个
-    const kind = event.track.kind;
-    const oldTracks = stream.getTracks().filter(t => t.kind === kind);
-    oldTracks.forEach(t => {
-      stream.removeTrack(t);
-      t.stop();
-    });
-    stream.addTrack(event.track);
+    // 移除同类型旧 track
+    const oldTracks = stream.getTracks().filter(t => t.kind === track.kind);
+    oldTracks.forEach(t => stream.removeTrack(t));
 
-    // 监听轨道结束
-    event.track.onended = () => {
-      stream.removeTrack(event.track);
-      event.track.stop();
-      console.log('Remote track ended:', kind);
+    stream.addTrack(track);
+
+    track.onended = () => {
+      stream.removeTrack(track);
+      console.log('Remote track ended:', track.kind);
     };
-    event.track.onmute = () => console.log('Remote track muted:', kind);
-    event.track.onunmute = () => console.log('Remote track unmuted:', kind);
+    track.onmute = () => console.log('Remote track muted:', track.kind);
+    track.onunmute = () => console.log('Remote track unmuted:', track.kind);
 
-    // 绑定到 UI（仅首次设置 srcObject）
-    bindRemoteMediaIfNeeded(stream);
+    bindRemoteMedia(stream);
 
     setCallStatus('connected');
     if (callTimeoutRef.current) clearTimeout(callTimeoutRef.current);
@@ -179,43 +200,85 @@ export default function CallModal({
       }, 1000);
     }
 
-    // 接收端统计检测：检查媒体是否真正到达
+    // 媒体接收质量检测（基于 bytes / packets / frames 变化量 + 远端 track 状态）
     if (!mediaCheckIntervalRef.current) {
       mediaCheckIntervalRef.current = setInterval(async () => {
         if (isClosedRef.current || !pcRef.current) return;
         try {
           const stats = await pcRef.current.getStats();
-          let videoBytes = 0, audioBytes = 0;
+          let currentVideoBytes = -1, currentAudioBytes = -1;
+          let currentVideoPackets = -1, currentAudioPackets = -1;
+          let currentFramesDecoded = -1;
           for (const [, report] of stats) {
             if (report.type === 'inbound-rtp') {
-              if (report.kind === 'video') videoBytes = report.bytesReceived || 0;
-              if (report.kind === 'audio') audioBytes = report.bytesReceived || 0;
+              if (report.kind === 'video') {
+                if (report.bytesReceived !== undefined) currentVideoBytes = report.bytesReceived;
+                if (report.packetsReceived !== undefined) currentVideoPackets = report.packetsReceived;
+                if (report.framesDecoded !== undefined) currentFramesDecoded = report.framesDecoded;
+              }
+              if (report.kind === 'audio') {
+                if (report.bytesReceived !== undefined) currentAudioBytes = report.bytesReceived;
+                if (report.packetsReceived !== undefined) currentAudioPackets = report.packetsReceived;
+              }
             }
           }
-          if (type === 'video' && videoBytes === 0) {
-            bytesReceivedZeroCount.current++;
-            if (bytesReceivedZeroCount.current > 5) {
-              // 5 秒内无数据，尝试 ICE 重启
+
+          const last = lastBytesReceivedRef.current;
+          const lastPackets = lastPacketsReceivedRef.current;
+          const lastFrames = lastFramesDecodedRef.current;
+
+          let videoStalled = false;
+          let audioStalled = false;
+
+          // 视频停滞判断：字节、包、帧全部未变化
+          if (currentVideoBytes !== -1 && currentVideoPackets !== -1) {
+            videoStalled =
+              currentVideoBytes === last.video &&
+              currentVideoPackets === lastPackets.video &&
+              (currentFramesDecoded === -1 || currentFramesDecoded === lastFrames);
+            last.video = currentVideoBytes;
+            lastPackets.video = currentVideoPackets;
+          }
+          if (currentAudioBytes !== -1 && currentAudioPackets !== -1) {
+            audioStalled =
+              currentAudioBytes === last.audio &&
+              currentAudioPackets === lastPackets.audio;
+            last.audio = currentAudioBytes;
+            lastPackets.audio = currentAudioPackets;
+          }
+          if (currentFramesDecoded !== -1) {
+            lastFramesDecodedRef.current = currentFramesDecoded;
+          }
+
+          const remoteVideoTrack = remoteStreamRef.current?.getVideoTracks()[0];
+          const videoShouldCheck = type === 'video' && !isCameraOff && remoteVideoTrack && !remoteVideoTrack.muted;
+          const audioShouldCheck = type === 'audio' || (type === 'video' && !!remoteVideoTrack);
+
+          const needRestart =
+            (videoShouldCheck && videoStalled) ||
+            (audioShouldCheck && audioStalled);
+
+          if (needRestart) {
+            noDataCountRef.current++;
+            if (noDataCountRef.current >= 5) {
               restartIce();
-              bytesReceivedZeroCount.current = 0;
-            }
-          } else if (type === 'audio' && audioBytes === 0) {
-            bytesReceivedZeroCount.current++;
-            if (bytesReceivedZeroCount.current > 5) {
-              restartIce();
-              bytesReceivedZeroCount.current = 0;
+              noDataCountRef.current = 0;
+              // 重置基准
+              lastBytesReceivedRef.current = { video: -1, audio: -1 };
+              lastPacketsReceivedRef.current = { video: -1, audio: -1 };
+              lastFramesDecodedRef.current = -1;
             }
           } else {
-            bytesReceivedZeroCount.current = 0;
+            noDataCountRef.current = 0;
           }
         } catch (e) {}
       }, 1000);
     }
-  }, [bindRemoteMediaIfNeeded, restartIce, type]);
+  }, [bindRemoteMedia, restartIce, type, isCameraOff]);
 
   const connectionPausedRef = useRef(false);
 
-  // 信令处理（完美协商 + 防 deadlock）
+  // 信令处理
   const handleSignal = useCallback(async (msg: any) => {
     if (isClosedRef.current) return;
     const pc = pcRef.current;
@@ -235,18 +298,21 @@ export default function CallModal({
         const isAnswer = msg.event === 'call-answer';
 
         if (isAnswer) {
-          await pc.setRemoteDescription(new RTCSessionDescription(description));
-          while (pendingCandidatesRef.current.length) {
-            const cand = pendingCandidatesRef.current.shift()!;
-            await pc.addIceCandidate(cand);
+          // 仅在 have-local-offer 时接受 answer
+          if (pc.signalingState === 'have-local-offer') {
+            await pc.setRemoteDescription(new RTCSessionDescription(description));
+            while (pendingCandidatesRef.current.length) {
+              const cand = pendingCandidatesRef.current.shift()!;
+              await pc.addIceCandidate(cand);
+            }
+            waitingForAnswerRef.current = false;
+            iceRestartCountRef.current = 0;
+            if (iceRestartTimeoutRef.current) {
+              clearTimeout(iceRestartTimeoutRef.current);
+              iceRestartTimeoutRef.current = null;
+            }
+            isSettingRemoteAnswerPendingRef.current = false;
           }
-          waitingForAnswerRef.current = false;
-          iceRestartCountRef.current = 0;
-          if (iceRestartTimeoutRef.current) {
-            clearTimeout(iceRestartTimeoutRef.current);
-            iceRestartTimeoutRef.current = null;
-          }
-          isSettingRemoteAnswerPendingRef.current = false;
         } else if (isOffer) {
           const offerCollision = makingOffer.current || pc.signalingState !== 'stable';
           ignoreOfferRef.current = !politeRef.current && offerCollision;
@@ -287,10 +353,11 @@ export default function CallModal({
     setAudioUnlocked(true);
 
     const tryPlay = () => {
-      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-      if (AudioCtx) {
-        new AudioCtx().resume().catch(() => {});
+      if (!audioContextRef.current) {
+        const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+        if (AudioCtx) audioContextRef.current = new AudioCtx();
       }
+      audioContextRef.current?.resume().catch(() => {});
       remoteVideoRef.current?.play().catch(() => {});
       remoteAudioRef.current?.play().catch(() => {});
     };
@@ -326,6 +393,7 @@ export default function CallModal({
       if (videoTrack && sender) {
         if (newOff) {
           videoTrack.enabled = false;
+          cameraChangeLock.current = false;
         } else {
           navigator.mediaDevices.getUserMedia({ video: true })
             .then(async newStream => {
@@ -335,7 +403,32 @@ export default function CallModal({
               }
               const newTrack = newStream.getVideoTracks()[0];
               if (!newTrack) return;
-              await sender.replaceTrack(newTrack);
+
+              newTrack.enabled = true;
+              newTrack.onended = () => {
+                console.log('本地摄像头被系统停止');
+              };
+
+              // replaceTrack 带错误恢复
+              try {
+                await sender.replaceTrack(newTrack);
+              } catch (replaceErr) {
+                console.error('replaceTrack failed, restoring old track', replaceErr);
+                // 恢复旧 track 状态
+                if (videoTrack) {
+                  videoTrack.enabled = true;
+                  await sender.replaceTrack(videoTrack).catch(() => {});
+                }
+                cameraChangeLock.current = false;
+                return;
+              }
+
+              const params = sender.getParameters();
+              if (!params.encodings) params.encodings = [{}];
+              params.encodings[0].maxBitrate = 1200000;
+              params.encodings[0].maxFramerate = 30;
+              sender.setParameters(params).catch(() => {});
+
               if (localVideoRef.current) localVideoRef.current.srcObject = newStream;
               if (localStreamRef.current) {
                 const oldVideoTrack = localStreamRef.current.getVideoTracks()[0];
@@ -389,7 +482,6 @@ export default function CallModal({
     isCleanedUp.current = false;
     pendingCandidatesRef.current.length = 0;
     audioUnlockedRef.current = false;
-    makingOfferRef.current = false;
     ignoreOfferRef.current = false;
     iceRestartCountRef.current = 0;
     waitingForAnswerRef.current = false;
@@ -399,7 +491,15 @@ export default function CallModal({
     cameraChangeLock.current = false;
     pauseTimeRef.current = null;
     makingOffer.current = false;
-    bytesReceivedZeroCount.current = 0;
+    iceRestartingRef.current = false;
+    lastBytesReceivedRef.current = { video: -1, audio: -1 };
+    lastPacketsReceivedRef.current = { video: -1, audio: -1 };
+    lastFramesDecodedRef.current = -1;
+    noDataCountRef.current = 0;
+    if (audioContextRef.current) {
+      audioContextRef.current.close().catch(() => {});
+      audioContextRef.current = null;
+    }
 
     politeRef.current = !!incoming;
 
@@ -412,8 +512,16 @@ export default function CallModal({
     const init = async () => {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
-          audio: true,
-          video: type === 'video',
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+          },
+          video: type === 'video' ? {
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+            frameRate: { ideal: 30, max: 30 },
+          } : false,
         });
         if (cancelled || isClosedRef.current) {
           stream.getTracks().forEach(t => t.stop());
@@ -434,26 +542,25 @@ export default function CallModal({
           iceTransportPolicy: 'all',
           bundlePolicy: 'max-bundle',
           rtcpMuxPolicy: 'require',
+          iceCandidatePoolSize: 10,
         });
         pcRef.current = pc;
 
-        // 添加轨道
         stream.getTracks().forEach(track => pc.addTrack(track, stream));
 
-        // 设置视频码率
         if (type === 'video') {
           const sender = pc.getSenders().find(s => s.track?.kind === 'video');
           if (sender) {
             const params = sender.getParameters();
             if (!params.encodings) params.encodings = [{}];
-            params.encodings[0].maxBitrate = 1200000; // 1.2 Mbps
+            params.encodings[0].maxBitrate = 1200000;
+            params.encodings[0].maxFramerate = 30;
             sender.setParameters(params).catch(() => {});
           }
         }
 
-        // 监听协商需要（用于摄像头切换等）
         pc.onnegotiationneeded = async () => {
-          if (isClosedRef.current) return;
+          if (isClosedRef.current || makingOffer.current || pc.signalingState !== 'stable') return;
           try {
             makingOffer.current = true;
             const offer = await pc.createOffer();
@@ -477,14 +584,16 @@ export default function CallModal({
           }
         };
 
-        // 同时监听 connectionState 和 iceConnectionState
         pc.onconnectionstatechange = () => {
           if (isClosedRef.current) return;
           console.log('connectionState:', pc.connectionState);
-          if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
-            hangup();
+          if (pc.connectionState === 'failed') {
+            restartIce();
+          } else if (pc.connectionState === 'closed') {
+            hangupPassive();
           }
         };
+
         pc.oniceconnectionstatechange = () => {
           if (isClosedRef.current) return;
           console.log('iceConnectionState:', pc.iceConnectionState);
@@ -513,7 +622,6 @@ export default function CallModal({
           ws.removeEventListener('close', onWsClose);
         };
 
-        // 呼叫建立
         if (incoming) {
           if (offerSdp && pc.signalingState === 'stable' && !pc.remoteDescription) {
             await pc.setRemoteDescription(new RTCSessionDescription(offerSdp));
