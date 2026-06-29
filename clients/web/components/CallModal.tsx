@@ -17,7 +17,7 @@ export default function CallModal({
   const [duration, setDuration] = useState(0);
   const [isMuted, setIsMuted] = useState(false);
   const [isCameraOff, setIsCameraOff] = useState(false);
-  const [isSpeakerOn, setIsSpeakerOn] = useState(true); // 控制远端声音
+  const [isSpeakerOn, setIsSpeakerOn] = useState(true);
   const [audioUnlocked, setAudioUnlocked] = useState(false);
 
   const localVideoRef = useRef<HTMLVideoElement>(null);
@@ -25,7 +25,7 @@ export default function CallModal({
   const remoteAudioRef = useRef<HTMLAudioElement>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
-  const remoteStreamRef = useRef<MediaStream | null>(null); // 长期维护的远端流
+  const remoteStreamRef = useRef<MediaStream | null>(null);
   const durationTimerRef = useRef<NodeJS.Timeout | null>(null);
   const startTimeRef = useRef<number>(0);
   const pauseTimeRef = useRef<number | null>(null);
@@ -42,6 +42,11 @@ export default function CallModal({
   const callStatusRef = useRef(callStatus);
   const isCleanedUp = useRef(false);
   const cameraChangeLock = useRef(false);
+  const isSettingRemoteAnswerPendingRef = useRef(false);
+  const makingOffer = useRef(false);
+  const statsIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const mediaCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const bytesReceivedZeroCount = useRef(0);
 
   useEffect(() => { callStatusRef.current = callStatus; }, [callStatus]);
 
@@ -68,6 +73,8 @@ export default function CallModal({
     if (durationTimerRef.current) clearInterval(durationTimerRef.current);
     if (callTimeoutRef.current) clearTimeout(callTimeoutRef.current);
     if (iceRestartTimeoutRef.current) clearTimeout(iceRestartTimeoutRef.current);
+    if (statsIntervalRef.current) clearInterval(statsIntervalRef.current);
+    if (mediaCheckIntervalRef.current) clearInterval(mediaCheckIntervalRef.current);
 
     pendingCandidatesRef.current.length = 0;
     removeWsListenersRef.current();
@@ -114,15 +121,15 @@ export default function CallModal({
     }
   }, [safeSend, friendId, type, hangup]);
 
-  // 绑定远端媒体元素（避免反复创建绑定）
-  const bindRemoteMedia = useCallback((stream: MediaStream) => {
+  // 绑定远程媒体元素（只第一次设置 srcObject）
+  const bindRemoteMediaIfNeeded = useCallback((stream: MediaStream) => {
     if (isClosedRef.current) return;
-    if (type === 'video' && remoteVideoRef.current) {
+    if (type === 'video' && remoteVideoRef.current && remoteVideoRef.current.srcObject !== stream) {
       remoteVideoRef.current.srcObject = stream;
       remoteVideoRef.current.onloadedmetadata = () => {
         remoteVideoRef.current?.play().catch(() => {});
       };
-    } else if (remoteAudioRef.current) {
+    } else if (type === 'audio' && remoteAudioRef.current && remoteAudioRef.current.srcObject !== stream) {
       remoteAudioRef.current.srcObject = stream;
       remoteAudioRef.current.onloadedmetadata = () => {
         remoteAudioRef.current?.play().catch(() => {});
@@ -130,25 +137,36 @@ export default function CallModal({
     }
   }, [type]);
 
-  // ontrack 处理：维护一个统一的远端 MediaStream
+  // ontrack 处理：维护每种类型的唯一 track
   const handleRemoteTrack = useCallback((event: RTCTrackEvent) => {
     if (isClosedRef.current) return;
 
-    // 创建或获取统一的远端流对象
     if (!remoteStreamRef.current) {
       remoteStreamRef.current = new MediaStream();
     }
-
-    // 将新 track 添加到统一流中
     const stream = remoteStreamRef.current;
-    if (!stream.getTracks().some(t => t.id === event.track.id)) {
-      stream.addTrack(event.track);
-    }
 
-    // 绑定到 UI
-    bindRemoteMedia(stream);
+    // 根据 kind 移除已有旧 track，保证每种类型只有一个
+    const kind = event.track.kind;
+    const oldTracks = stream.getTracks().filter(t => t.kind === kind);
+    oldTracks.forEach(t => {
+      stream.removeTrack(t);
+      t.stop();
+    });
+    stream.addTrack(event.track);
 
-    // 状态更新
+    // 监听轨道结束
+    event.track.onended = () => {
+      stream.removeTrack(event.track);
+      event.track.stop();
+      console.log('Remote track ended:', kind);
+    };
+    event.track.onmute = () => console.log('Remote track muted:', kind);
+    event.track.onunmute = () => console.log('Remote track unmuted:', kind);
+
+    // 绑定到 UI（仅首次设置 srcObject）
+    bindRemoteMediaIfNeeded(stream);
+
     setCallStatus('connected');
     if (callTimeoutRef.current) clearTimeout(callTimeoutRef.current);
 
@@ -161,15 +179,43 @@ export default function CallModal({
       }, 1000);
     }
 
-    // 监听轨道事件
-    event.track.onended = () => console.log('Remote track ended:', event.track.kind);
-    event.track.onmute = () => console.log('Remote track muted:', event.track.kind);
-    event.track.onunmute = () => console.log('Remote track unmuted:', event.track.kind);
-  }, [bindRemoteMedia]);
+    // 接收端统计检测：检查媒体是否真正到达
+    if (!mediaCheckIntervalRef.current) {
+      mediaCheckIntervalRef.current = setInterval(async () => {
+        if (isClosedRef.current || !pcRef.current) return;
+        try {
+          const stats = await pcRef.current.getStats();
+          let videoBytes = 0, audioBytes = 0;
+          for (const [, report] of stats) {
+            if (report.type === 'inbound-rtp') {
+              if (report.kind === 'video') videoBytes = report.bytesReceived || 0;
+              if (report.kind === 'audio') audioBytes = report.bytesReceived || 0;
+            }
+          }
+          if (type === 'video' && videoBytes === 0) {
+            bytesReceivedZeroCount.current++;
+            if (bytesReceivedZeroCount.current > 5) {
+              // 5 秒内无数据，尝试 ICE 重启
+              restartIce();
+              bytesReceivedZeroCount.current = 0;
+            }
+          } else if (type === 'audio' && audioBytes === 0) {
+            bytesReceivedZeroCount.current++;
+            if (bytesReceivedZeroCount.current > 5) {
+              restartIce();
+              bytesReceivedZeroCount.current = 0;
+            }
+          } else {
+            bytesReceivedZeroCount.current = 0;
+          }
+        } catch (e) {}
+      }, 1000);
+    }
+  }, [bindRemoteMediaIfNeeded, restartIce, type]);
 
   const connectionPausedRef = useRef(false);
 
-  // 信令处理
+  // 信令处理（完美协商 + 防 deadlock）
   const handleSignal = useCallback(async (msg: any) => {
     if (isClosedRef.current) return;
     const pc = pcRef.current;
@@ -200,8 +246,9 @@ export default function CallModal({
             clearTimeout(iceRestartTimeoutRef.current);
             iceRestartTimeoutRef.current = null;
           }
+          isSettingRemoteAnswerPendingRef.current = false;
         } else if (isOffer) {
-          const offerCollision = makingOfferRef.current || pc.signalingState !== 'stable';
+          const offerCollision = makingOffer.current || pc.signalingState !== 'stable';
           ignoreOfferRef.current = !politeRef.current && offerCollision;
           if (ignoreOfferRef.current) return;
 
@@ -209,6 +256,7 @@ export default function CallModal({
             await pc.setLocalDescription({ type: 'rollback' });
           }
 
+          isSettingRemoteAnswerPendingRef.current = true;
           await pc.setRemoteDescription(new RTCSessionDescription(description));
           while (pendingCandidatesRef.current.length) {
             const cand = pendingCandidatesRef.current.shift()!;
@@ -218,6 +266,7 @@ export default function CallModal({
           const answer = await pc.createAnswer();
           await pc.setLocalDescription(answer);
           safeSend({ event: 'call-answer', data: { targetId: friendId, sdp: answer } });
+          isSettingRemoteAnswerPendingRef.current = false;
         }
       } else if (candidate) {
         const iceCandidate = new RTCIceCandidate(candidate);
@@ -276,7 +325,7 @@ export default function CallModal({
 
       if (videoTrack && sender) {
         if (newOff) {
-          videoTrack.enabled = false; // 关闭摄像头
+          videoTrack.enabled = false;
         } else {
           navigator.mediaDevices.getUserMedia({ video: true })
             .then(async newStream => {
@@ -288,7 +337,6 @@ export default function CallModal({
               if (!newTrack) return;
               await sender.replaceTrack(newTrack);
               if (localVideoRef.current) localVideoRef.current.srcObject = newStream;
-              // 更新本地流
               if (localStreamRef.current) {
                 const oldVideoTrack = localStreamRef.current.getVideoTracks()[0];
                 if (oldVideoTrack) {
@@ -310,7 +358,7 @@ export default function CallModal({
 
   const toggleSpeaker = useCallback(() => {
     unlockAudio();
-    setIsSpeakerOn(prev => !prev); // React 状态驱动 muted
+    setIsSpeakerOn(prev => !prev);
   }, [unlockAudio]);
 
   // 页面生命周期
@@ -345,12 +393,15 @@ export default function CallModal({
     ignoreOfferRef.current = false;
     iceRestartCountRef.current = 0;
     waitingForAnswerRef.current = false;
+    isSettingRemoteAnswerPendingRef.current = false;
     remoteStreamRef.current = null;
     connectionPausedRef.current = false;
     cameraChangeLock.current = false;
     pauseTimeRef.current = null;
+    makingOffer.current = false;
+    bytesReceivedZeroCount.current = 0;
 
-    politeRef.current = !!incoming; // 被叫 polite，主叫 impolite
+    politeRef.current = !!incoming;
 
     callTimeoutRef.current = setTimeout(() => {
       if (!cancelled && callStatusRef.current === 'calling') {
@@ -386,21 +437,54 @@ export default function CallModal({
         });
         pcRef.current = pc;
 
-        // 使用 addTrack 初始化（标准做法）
+        // 添加轨道
         stream.getTracks().forEach(track => pc.addTrack(track, stream));
+
+        // 设置视频码率
+        if (type === 'video') {
+          const sender = pc.getSenders().find(s => s.track?.kind === 'video');
+          if (sender) {
+            const params = sender.getParameters();
+            if (!params.encodings) params.encodings = [{}];
+            params.encodings[0].maxBitrate = 1200000; // 1.2 Mbps
+            sender.setParameters(params).catch(() => {});
+          }
+        }
+
+        // 监听协商需要（用于摄像头切换等）
+        pc.onnegotiationneeded = async () => {
+          if (isClosedRef.current) return;
+          try {
+            makingOffer.current = true;
+            const offer = await pc.createOffer();
+            if (pc.signalingState !== 'stable') return;
+            await pc.setLocalDescription(offer);
+            safeSend({ event: 'call-offer', data: { targetId: friendId, sdp: offer, type } });
+          } catch (e) {
+            console.error('negotiationneeded error', e);
+          } finally {
+            makingOffer.current = false;
+          }
+        };
 
         pc.ontrack = handleRemoteTrack;
 
         pc.onicecandidate = (event) => {
           if (isClosedRef.current) return;
           if (event.candidate) {
-            // 打印 candidate 类型便于调试 TURN
             console.log('ICE candidate:', event.candidate.type, event.candidate.candidate);
             safeSend({ event: 'ice-candidate', data: { targetId: friendId, candidate: event.candidate } });
           }
         };
 
-        // 监听 iceConnectionState
+        // 同时监听 connectionState 和 iceConnectionState
+        pc.onconnectionstatechange = () => {
+          if (isClosedRef.current) return;
+          console.log('connectionState:', pc.connectionState);
+          if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
+            hangup();
+          }
+        };
         pc.oniceconnectionstatechange = () => {
           if (isClosedRef.current) return;
           console.log('iceConnectionState:', pc.iceConnectionState);
@@ -410,8 +494,6 @@ export default function CallModal({
             setTimeout(() => {
               if (pc.iceConnectionState === 'disconnected') hangup();
             }, 10000);
-          } else if (pc.iceConnectionState === 'closed') {
-            hangupPassive();
           }
         };
 
@@ -431,6 +513,7 @@ export default function CallModal({
           ws.removeEventListener('close', onWsClose);
         };
 
+        // 呼叫建立
         if (incoming) {
           if (offerSdp && pc.signalingState === 'stable' && !pc.remoteDescription) {
             await pc.setRemoteDescription(new RTCSessionDescription(offerSdp));
@@ -443,14 +526,11 @@ export default function CallModal({
             safeSend({ event: 'call-answer', data: { targetId: friendId, sdp: answer } });
           }
         } else {
-          makingOfferRef.current = true;
-          const offer = await pc.createOffer({
-            offerToReceiveAudio: true,
-            offerToReceiveVideo: type === 'video',
-          });
+          makingOffer.current = true;
+          const offer = await pc.createOffer();
           await pc.setLocalDescription(offer);
           safeSend({ event: 'call-offer', data: { targetId: friendId, sdp: offer, type } });
-          makingOfferRef.current = false;
+          makingOffer.current = false;
         }
       } catch (err) {
         console.error(err);
@@ -475,13 +555,12 @@ export default function CallModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black" onClick={unlockAudio}>
       <div className="relative flex flex-col items-center w-full h-full max-w-3xl mx-auto">
-        {/* 音频通话时才渲染隐藏的 audio 元素 */}
         {type === 'audio' && (
           <audio
             ref={remoteAudioRef}
             autoPlay
             playsInline
-            muted={!isSpeakerOn} // 由 React 状态控制
+            muted={!isSpeakerOn}
             className="hidden"
           />
         )}
@@ -491,7 +570,7 @@ export default function CallModal({
               ref={remoteVideoRef}
               autoPlay
               playsInline
-              muted={!isSpeakerOn} // 由 React 状态控制静音
+              muted={!isSpeakerOn}
               className="w-full h-full object-cover"
             />
           ) : (
