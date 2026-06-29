@@ -47,21 +47,31 @@ export default function CallModal({
   const lastPacketsReceivedRef = useRef<{ video: number; audio: number }>({ video: -1, audio: -1 });
   const lastFramesDecodedRef = useRef<number>(-1);
   const lastPacketsLostRef = useRef<{ video: number; audio: number }>({ video: -1, audio: -1 });
-  const lastJitterRef = useRef<{ video: number; audio: number }>({ video: -1, audio: -1 });
+  const jitterWindowRef = useRef<{ video: number[]; audio: number[] }>({ video: [], audio: [] });
   const noDataCountRef = useRef(0);
   const audioContextRef = useRef<AudioContext | null>(null);
-  const currentOfferIdRef = useRef<string | null>(null); // 当前 offer 的 UUID
-  const currentUfragRef = useRef<string | null>(null);   // 当前 ICE ufrag
+  const currentOfferIdRef = useRef<string | null>(null);
+  const remoteUfragRef = useRef<string | null>(null); // 远端 ufrag
+  const mediaCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => { callStatusRef.current = callStatus; }, [callStatus]);
 
   const removeWsListenersRef = useRef<() => void>(() => {});
 
+  // 安全发送
   const safeSend = useCallback((data: any) => {
     if (ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify(data));
     }
   }, [ws]);
+
+  // 生成 UUID
+  const uuid = useCallback(() => {
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+      return crypto.randomUUID();
+    }
+    return URL.createObjectURL(new Blob([])).split('/').pop()! + Math.random().toString(36).slice(2);
+  }, []);
 
   // ---------- 清理 ----------
   const commonCleanup = useCallback(() => {
@@ -78,6 +88,7 @@ export default function CallModal({
     if (durationTimerRef.current) clearInterval(durationTimerRef.current);
     if (callTimeoutRef.current) clearTimeout(callTimeoutRef.current);
     if (iceRestartTimeoutRef.current) clearTimeout(iceRestartTimeoutRef.current);
+    if (mediaCheckIntervalRef.current) clearInterval(mediaCheckIntervalRef.current);
     if (audioContextRef.current) {
       audioContextRef.current.close().catch(() => {});
       audioContextRef.current = null;
@@ -104,10 +115,7 @@ export default function CallModal({
     onHangup();
   }, [commonCleanup, onHangup]);
 
-  // 生成 UUID
-  const uuid = () => URL.createObjectURL(new Blob([])).split('/').pop()! + Math.random().toString(36).slice(2);
-
-  // ICE 重启（增加 signalingState 检查和锁）
+  // ICE 重启（增加了超时回滚）
   const restartIce = useCallback(async () => {
     const pc = pcRef.current;
     if (
@@ -129,6 +137,10 @@ export default function CallModal({
 
     if (iceRestartTimeoutRef.current) clearTimeout(iceRestartTimeoutRef.current);
     iceRestartTimeoutRef.current = setTimeout(() => {
+      // 超时后回滚到 stable，并释放等待
+      if (pc.signalingState === 'have-local-offer') {
+        pc.setLocalDescription({ type: 'rollback' }).catch(() => {});
+      }
       waitingForAnswerRef.current = false;
       iceRestartTimeoutRef.current = null;
     }, 15000);
@@ -142,11 +154,6 @@ export default function CallModal({
       }
       const offer = await pc.createOffer({ iceRestart: true });
       await pc.setLocalDescription(offer);
-      // 保存当前 ufrag 用于候选人过滤
-      if (pc.localDescription?.sdp) {
-        const match = pc.localDescription.sdp.match(/ice-ufrag:(\S+)/);
-        if (match) currentUfragRef.current = match[1];
-      }
       safeSend({ event: 'call-offer', data: { targetId: friendId, sdp: offer, type, offerId } });
     } catch (e) {
       console.error('ICE restart failed', e);
@@ -154,7 +161,7 @@ export default function CallModal({
     } finally {
       iceRestartingRef.current = false;
     }
-  }, [safeSend, friendId, type, hangup]);
+  }, [safeSend, friendId, type, hangup, uuid]);
 
   // 绑定远程媒体元素
   const bindRemoteMedia = useCallback((stream: MediaStream) => {
@@ -191,8 +198,10 @@ export default function CallModal({
     stream.addTrack(track);
 
     track.onended = () => {
-      stream.removeTrack(track);
-      bindRemoteMedia(stream); // 刷新绑定
+      if (stream.getTracks().includes(track)) {
+        stream.removeTrack(track);
+      }
+      bindRemoteMedia(stream);
       console.log('Remote track ended:', track.kind);
     };
     track.onmute = () => console.log('Remote track muted:', track.kind);
@@ -212,7 +221,7 @@ export default function CallModal({
       }, 1000);
     }
 
-    // 媒体接收质量检测（bytes、packets、frames、jitter、packetsLost 综合判断）
+    // 媒体接收质量检测（综合丢包率、抖动、数据流）
     if (!mediaCheckIntervalRef.current) {
       mediaCheckIntervalRef.current = setInterval(async () => {
         if (isClosedRef.current || !pcRef.current) return;
@@ -221,22 +230,22 @@ export default function CallModal({
           let curVideoBytes = -1, curAudioBytes = -1;
           let curVideoPackets = -1, curAudioPackets = -1;
           let curFramesDecoded = -1;
-          let curVideoJitter = -1, curAudioJitter = -1;
           let curVideoLost = -1, curAudioLost = -1;
+          let curVideoJitter = -1, curAudioJitter = -1;
           for (const [, report] of stats) {
             if (report.type === 'inbound-rtp') {
               if (report.kind === 'video') {
                 if (report.bytesReceived !== undefined) curVideoBytes = report.bytesReceived;
                 if (report.packetsReceived !== undefined) curVideoPackets = report.packetsReceived;
                 if (report.framesDecoded !== undefined) curFramesDecoded = report.framesDecoded;
-                if (report.jitter !== undefined) curVideoJitter = report.jitter;
                 if (report.packetsLost !== undefined) curVideoLost = report.packetsLost;
+                if (report.jitter !== undefined) curVideoJitter = report.jitter;
               }
               if (report.kind === 'audio') {
                 if (report.bytesReceived !== undefined) curAudioBytes = report.bytesReceived;
                 if (report.packetsReceived !== undefined) curAudioPackets = report.packetsReceived;
-                if (report.jitter !== undefined) curAudioJitter = report.jitter;
                 if (report.packetsLost !== undefined) curAudioLost = report.packetsLost;
+                if (report.jitter !== undefined) curAudioJitter = report.jitter;
               }
             }
           }
@@ -245,39 +254,71 @@ export default function CallModal({
           const lastPackets = lastPacketsReceivedRef.current;
           const lastFrames = lastFramesDecodedRef.current;
           const lastLost = lastPacketsLostRef.current;
-          const lastJitter = lastJitterRef.current;
 
+          // 计算丢包率和抖动移动平均
           let videoStalled = false;
           let audioStalled = false;
 
-          // 视频停滞判断：字节、包、帧无变化，且丢包/抖动未改善
+          // 视频检测
           if (curVideoBytes !== -1 && curVideoPackets !== -1) {
-            const bytesStalled = curVideoBytes === last.video;
-            const packetsStalled = curVideoPackets === lastPackets.video;
-            const framesStalled = curFramesDecoded === -1 || curFramesDecoded === lastFrames;
-            const lossWorse = curVideoLost !== -1 && lastLost.video !== -1 && curVideoLost > lastLost.video;
-            const jitterWorse = curVideoJitter !== -1 && lastJitter.video !== -1 && curVideoJitter > lastJitter.video + 0.1;
+            const bytesChanged = curVideoBytes !== last.video;
+            const packetsChanged = curVideoPackets !== lastPackets.video;
+            const framesChanged = curFramesDecoded !== -1 && curFramesDecoded !== lastFrames;
 
-            videoStalled = (bytesStalled && packetsStalled && framesStalled) || (packetsStalled && (lossWorse || jitterWorse));
+            // 计算丢包率
+            const deltaLost = curVideoLost !== -1 && lastLost.video !== -1 ? curVideoLost - lastLost.video : 0;
+            const deltaPackets = packetsChanged ? Math.max(0, curVideoPackets - lastPackets.video) : 0;
+            const lossRate = deltaPackets > 0 ? deltaLost / deltaPackets : 0;
+
+            // 抖动窗口
+            if (curVideoJitter !== -1) {
+              const window = jitterWindowRef.current.video;
+              window.push(curVideoJitter);
+              if (window.length > 5) window.shift();
+            }
+
+            const jitterExceeded =
+              jitterWindowRef.current.video.length >= 5 &&
+              jitterWindowRef.current.video.every(j => j > 0.03);
+
+            // 停滞条件：字节、包、帧都没变化，或者丢包率连续过高
+            const streamStalled = !bytesChanged && !packetsChanged && !framesChanged;
+            const highLoss = lossRate > 0.1 && deltaLost > 0;
+
+            videoStalled = streamStalled || (highLoss && !bytesChanged) || jitterExceeded;
 
             last.video = curVideoBytes;
             lastPackets.video = curVideoPackets;
             lastLost.video = curVideoLost;
-            lastJitter.video = curVideoJitter;
           }
 
+          // 音频检测
           if (curAudioBytes !== -1 && curAudioPackets !== -1) {
-            const bytesStalled = curAudioBytes === last.audio;
-            const packetsStalled = curAudioPackets === lastPackets.audio;
-            const lossWorse = curAudioLost !== -1 && lastLost.audio !== -1 && curAudioLost > lastLost.audio;
-            const jitterWorse = curAudioJitter !== -1 && lastJitter.audio !== -1 && curAudioJitter > lastJitter.audio + 0.1;
+            const bytesChanged = curAudioBytes !== last.audio;
+            const packetsChanged = curAudioPackets !== lastPackets.audio;
 
-            audioStalled = (bytesStalled && packetsStalled) || (packetsStalled && (lossWorse || jitterWorse));
+            const deltaLost = curAudioLost !== -1 && lastLost.audio !== -1 ? curAudioLost - lastLost.audio : 0;
+            const deltaPackets = packetsChanged ? Math.max(0, curAudioPackets - lastPackets.audio) : 0;
+            const lossRate = deltaPackets > 0 ? deltaLost / deltaPackets : 0;
+
+            if (curAudioJitter !== -1) {
+              const window = jitterWindowRef.current.audio;
+              window.push(curAudioJitter);
+              if (window.length > 5) window.shift();
+            }
+
+            const jitterExceeded =
+              jitterWindowRef.current.audio.length >= 5 &&
+              jitterWindowRef.current.audio.every(j => j > 0.03);
+
+            const streamStalled = !bytesChanged && !packetsChanged;
+            const highLoss = lossRate > 0.1 && deltaLost > 0;
+
+            audioStalled = streamStalled || (highLoss && !bytesChanged) || jitterExceeded;
 
             last.audio = curAudioBytes;
             lastPackets.audio = curAudioPackets;
             lastLost.audio = curAudioLost;
-            lastJitter.audio = curAudioJitter;
           }
           if (curFramesDecoded !== -1) lastFramesDecodedRef.current = curFramesDecoded;
 
@@ -299,7 +340,7 @@ export default function CallModal({
               lastPacketsReceivedRef.current = { video: -1, audio: -1 };
               lastFramesDecodedRef.current = -1;
               lastPacketsLostRef.current = { video: -1, audio: -1 };
-              lastJitterRef.current = { video: -1, audio: -1 };
+              jitterWindowRef.current = { video: [], audio: [] };
             }
           } else {
             noDataCountRef.current = 0;
@@ -310,7 +351,6 @@ export default function CallModal({
   }, [bindRemoteMedia, restartIce, type, isCameraOff]);
 
   const connectionPausedRef = useRef(false);
-  const mediaCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // 信令处理
   const handleSignal = useCallback(async (msg: any) => {
@@ -332,14 +372,18 @@ export default function CallModal({
         const isAnswer = msg.event === 'call-answer';
 
         if (isAnswer) {
-          // 验证 answer 对应的 offerId 是否匹配
+          // 验证 offerId
           if (currentOfferIdRef.current && msg.data?.offerId !== currentOfferIdRef.current) {
             console.warn('忽略过期的 answer');
             return;
           }
-          // 仅在 have-local-offer 时接受 answer
           if (pc.signalingState === 'have-local-offer') {
             await pc.setRemoteDescription(new RTCSessionDescription(description));
+            // 提取远端 ufrag
+            if (pc.remoteDescription?.sdp) {
+              const match = pc.remoteDescription.sdp.match(/ice-ufrag:(\S+)/);
+              if (match) remoteUfragRef.current = match[1];
+            }
             while (pendingCandidatesRef.current.length) {
               const cand = pendingCandidatesRef.current.shift()!;
               await pc.addIceCandidate(cand);
@@ -360,9 +404,13 @@ export default function CallModal({
             await pc.setLocalDescription({ type: 'rollback' });
           }
 
-          // 保存对方的 offerId 用于 answer 回应
           const answerOfferId = msg.data?.offerId;
           await pc.setRemoteDescription(new RTCSessionDescription(description));
+          // 提取远端 ufrag
+          if (pc.remoteDescription?.sdp) {
+            const match = pc.remoteDescription.sdp.match(/ice-ufrag:(\S+)/);
+            if (match) remoteUfragRef.current = match[1];
+          }
           while (pendingCandidatesRef.current.length) {
             const cand = pendingCandidatesRef.current.shift()!;
             await pc.addIceCandidate(cand);
@@ -373,8 +421,8 @@ export default function CallModal({
           safeSend({ event: 'call-answer', data: { targetId: friendId, sdp: answer, offerId: answerOfferId } });
         }
       } else if (candidate) {
-        // ICE candidate 过滤：仅接受当前 ufrag 匹配的候选
-        if (currentUfragRef.current && msg.data?.ufrag && msg.data.ufrag !== currentUfragRef.current) {
+        // ICE candidate 过滤：使用远端 ufrag
+        if (remoteUfragRef.current && msg.data?.ufrag && msg.data.ufrag !== remoteUfragRef.current) {
           console.warn('忽略旧世代 ICE candidate');
           return;
         }
@@ -536,10 +584,10 @@ export default function CallModal({
     lastPacketsReceivedRef.current = { video: -1, audio: -1 };
     lastFramesDecodedRef.current = -1;
     lastPacketsLostRef.current = { video: -1, audio: -1 };
-    lastJitterRef.current = { video: -1, audio: -1 };
+    jitterWindowRef.current = { video: [], audio: [] };
     noDataCountRef.current = 0;
     currentOfferIdRef.current = null;
-    currentUfragRef.current = null;
+    remoteUfragRef.current = null;
     if (audioContextRef.current) {
       audioContextRef.current.close().catch(() => {});
       audioContextRef.current = null;
@@ -612,10 +660,6 @@ export default function CallModal({
             const offer = await pc.createOffer();
             if (pc.signalingState !== 'stable') return;
             await pc.setLocalDescription(offer);
-            if (pc.localDescription?.sdp) {
-              const match = pc.localDescription.sdp.match(/ice-ufrag:(\S+)/);
-              if (match) currentUfragRef.current = match[1];
-            }
             safeSend({ event: 'call-offer', data: { targetId: friendId, sdp: offer, type, offerId } });
           } catch (e) {
             console.error('negotiationneeded error', e);
@@ -632,7 +676,7 @@ export default function CallModal({
             const candidateData = {
               targetId: friendId,
               candidate: event.candidate,
-              ufrag: currentUfragRef.current,
+              ufrag: event.candidate.candidate.includes('ufrag') ? event.candidate.candidate.split(' ').find(p => p.startsWith('ufrag'))?.split(':')[1] : undefined,
             };
             console.log('ICE candidate:', event.candidate.type, event.candidate.candidate);
             safeSend({ event: 'ice-candidate', data: candidateData });
@@ -680,6 +724,10 @@ export default function CallModal({
         if (incoming) {
           if (offerSdp && pc.signalingState === 'stable' && !pc.remoteDescription) {
             await pc.setRemoteDescription(new RTCSessionDescription(offerSdp));
+            if (pc.remoteDescription?.sdp) {
+              const match = pc.remoteDescription.sdp.match(/ice-ufrag:(\S+)/);
+              if (match) remoteUfragRef.current = match[1];
+            }
             while (pendingCandidatesRef.current.length) {
               const cand = pendingCandidatesRef.current.shift()!;
               await pc.addIceCandidate(cand);
@@ -694,10 +742,6 @@ export default function CallModal({
           makingOffer.current = true;
           const offer = await pc.createOffer();
           await pc.setLocalDescription(offer);
-          if (pc.localDescription?.sdp) {
-            const match = pc.localDescription.sdp.match(/ice-ufrag:(\S+)/);
-            if (match) currentUfragRef.current = match[1];
-          }
           safeSend({ event: 'call-offer', data: { targetId: friendId, sdp: offer, type, offerId } });
           makingOffer.current = false;
         }
