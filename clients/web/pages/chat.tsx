@@ -740,7 +740,7 @@ export default function Chat() {
 
   return (
     <div
-      className="h-full w-full flex min-h-0 bg-transparent relative overflow-hidden"
+      className="h-dvh w-full flex min-h-0 bg-transparent relative overflow-hidden"
       onClick={() => { setContextMenu(null); setShowMentionList(false); }}
     >
       {/* 左侧栏 */}
@@ -894,8 +894,8 @@ export default function Chat() {
         </div>
       </div>
 
-      {/* 右侧聊天窗：纯 Flex 三行布局 */}
-      <div className={`${mobileView === 'chat' ? 'block' : 'hidden'} md:block flex-1 flex flex-col min-w-0 min-h-0 h-full`}>
+      {/* 右侧聊天窗：纯 Flex 三行布局，修复版 */}
+      <div className={`${mobileView === 'chat' ? 'block' : 'hidden'} md:block flex-1 flex flex-col min-w-0 min-h-0`}>
         {selectedChat ? (
           <>
             {/* 顶部信息栏：固定高度 */}
