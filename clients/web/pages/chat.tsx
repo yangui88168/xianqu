@@ -292,7 +292,7 @@ export default function Chat() {
               if (prev.find(m => m.id === newMsg.id)) return prev;
               return [...prev, newMsg];
             });
-            shouldAutoScroll.current = true;
+            shouldAutoScroll.current = isNearBottom();
             fetch(`${API}/messages/read`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ senderId: newMsg.senderId }) });
           } else {
             MessageSound?.play();
@@ -309,7 +309,7 @@ export default function Chat() {
               if (prev.find(m => m.id === newMsg.id)) return prev;
               return [...prev, newMsg];
             });
-            shouldAutoScroll.current = true;
+            shouldAutoScroll.current = isNearBottom();
           } else {
             MessageSound?.play();
           }
@@ -340,6 +340,13 @@ export default function Chat() {
       }
     };
   }, [userId, loadSessions, loadGroups]);
+
+  const isNearBottom = () => {
+    const container = scrollContainerRef.current;
+    if (!container) return false;
+    const { scrollTop, scrollHeight, clientHeight } = container;
+    return scrollHeight - scrollTop - clientHeight < 100;
+  };
 
   const addToCache = (key: string, msg: any) => {
     const cache = messageCache.current;
@@ -641,7 +648,6 @@ export default function Chat() {
     if (res.ok) { setShowGroupModal(false); setNewGroupName(''); setSelectedFriends([]); loadGroups(); } else alert('创建失败');
   };
 
-  // 滚动逻辑：直接操作 scrollTop，不使用 scrollIntoView
   useEffect(() => {
     const container = scrollContainerRef.current;
     if (shouldAutoScroll.current && container) {
@@ -658,285 +664,288 @@ export default function Chat() {
   const goBack = () => setMobileView('sidebar');
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden bg-white">
-      <div className="flex-1 min-h-0 flex overflow-hidden relative">
-        {/* 左侧栏 */}
-        <div className={`${mobileView === 'sidebar' ? 'block' : 'hidden'} md:block md:w-80 w-full border-r flex flex-col min-h-0 absolute md:relative z-10 h-full md:h-auto`}>
-          <div className="flex-shrink-0 p-3 border-b">
-            <div className="flex items-center gap-2">
-              {showSearch ? (
-                <div className="flex-1 flex gap-2">
-                  <input className="flex-1 p-2 border rounded text-sm" placeholder="搜索用户..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} onKeyDown={e => e.key === 'Enter' && searchUsers()} autoFocus />
-                  <button onClick={searchUsers} className="bg-blue-500 text-white px-3 py-1 rounded text-sm">搜索</button>
-                  <button onClick={() => { setShowSearch(false); setSearchQuery(''); setSearchResults([]); }} className="text-gray-500 text-sm whitespace-nowrap">取消</button>
+    <div className="flex-1 min-h-0 flex overflow-hidden relative bg-white">
+      {/* 左侧栏：桌面端正常显示，移动端用 translateX 隐藏 */}
+      <div
+        className={`w-full md:w-80 border-r flex flex-col min-h-0 absolute md:relative z-10 transition-transform duration-300 ${
+          mobileView === 'sidebar' ? 'translate-x-0' : '-translate-x-full'
+        } md:translate-x-0`}
+        style={{ height: '100%' }}
+      >
+        <div className="flex-shrink-0 p-3 border-b">
+          <div className="flex items-center gap-2">
+            {showSearch ? (
+              <div className="flex-1 flex gap-2">
+                <input className="flex-1 p-2 border rounded text-sm" placeholder="搜索用户..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} onKeyDown={e => e.key === 'Enter' && searchUsers()} autoFocus />
+                <button onClick={searchUsers} className="bg-blue-500 text-white px-3 py-1 rounded text-sm">搜索</button>
+                <button onClick={() => { setShowSearch(false); setSearchQuery(''); setSearchResults([]); }} className="text-gray-500 text-sm whitespace-nowrap">取消</button>
+              </div>
+            ) : (
+              <button onClick={() => setShowSearch(true)} className="flex-1 flex items-center gap-2 bg-gray-100 rounded-lg px-3 py-2 text-sm text-gray-500 hover:bg-gray-200">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                搜索
+              </button>
+            )}
+            <div className="relative">
+              <button onClick={() => setShowMenu(!showMenu)} className="flex-shrink-0 bg-gray-100 hover:bg-gray-200 rounded-lg p-2 text-gray-500">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" /></svg>
+              </button>
+              {showMenu && (
+                <div className="absolute left-0 top-10 bg-white border rounded-xl shadow-lg py-1 w-40 z-50">
+                  <button onClick={() => { setShowMenu(false); setShowGroupModal(true); }} className="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 flex items-center gap-2">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
+                    创建群聊
+                  </button>
+                  <button onClick={() => { setShowMenu(false); setShowSearch(true); }} className="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 flex items-center gap-2">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                    添加好友
+                  </button>
                 </div>
-              ) : (
-                <button onClick={() => setShowSearch(true)} className="flex-1 flex items-center gap-2 bg-gray-100 rounded-lg px-3 py-2 text-sm text-gray-500 hover:bg-gray-200">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-                  搜索
-                </button>
               )}
-              <div className="relative">
-                <button onClick={() => setShowMenu(!showMenu)} className="flex-shrink-0 bg-gray-100 hover:bg-gray-200 rounded-lg p-2 text-gray-500">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" /></svg>
-                </button>
-                {showMenu && (
-                  <div className="absolute left-0 top-10 bg-white border rounded-xl shadow-lg py-1 w-40 z-50">
-                    <button onClick={() => { setShowMenu(false); setShowGroupModal(true); }} className="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 flex items-center gap-2">
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
-                      创建群聊
-                    </button>
-                    <button onClick={() => { setShowMenu(false); setShowSearch(true); }} className="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 flex items-center gap-2">
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-                      添加好友
-                    </button>
-                  </div>
-                )}
-              </div>
             </div>
-            {searchResults.length > 0 && (
-              <div className="max-h-40 overflow-y-auto border rounded p-1 mt-2">
-                {searchResults.map((user: any) => (
-                  <div key={user.id} className="flex justify-between items-center p-2 hover:bg-gray-100 rounded">
-                    <span className="text-sm">{user.nickname || user.username}</span>
-                    <button onClick={() => sendFriendRequest(user.id)} className="text-xs bg-green-500 text-white px-2 py-1 rounded">添加</button>
-                  </div>
-                ))}
-              </div>
-            )}
-            {searchMode && searchMessageResults.length > 0 && (
-              <div className="mt-2 max-h-40 overflow-y-auto border rounded p-1">
-                <p className="text-xs text-gray-500 mb-1">消息搜索结果</p>
-                {searchMessageResults.map((item: any, i: number) => (
-                  <div key={i} className="p-2 hover:bg-gray-100 rounded text-xs cursor-pointer" onClick={() => openSearchResult(item)}>
-                    <span className="font-medium">{item.chatName}</span>：{item.content.substring(0, 30)}
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
-
-          {friendRequests.length > 0 && (
-            <div className="flex-shrink-0 border-b bg-yellow-50">
-              <div className="p-2 text-sm font-bold">好友请求</div>
-              {friendRequests.map((req: any) => (
-                <div key={req.id} className="flex justify-between items-center px-3 py-2">
-                  <span className="text-sm">{req.sender?.nickname || req.sender?.username}</span>
-                  <div className="flex gap-1">
-                    <button onClick={() => acceptRequest(req.id)} className="text-xs bg-green-500 text-white px-2 py-1 rounded">接受</button>
-                    <button onClick={() => rejectRequest(req.id)} className="text-xs bg-red-500 text-white px-2 py-1 rounded">拒绝</button>
-                  </div>
+          {searchResults.length > 0 && (
+            <div className="max-h-40 overflow-y-auto border rounded p-1 mt-2">
+              {searchResults.map((user: any) => (
+                <div key={user.id} className="flex justify-between items-center p-2 hover:bg-gray-100 rounded">
+                  <span className="text-sm">{user.nickname || user.username}</span>
+                  <button onClick={() => sendFriendRequest(user.id)} className="text-xs bg-green-500 text-white px-2 py-1 rounded">添加</button>
                 </div>
               ))}
             </div>
           )}
+          {searchMode && searchMessageResults.length > 0 && (
+            <div className="mt-2 max-h-40 overflow-y-auto border rounded p-1">
+              <p className="text-xs text-gray-500 mb-1">消息搜索结果</p>
+              {searchMessageResults.map((item: any, i: number) => (
+                <div key={i} className="p-2 hover:bg-gray-100 rounded text-xs cursor-pointer" onClick={() => openSearchResult(item)}>
+                  <span className="font-medium">{item.chatName}</span>：{item.content.substring(0, 30)}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
 
-          <div className="flex-1 min-h-0 overflow-y-auto">
-            {allConversations.map((conv: any) => (
-              <div key={conv.type + conv.data.id} onClick={() => selectChat(conv.type, conv.data)}
-                className={`p-3 cursor-pointer hover:bg-gray-50 border-b ${selectedChat?.data?.id === conv.data.id && selectedChat?.type === conv.type ? 'bg-blue-50' : ''}`}>
-                {conv.type === 'group' ? (
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-gray-300 rounded-full flex items-center justify-center text-white text-sm font-bold">#</div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex justify-between">
-                        <span className="font-medium text-sm truncate">{conv.data.name}</span>
-                        {conv.lastTime && <span className="text-xs text-gray-400">{new Date(conv.lastTime).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' })}</span>}
-                      </div>
-                      <p className="text-xs text-gray-500 mt-0.5">群聊</p>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold">{(conv.data.nickname || conv.data.username)[0]}</div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex justify-between">
-                        <span className="font-medium text-sm truncate">{conv.data.nickname || conv.data.username}</span>
-                        {conv.lastTime && <span className="text-xs text-gray-400">{new Date(conv.lastTime).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' })}</span>}
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-xs text-gray-500 truncate">{conv.lastMessage?.type === 'image' ? '[图片]' : conv.lastMessage?.type === 'voice' ? '[语音]' : conv.lastMessage?.content || ''}</span>
-                        {conv.unreadCount > 0 && <span className="bg-red-500 text-white text-xs rounded-full px-1.5 py-0.5">{conv.unreadCount}</span>}
-                      </div>
-                      <p className="text-xs text-gray-500 mt-0.5">{getLastSeenText(conv.data)}</p>
-                    </div>
-                  </div>
-                )}
+        {friendRequests.length > 0 && (
+          <div className="flex-shrink-0 border-b bg-yellow-50">
+            <div className="p-2 text-sm font-bold">好友请求</div>
+            {friendRequests.map((req: any) => (
+              <div key={req.id} className="flex justify-between items-center px-3 py-2">
+                <span className="text-sm">{req.sender?.nickname || req.sender?.username}</span>
+                <div className="flex gap-1">
+                  <button onClick={() => acceptRequest(req.id)} className="text-xs bg-green-500 text-white px-2 py-1 rounded">接受</button>
+                  <button onClick={() => rejectRequest(req.id)} className="text-xs bg-red-500 text-white px-2 py-1 rounded">拒绝</button>
+                </div>
               </div>
             ))}
           </div>
-        </div>
+        )}
 
-        {/* 右侧聊天区域 */}
-        <div className={`${mobileView === 'chat' ? 'block' : 'hidden'} md:block flex-1 flex flex-col min-h-0 overflow-hidden`}>
-          {selectedChat ? (
-            <>
-              {/* Header */}
-              <div className="flex-shrink-0 bg-white border-b px-4 py-3 flex items-center gap-3" style={{ height: '56px' }}>
-                <button onClick={goBack} className="md:hidden text-gray-500 mr-2">←</button>
-                <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold">
-                  {selectedChat.type === 'group' ? '#' : (selectedChat.data.nickname || selectedChat.data.username)[0]}
+        <div className="flex-1 min-h-0 overflow-y-auto">
+          {allConversations.map((conv: any) => (
+            <div key={conv.type + conv.data.id} onClick={() => selectChat(conv.type, conv.data)}
+              className={`p-3 cursor-pointer hover:bg-gray-50 border-b ${selectedChat?.data?.id === conv.data.id && selectedChat?.type === conv.type ? 'bg-blue-50' : ''}`}>
+              {conv.type === 'group' ? (
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-gray-300 rounded-full flex items-center justify-center text-white text-sm font-bold">#</div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex justify-between">
+                      <span className="font-medium text-sm truncate">{conv.data.name}</span>
+                      {conv.lastTime && <span className="text-xs text-gray-400">{new Date(conv.lastTime).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' })}</span>}
+                    </div>
+                    <p className="text-xs text-gray-500 mt-0.5">群聊</p>
+                  </div>
                 </div>
-                <div className="flex-1">
-                  <p className="font-bold">{selectedChat.type === 'group' ? selectedChat.data.name : (selectedChat.data.nickname || selectedChat.data.username)}</p>
-                  {selectedChat.type === 'friend' && <p className="text-xs text-gray-500">{getLastSeenText(selectedChat.data)}</p>}
-                </div>
-                <div className="flex items-center gap-1">
-                  {selectedChat.type === 'friend' && (
-                    <>
-                      <button onClick={() => { if (!ws) return; setCallState({ type: 'audio', friendId: selectedChat.data.id, friendName: selectedChat.data.nickname || selectedChat.data.username, incoming: false }); }} className="text-gray-500 hover:text-gray-700 p-1" title="语音通话">
-                        <svg className="w-5 h-5 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
-                      </button>
-                      <button onClick={() => { if (!ws) return; setCallState({ type: 'video', friendId: selectedChat.data.id, friendName: selectedChat.data.nickname || selectedChat.data.username, incoming: false }); }} className="text-gray-500 hover:text-gray-700 p-1" title="视频通话">
-                        <svg className="w-5 h-5 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
-                      </button>
-                    </>
-                  )}
-                  {selectedChat.type === 'group' && (
-                    <button onClick={() => { loadGroupInfo(); setShowGroupInfo(true); }} className="text-gray-500 hover:text-gray-700 p-1" title="群信息">
-                      <svg className="w-5 h-5 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                    </button>
-                  )}
-                  <button onClick={() => { setSelectedChat(null); setMessages([]); }} className="text-gray-400 hover:text-gray-600 p-1 ml-1" title="关闭">
-                    <svg className="w-5 h-5 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
-                  </button>
-                </div>
-              </div>
-
-              {/* ReplyBar 独立固定 */}
-              {replyingTo && (
-                <div className="flex-shrink-0 bg-gray-200 px-4 py-2 text-sm flex justify-between items-center" style={bubbleStyle}>
-                  <span>回复 {(replyingTo.sender?.nickname || replyingTo.sender?.username || '用户')}：{replyingTo.content?.substring(0, 50)}</span>
-                  <button onClick={() => setReplyingTo(null)} className="text-red-500">✕</button>
+              ) : (
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold">{(conv.data.nickname || conv.data.username)[0]}</div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex justify-between">
+                      <span className="font-medium text-sm truncate">{conv.data.nickname || conv.data.username}</span>
+                      {conv.lastTime && <span className="text-xs text-gray-400">{new Date(conv.lastTime).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' })}</span>}
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-xs text-gray-500 truncate">{conv.lastMessage?.type === 'image' ? '[图片]' : conv.lastMessage?.type === 'voice' ? '[语音]' : conv.lastMessage?.content || ''}</span>
+                      {conv.unreadCount > 0 && <span className="bg-red-500 text-white text-xs rounded-full px-1.5 py-0.5">{conv.unreadCount}</span>}
+                    </div>
+                    <p className="text-xs text-gray-500 mt-0.5">{getLastSeenText(conv.data)}</p>
+                  </div>
                 </div>
               )}
+            </div>
+          ))}
+        </div>
+      </div>
 
-              {/* Body：唯一滚动容器 */}
-              <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
-                <div
-                  ref={scrollContainerRef}
-                  onScroll={handleScroll}
-                  className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-4"
-                  style={{ height: 0 }}
-                >
-                  {isLoadingChat ? (
-                    <div className="flex items-center justify-center h-full">
-                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mb-2"></div>
-                      <span className="text-gray-400 text-sm">加载中...</span>
-                    </div>
-                  ) : (
-                    <>
-                      {loadingMore && <div className="text-center text-gray-400 text-xs py-2">加载中...</div>}
-                      {!hasMore && messages.length > 0 && <div className="text-center text-gray-400 text-xs py-2">没有更多消息了</div>}
-                      {messages.map((msg: any, i: number) => (
-                        <MessageItem
-                          key={msg.id || i}
-                          msg={msg}
-                          userId={userId}
-                          selectedChat={selectedChat}
-                          onContextMenu={(e: any) => handleContextMenu(e, msg)}
-                          onTouchStart={() => handleTouchStart(msg)}
-                          onTouchEnd={handleTouchEnd}
-                          onTouchMove={handleTouchEnd}
-                          onReply={setReplyingTo}
-                          onRecall={recallMessage}
-                          onEdit={setEditingMessage}
-                          editingMessage={editingMessage}
-                          editInput={editInput}
-                          setEditInput={setEditInput}
-                          submitEdit={submitEdit}
-                        />
-                      ))}
-                    </>
-                  )}
-                </div>
+      {/* 右侧聊天区域：桌面端正常，移动端用 translateX */}
+      <div
+        className={`flex-1 flex flex-col min-h-0 overflow-hidden transition-transform duration-300 ${
+          mobileView === 'chat' ? 'translate-x-0' : 'translate-x-full'
+        } md:translate-x-0`}
+      >
+        {selectedChat ? (
+          <>
+            <div className="flex-shrink-0 bg-white border-b px-4 py-3 flex items-center gap-3" style={{ height: '56px' }}>
+              <button onClick={goBack} className="md:hidden text-gray-500 mr-2">←</button>
+              <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold">
+                {selectedChat.type === 'group' ? '#' : (selectedChat.data.nickname || selectedChat.data.username)[0]}
               </div>
-
-              {/* Input 固定高度 */}
-              <div className="flex-shrink-0 bg-white border-t p-3" style={{ minHeight: '64px', maxHeight: '64px' }}>
-                <div className="flex items-center gap-2 h-full">
-                  <button onClick={() => setInputMode(inputMode === 'text' ? 'voice' : 'text')} className="text-gray-400 hover:text-gray-600 p-2">
-                    {inputMode === 'text' ? (
-                      <svg className="w-5 h-5 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" /></svg>
-                    ) : (
-                      <svg className="w-5 h-5 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" /></svg>
-                    )}
+              <div className="flex-1">
+                <p className="font-bold">{selectedChat.type === 'group' ? selectedChat.data.name : (selectedChat.data.nickname || selectedChat.data.username)}</p>
+                {selectedChat.type === 'friend' && <p className="text-xs text-gray-500">{getLastSeenText(selectedChat.data)}</p>}
+              </div>
+              <div className="flex items-center gap-1">
+                {selectedChat.type === 'friend' && (
+                  <>
+                    <button onClick={() => { if (!ws) return; setCallState({ type: 'audio', friendId: selectedChat.data.id, friendName: selectedChat.data.nickname || selectedChat.data.username, incoming: false }); }} className="text-gray-500 hover:text-gray-700 p-1" title="语音通话">
+                      <svg className="w-5 h-5 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
+                    </button>
+                    <button onClick={() => { if (!ws) return; setCallState({ type: 'video', friendId: selectedChat.data.id, friendName: selectedChat.data.nickname || selectedChat.data.username, incoming: false }); }} className="text-gray-500 hover:text-gray-700 p-1" title="视频通话">
+                      <svg className="w-5 h-5 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                    </button>
+                  </>
+                )}
+                {selectedChat.type === 'group' && (
+                  <button onClick={() => { loadGroupInfo(); setShowGroupInfo(true); }} className="text-gray-500 hover:text-gray-700 p-1" title="群信息">
+                    <svg className="w-5 h-5 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                   </button>
+                )}
+                <button onClick={() => { setSelectedChat(null); setMessages([]); }} className="text-gray-400 hover:text-gray-600 p-1 ml-1" title="关闭">
+                  <svg className="w-5 h-5 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              </div>
+            </div>
+
+            {replyingTo && (
+              <div className="flex-shrink-0 bg-gray-200 px-4 py-2 text-sm flex justify-between items-center" style={bubbleStyle}>
+                <span>回复 {(replyingTo.sender?.nickname || replyingTo.sender?.username || '用户')}：{replyingTo.content?.substring(0, 50)}</span>
+                <button onClick={() => setReplyingTo(null)} className="text-red-500">✕</button>
+              </div>
+            )}
+
+            <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
+              <div
+                ref={scrollContainerRef}
+                onScroll={handleScroll}
+                className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-4"
+                style={{ height: 0 }}
+              >
+                {isLoadingChat ? (
+                  <div className="flex items-center justify-center h-full">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mb-2"></div>
+                    <span className="text-gray-400 text-sm">加载中...</span>
+                  </div>
+                ) : (
+                  <>
+                    {loadingMore && <div className="text-center text-gray-400 text-xs py-2">加载中...</div>}
+                    {!hasMore && messages.length > 0 && <div className="text-center text-gray-400 text-xs py-2">没有更多消息了</div>}
+                    {messages.map((msg: any, i: number) => (
+                      <MessageItem
+                        key={msg.id || i}
+                        msg={msg}
+                        userId={userId}
+                        selectedChat={selectedChat}
+                        onContextMenu={(e: any) => handleContextMenu(e, msg)}
+                        onTouchStart={() => handleTouchStart(msg)}
+                        onTouchEnd={handleTouchEnd}
+                        onTouchMove={handleTouchEnd}
+                        onReply={setReplyingTo}
+                        onRecall={recallMessage}
+                        onEdit={setEditingMessage}
+                        editingMessage={editingMessage}
+                        editInput={editInput}
+                        setEditInput={setEditInput}
+                        submitEdit={submitEdit}
+                      />
+                    ))}
+                  </>
+                )}
+              </div>
+            </div>
+
+            <div className="flex-shrink-0 bg-white border-t p-3" style={{ minHeight: '64px', maxHeight: '64px' }}>
+              <div className="flex items-center gap-2 h-full">
+                <button onClick={() => setInputMode(inputMode === 'text' ? 'voice' : 'text')} className="text-gray-400 hover:text-gray-600 p-2">
                   {inputMode === 'text' ? (
-                    <>
-                      <button onClick={() => widgetRef.current?.open()} className="text-gray-400 hover:text-gray-600 p-2">
-                        <svg className="w-5 h-5 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                      </button>
-                      <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
-                      <button onClick={() => fileInputRef.current?.click()} className="text-gray-400 hover:text-gray-600 p-2">
-                        <svg className="w-5 h-5 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                      </button>
-                      {selectedChat?.type === 'group' && (
-                        <div className="relative">
-                          <button onClick={async () => { if (!groupInfo) await loadGroupInfo(); setShowMentionList(!showMentionList); }} className="text-gray-400 hover:text-gray-600 p-2">@</button>
-                          {showMentionList && (
-                            <div className="absolute bottom-10 left-0 bg-white border rounded shadow p-2 z-10 min-w-[120px]">
-                              <button onClick={() => { setInput(prev => prev + '@all '); setShowMentionList(false); }} className="block w-full text-left text-sm hover:bg-gray-100 px-2 py-1 rounded">@全体成员</button>
-                              {groupInfo?.members?.filter((m: any) => m.userId !== userId).map((m: any) => (
-                                <button key={m.userId} onClick={() => { setInput(prev => prev + `@${m.user?.nickname || m.user?.username} `); setShowMentionList(false); }} className="block w-full text-left text-sm hover:bg-gray-100 px-2 py-1 rounded">{m.user?.nickname || m.user?.username}</button>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      )}
+                    <svg className="w-5 h-5 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" /></svg>
+                  ) : (
+                    <svg className="w-5 h-5 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" /></svg>
+                  )}
+                </button>
+                {inputMode === 'text' ? (
+                  <>
+                    <button onClick={() => widgetRef.current?.open()} className="text-gray-400 hover:text-gray-600 p-2">
+                      <svg className="w-5 h-5 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                    </button>
+                    <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
+                    <button onClick={() => fileInputRef.current?.click()} className="text-gray-400 hover:text-gray-600 p-2">
+                      <svg className="w-5 h-5 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                    </button>
+                    {selectedChat?.type === 'group' && (
                       <div className="relative">
-                        <button onClick={() => setShowEmoji(!showEmoji)} className="text-gray-400 hover:text-gray-600 p-2" type="button">
-                          <svg className="w-5 h-5 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                        </button>
-                        {showEmoji && (
-                          <div className="absolute bottom-10 left-0 bg-white border rounded-xl shadow-lg p-2 grid grid-cols-6 gap-1 w-56 z-50">
-                            {EMOJIS.map((emoji: string) => (
-                              <button key={emoji} onClick={() => { setInput((prev: string) => prev + emoji); setShowEmoji(false); }} className="text-xl hover:bg-gray-100 p-1 rounded">{emoji}</button>
+                        <button onClick={async () => { if (!groupInfo) await loadGroupInfo(); setShowMentionList(!showMentionList); }} className="text-gray-400 hover:text-gray-600 p-2">@</button>
+                        {showMentionList && (
+                          <div className="absolute bottom-10 left-0 bg-white border rounded shadow p-2 z-10 min-w-[120px]">
+                            <button onClick={() => { setInput(prev => prev + '@all '); setShowMentionList(false); }} className="block w-full text-left text-sm hover:bg-gray-100 px-2 py-1 rounded">@全体成员</button>
+                            {groupInfo?.members?.filter((m: any) => m.userId !== userId).map((m: any) => (
+                              <button key={m.userId} onClick={() => { setInput(prev => prev + `@${m.user?.nickname || m.user?.username} `); setShowMentionList(false); }} className="block w-full text-left text-sm hover:bg-gray-100 px-2 py-1 rounded">{m.user?.nickname || m.user?.username}</button>
                             ))}
                           </div>
                         )}
                       </div>
-                      <input
-                        className="flex-1 p-2 border rounded-full focus:outline-none focus:ring-2 focus:ring-blue-300 text-sm"
-                        value={input}
-                        onChange={e => setInput(e.target.value)}
-                        onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
-                        placeholder="输入消息..."
-                      />
-                      <button onClick={sendMessage} className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-full text-sm">发送</button>
-                    </>
-                  ) : (
-                    <div className="flex-1 flex justify-center">
-                      <button
-                        onMouseDown={e => { e.preventDefault(); startRecording(e.clientY); }}
-                        onMouseMove={e => { if (isRecording) setRecordingCancel(recordStartY.current - e.clientY > 50); }}
-                        onMouseUp={e => { e.preventDefault(); stopRecording(); }}
-                        onMouseLeave={e => { if (isRecording) stopRecording(); }}
-                        onTouchStart={e => { e.preventDefault(); startRecording(e.touches[0].clientY); }}
-                        onTouchMove={e => { if (isRecording) setRecordingCancel(recordStartY.current - e.touches[0].clientY > 50); }}
-                        onTouchEnd={e => { e.preventDefault(); stopRecording(); }}
-                        className={`w-full py-3 rounded-full text-center font-medium select-none ${isRecording ? (recordingCancel ? 'bg-red-500 text-white' : 'bg-blue-600 text-white') : 'bg-gray-200 text-gray-600 hover:bg-gray-300'}`}
-                      >
-                        {isRecording ? (recordingCancel ? '松开取消' : '正在录音...') : '按住说话'}
+                    )}
+                    <div className="relative">
+                      <button onClick={() => setShowEmoji(!showEmoji)} className="text-gray-400 hover:text-gray-600 p-2" type="button">
+                        <svg className="w-5 h-5 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                       </button>
+                      {showEmoji && (
+                        <div className="absolute bottom-10 left-0 bg-white border rounded-xl shadow-lg p-2 grid grid-cols-6 gap-1 w-56 z-50">
+                          {EMOJIS.map((emoji: string) => (
+                            <button key={emoji} onClick={() => { setInput((prev: string) => prev + emoji); setShowEmoji(false); }} className="text-xl hover:bg-gray-100 p-1 rounded">{emoji}</button>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                  )}
-                  {isRecording && !recordingCancel && <div className="absolute -top-6 left-0 right-0 text-center text-xs text-gray-400">上滑取消</div>}
-                </div>
-              </div>
-            </>
-          ) : (
-            <div className="flex-1 flex items-center justify-center text-gray-400">
-              <div className="text-center">
-                <div className="text-6xl mb-4">💬</div>
-                <p className="text-lg">选择一个会话开始聊天</p>
+                    <input
+                      className="flex-1 p-2 border rounded-full focus:outline-none focus:ring-2 focus:ring-blue-300 text-sm"
+                      value={input}
+                      onChange={e => setInput(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
+                      placeholder="输入消息..."
+                    />
+                    <button onClick={sendMessage} className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-full text-sm">发送</button>
+                  </>
+                ) : (
+                  <div className="flex-1 flex justify-center">
+                    <button
+                      onMouseDown={e => { e.preventDefault(); startRecording(e.clientY); }}
+                      onMouseMove={e => { if (isRecording) setRecordingCancel(recordStartY.current - e.clientY > 50); }}
+                      onMouseUp={e => { e.preventDefault(); stopRecording(); }}
+                      onMouseLeave={e => { if (isRecording) stopRecording(); }}
+                      onTouchStart={e => { e.preventDefault(); startRecording(e.touches[0].clientY); }}
+                      onTouchMove={e => { if (isRecording) setRecordingCancel(recordStartY.current - e.touches[0].clientY > 50); }}
+                      onTouchEnd={e => { e.preventDefault(); stopRecording(); }}
+                      className={`w-full py-3 rounded-full text-center font-medium select-none ${isRecording ? (recordingCancel ? 'bg-red-500 text-white' : 'bg-blue-600 text-white') : 'bg-gray-200 text-gray-600 hover:bg-gray-300'}`}
+                    >
+                      {isRecording ? (recordingCancel ? '松开取消' : '正在录音...') : '按住说话'}
+                    </button>
+                  </div>
+                )}
+                {isRecording && !recordingCancel && <div className="absolute -top-6 left-0 right-0 text-center text-xs text-gray-400">上滑取消</div>}
               </div>
             </div>
-          )}
-        </div>
+          </>
+        ) : (
+          <div className="flex-1 flex items-center justify-center text-gray-400">
+            <div className="text-center">
+              <div className="text-6xl mb-4">💬</div>
+              <p className="text-lg">选择一个会话开始聊天</p>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* 弹窗部分保持不变 */}
+      {/* 弹窗 */}
       {showGroupModal && (
         <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
           <div className="bg-white p-5 rounded shadow-lg w-80 max-h-[70vh] flex flex-col">
