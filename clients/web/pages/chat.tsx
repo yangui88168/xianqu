@@ -113,8 +113,6 @@ export default function Chat() {
   const [showSearch, setShowSearch] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
 
-  // 已删除 chatContainerRef 和相关的动态高度 useEffect
-
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (!token) { router.push('/'); return; }
@@ -896,12 +894,12 @@ export default function Chat() {
         </div>
       </div>
 
-      {/* 右侧聊天窗 - Grid 布局 + contain */}
-      <div className={`${mobileView === 'chat' ? 'block' : 'hidden'} md:block flex-1 h-full contain-strict`}>
+      {/* 右侧聊天窗 - Flex 三行布局 */}
+      <div className={`${mobileView === 'chat' ? 'block' : 'hidden'} md:block flex-1 flex flex-col h-full`}>
         {selectedChat ? (
-          <div className="h-full grid grid-rows-[56px_1fr_60px]">
-            {/* 第一行：顶部栏 */}
-            <div className="bg-white border-b px-4 py-3 flex items-center gap-3">
+          <>
+            {/* 第一块：顶部信息栏（固定高度） */}
+            <div className="flex-shrink-0 bg-white border-b px-4 py-3 flex items-center gap-3" style={{ height: '56px' }}>
               <button onClick={goBack} className="md:hidden text-gray-500 mr-2">←</button>
               <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold">
                 {selectedChat.type === 'group' ? '#' : (selectedChat.data.nickname || selectedChat.data.username)[0]}
@@ -946,11 +944,11 @@ export default function Chat() {
               </div>
             </div>
 
-            {/* 第二行：消息列表（滚动容器） */}
+            {/* 第二块：聊天内容（弹性填充，内部滚动） */}
             <div
               ref={scrollContainerRef}
               onScroll={handleScroll}
-              className="overflow-y-auto chat-messages-bg p-4"
+              className="flex-1 min-h-0 overflow-y-auto chat-messages-bg p-4"
             >
               {replyingTo && (
                 <div className="sticky top-0 z-10 bg-gray-200 px-4 py-2 text-sm flex justify-between items-center rounded mb-2">
@@ -1053,8 +1051,8 @@ export default function Chat() {
               )}
             </div>
 
-            {/* 第三行：输入框 */}
-            <div className="bg-white border-t chat-input-bg p-3">
+            {/* 第三块：输入框（固定高度） */}
+            <div className="flex-shrink-0 bg-white border-t chat-input-bg p-3">
               <div className="flex items-center gap-2">
                 <button onClick={() => setInputMode(inputMode === 'text' ? 'voice' : 'text')} className="text-gray-400 hover:text-gray-600 p-2">
                   {inputMode === 'text' ? (
@@ -1169,9 +1167,9 @@ export default function Chat() {
                 )}
               </div>
             </div>
-          </div>
+          </>
         ) : (
-          <div className="h-full flex items-center justify-center text-gray-400">
+          <div className="flex-1 flex items-center justify-center text-gray-400">
             <div className="text-center">
               <div className="text-6xl mb-4">💬</div>
               <p className="text-lg">选择一个会话开始聊天</p>
