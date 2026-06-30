@@ -740,8 +740,7 @@ export default function Chat() {
 
   return (
     <div
-      className="fixed top-0 left-0 right-0 z-40 bg-transparent flex overflow-hidden"
-      style={{ bottom: '56px' }}
+      className="flex flex-1 min-h-0 bg-transparent relative overflow-hidden"
       onClick={() => { setContextMenu(null); setShowMentionList(false); }}
     >
       {/* 左侧栏 */}
