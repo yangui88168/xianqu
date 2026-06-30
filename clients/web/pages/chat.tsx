@@ -665,7 +665,7 @@ export default function Chat() {
   const goBack = () => setMobileView('sidebar');
 
   return (
-    <div className="flex-1 min-h-0 flex overflow-hidden relative bg-white">
+    <div className="flex-1 min-h-0 flex overflow-hidden relative bg-white h-full">
       {/* 左侧栏：桌面端始终可见，移动端用 translateX 控制 */}
       <div
         className={`w-full md:w-80 border-r flex flex-col h-full absolute md:relative z-10 transition-transform duration-300 ${
