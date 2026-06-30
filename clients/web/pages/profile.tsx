@@ -403,10 +403,8 @@ export default function Profile() {
             onChange={(e) => {
               const val = parseFloat(e.target.value);
               localStorage.setItem('bgOpacity', val.toString());
-              // 延迟刷新，等待背景层重新计算
-              setTimeout(() => {
-                window.location.reload();
-              }, 200);
+              // 触发自定义事件，让 _app.tsx 直接更新遮罩，不刷新页面
+              window.dispatchEvent(new CustomEvent('bgOpacityChange', { detail: val }));
             }}
             className="flex-1"
           />
