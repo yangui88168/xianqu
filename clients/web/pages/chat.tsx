@@ -109,24 +109,9 @@ export default function Chat() {
   const [searchMode, setSearchMode] = useState(false);
   const [searchMessageResults, setSearchMessageResults] = useState<any[]>([]);
 
-  // 新增：左侧栏搜索折叠与加号菜单
+  // 左侧栏搜索折叠与加号菜单
   const [showSearch, setShowSearch] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
-
-  // 新增动态高度 ref
-  const chatContainerRef = useRef<HTMLDivElement>(null);
-
-  // 动态设置聊天页面精确高度，防止任何溢出
-  useEffect(() => {
-    const setHeight = () => {
-      if (chatContainerRef.current) {
-        chatContainerRef.current.style.height = `${window.innerHeight - 56}px`;
-      }
-    };
-    setHeight();
-    window.addEventListener('resize', setHeight);
-    return () => window.removeEventListener('resize', setHeight);
-  }, []);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -755,8 +740,7 @@ export default function Chat() {
 
   return (
     <div
-      ref={chatContainerRef}
-      className="flex bg-transparent relative overflow-hidden"
+      className="flex flex-1 min-h-0 bg-transparent relative overflow-hidden"
       onClick={() => { setContextMenu(null); setShowMentionList(false); }}
     >
       {/* 左侧栏 */}
@@ -927,7 +911,7 @@ export default function Chat() {
               <div className="flex items-center gap-1">
                 {selectedChat.type === 'friend' && (
                   <>
-                    {/* 语音通话按钮 - 仅打开 CallModal，不发送信令 */}
+                    {/* 语音通话按钮 */}
                     <button onClick={() => {
                       if (!ws) return;
                       setCallState({ type: 'audio', friendId: selectedChat.data.id, friendName: selectedChat.data.nickname || selectedChat.data.username, incoming: false });
@@ -936,7 +920,7 @@ export default function Chat() {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
                       </svg>
                     </button>
-                    {/* 视频通话按钮 - 仅打开 CallModal，不发送信令 */}
+                    {/* 视频通话按钮 */}
                     <button onClick={() => {
                       if (!ws) return;
                       setCallState({ type: 'video', friendId: selectedChat.data.id, friendName: selectedChat.data.nickname || selectedChat.data.username, incoming: false });
@@ -1232,7 +1216,7 @@ export default function Chat() {
             <p className="font-medium">群名称：{groupInfo.name}</p>
             <p className="text-sm text-gray-500 mt-1">成员 {groupInfo.members?.length} 人</p>
 
-            {/* 邀请链接 - 输入框 + 复制按钮 */}
+            {/* 邀请链接 */}
             {groupInfo.inviteCode && (
               <div className="mt-3">
                 <label className="text-sm font-medium">群邀请链接</label>
