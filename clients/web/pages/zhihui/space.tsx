@@ -130,7 +130,7 @@ export default function Space() {
   };
 
   return (
-    <div className="h-full flex flex-col bg-gray-50">
+    <div className="h-full overflow-y-auto bg-gray-50">
       {/* 返回按钮 */}
       <div className="p-3 border-b bg-white flex items-center">
         <Link href="/zhihui" className="text-blue-500 text-sm">← 返回</Link>
@@ -183,67 +183,65 @@ export default function Space() {
       </div>
 
       {/* 动态流 */}
-      <div className="flex-1 overflow-y-auto">
-        {loading ? (
-          <div className="flex items-center justify-center h-full text-gray-400">
-            <p className="text-sm">加载中...</p>
-          </div>
-        ) : feed.length === 0 ? (
-          <div className="flex items-center justify-center h-full text-gray-400">
-            <p className="text-sm">暂无动态，快去发布吧</p>
-          </div>
-        ) : (
-          feed.map((post: any) => (
-            <div key={post.id} className="bg-white p-4 border-b">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white text-xs">
-                  {(post.user?.nickname || post.user?.username || '?')[0]}
-                </div>
-                <span className="font-medium text-sm">
-                  {post.user?.nickname || post.user?.username || '未知'}
-                </span>
-                <span className="text-xs text-gray-400 ml-auto">
-                  {post.permission === 'private' && '🔒 '}
-                  {post.permission === 'friends' && '👥 '}
-                  {new Date(post.createdAt).toLocaleDateString()}
-                </span>
+      {loading ? (
+        <div className="flex items-center justify-center h-full text-gray-400 py-10">
+          <p className="text-sm">加载中...</p>
+        </div>
+      ) : feed.length === 0 ? (
+        <div className="flex items-center justify-center h-full text-gray-400 py-10">
+          <p className="text-sm">暂无动态，快去发布吧</p>
+        </div>
+      ) : (
+        feed.map((post: any) => (
+          <div key={post.id} className="bg-white p-4 border-b">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white text-xs">
+                {(post.user?.nickname || post.user?.username || '?')[0]}
               </div>
-              <p className="text-sm text-gray-800">{post.content}</p>
-              {post.imageUrl && (
-                <img src={post.imageUrl} alt="" className="mt-2 rounded max-w-full max-h-60 object-cover" />
-              )}
-              <div className="flex items-center gap-4 mt-3 text-gray-500 text-xs">
-                <button onClick={() => toggleLike(post.id)} className="flex items-center gap-1">
-                  ❤️ {post._count?.likes || 0}
+              <span className="font-medium text-sm">
+                {post.user?.nickname || post.user?.username || '未知'}
+              </span>
+              <span className="text-xs text-gray-400 ml-auto">
+                {post.permission === 'private' && '🔒 '}
+                {post.permission === 'friends' && '👥 '}
+                {new Date(post.createdAt).toLocaleDateString()}
+              </span>
+            </div>
+            <p className="text-sm text-gray-800">{post.content}</p>
+            {post.imageUrl && (
+              <img src={post.imageUrl} alt="" className="mt-2 rounded max-w-full max-h-60 object-cover" />
+            )}
+            <div className="flex items-center gap-4 mt-3 text-gray-500 text-xs">
+              <button onClick={() => toggleLike(post.id)} className="flex items-center gap-1">
+                ❤️ {post._count?.likes || 0}
+              </button>
+              <button
+                onClick={() => {
+                  const text = prompt('输入评论：');
+                  if (text) postComment(post.id, text);
+                }}
+                className="flex items-center gap-1"
+              >
+                💬 {post._count?.comments || 0}
+              </button>
+              {post.userId === userId && (
+                <button onClick={() => deletePost(post.id)} className="text-red-400 hover:text-red-600">
+                  删除
                 </button>
-                <button
-                  onClick={() => {
-                    const text = prompt('输入评论：');
-                    if (text) postComment(post.id, text);
-                  }}
-                  className="flex items-center gap-1"
-                >
-                  💬 {post._count?.comments || 0}
-                </button>
-                {post.userId === userId && (
-                  <button onClick={() => deletePost(post.id)} className="text-red-400 hover:text-red-600">
-                    删除
-                  </button>
-                )}
-              </div>
-              {post.comments?.length > 0 && (
-                <div className="mt-2 bg-gray-50 rounded p-2">
-                  {post.comments.map((c: any) => (
-                    <p key={c.id} className="text-xs text-gray-600">
-                      <span className="font-medium">{c.user?.nickname || c.user?.username}:</span> {c.content}
-                    </p>
-                  ))}
-                </div>
               )}
             </div>
-          ))
-        )}
-      </div>
+            {post.comments?.length > 0 && (
+              <div className="mt-2 bg-gray-50 rounded p-2">
+                {post.comments.map((c: any) => (
+                  <p key={c.id} className="text-xs text-gray-600">
+                    <span className="font-medium">{c.user?.nickname || c.user?.username}:</span> {c.content}
+                  </p>
+                ))}
+              </div>
+            )}
+          </div>
+        ))
+      )}
     </div>
   );
 }
