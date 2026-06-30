@@ -12,21 +12,17 @@ if (typeof window !== 'undefined') {
 
 const API = 'https://xianqu-server.onrender.com';
 const PAGE_SIZE = 10;
-const MAX_CACHE_SIZE = 50;
+const MAX_CACHE_SIZE = 50;          // 每个聊天缓存消息数上限
+const MAX_CHAT_CACHES = 50;        // LRU 聊天缓存上限
 const EMOJIS = ['😀', '😂', '❤️', '👍', '😢', '😡', '🎉', '🔥', '💯', '✨', '👋', '🙏'];
 
 // 根据用户状态和 lastSeen 生成描述文字（支持多状态）
 const getLastSeenText = (friend: any) => {
   if (friend.status === 'invisible') return '离线';
   const statusTextMap: Record<string, string> = {
-    online: '在线',
-    busy: '忙碌',
-    dnd: '勿扰',
-    away: '离开',
+    online: '在线', busy: '忙碌', dnd: '勿扰', away: '离开',
   };
-  if (friend.status && statusTextMap[friend.status]) {
-    return statusTextMap[friend.status];
-  }
+  if (friend.status && statusTextMap[friend.status]) return statusTextMap[friend.status];
   if (!friend.lastSeen) return '离线';
   const diff = Date.now() - new Date(friend.lastSeen).getTime();
   const minutes = Math.floor(diff / 60000);
@@ -38,6 +34,39 @@ const getLastSeenText = (friend: any) => {
   if (days < 7) return `${days}天前在线`;
   return new Date(friend.lastSeen).toLocaleDateString();
 };
+
+// LRU 缓存辅助
+class LRUCache {
+  private capacity: number;
+  private map: Map<string, any[]>;
+  private order: string[];
+  constructor(capacity: number) {
+    this.capacity = capacity;
+    this.map = new Map();
+    this.order = [];
+  }
+  get(key: string) {
+    if (!this.map.has(key)) return undefined;
+    // 更新访问顺序
+    this.order = this.order.filter(k => k !== key);
+    this.order.push(key);
+    return this.map.get(key);
+  }
+  set(key: string, value: any[]) {
+    if (this.map.has(key)) {
+      this.order = this.order.filter(k => k !== key);
+    } else if (this.order.length >= this.capacity) {
+      const oldest = this.order.shift();
+      if (oldest) this.map.delete(oldest);
+    }
+    this.order.push(key);
+    this.map.set(key, value);
+  }
+  delete(key: string) {
+    this.map.delete(key);
+    this.order = this.order.filter(k => k !== key);
+  }
+}
 
 export default function Chat() {
   const [ws, setWs] = useState<WebSocket | null>(null);
@@ -85,12 +114,14 @@ export default function Chat() {
   const [inviteModal, setInviteModal] = useState(false);
   const [inviteGroupId, setInviteGroupId] = useState('');
   const [selectedFriends, setSelectedFriends] = useState<string[]>([]);
-  const messageCache = useRef<Map<string, any[]>>(new Map());
+  // 使用 LRU 缓存管理消息缓存
+  const messageCache = useRef<LRUCache>(new LRUCache(MAX_CHAT_CACHES));
   const loadingChatRef = useRef<Set<string>>(new Set());
   const cloudinaryRef = useRef<any>();
   const widgetRef = useRef<any>();
-  const shouldScrollRef = useRef(true); // 控制是否滚动到底部
-  const prevScrollHeightRef = useRef(0); // 用于加载历史后恢复位置
+  // 滚动控制
+  const shouldAutoScroll = useRef(true);        // 新消息到达时是否自动滚到底
+  const prevScrollHeight = useRef(0);           // 用于加载历史后恢复位置
 
   // 编辑消息相关
   const [editingMessage, setEditingMessage] = useState<any>(null);
@@ -174,7 +205,6 @@ export default function Chat() {
     document.body.appendChild(script);
     return () => {
       document.body.removeChild(script);
-      // 销毁 widget 防止内存泄漏
       if (widgetRef.current) {
         widgetRef.current.destroy();
         widgetRef.current = null;
@@ -190,14 +220,12 @@ export default function Chat() {
     let socket: WebSocket;
 
     const connect = () => {
-      // 确保旧连接关闭
       if (socket) {
         socket.close();
         socket.onopen = null;
         socket.onmessage = null;
         socket.onclose = null;
       }
-
       const token = localStorage.getItem('token');
       socket = new WebSocket(`${API.replace(/^http/, 'ws')}/ws?token=${token}`);
       socket.onopen = () => {
@@ -211,10 +239,10 @@ export default function Chat() {
 
         if (msg.event === 'message:receive') {
           const newMsg = msg.data;
-          // 只在当前聊天是此好友时更新 messages
+          // 只有当前聊天是这个好友时才更新 messages
           if (currentChat?.type === 'friend' && currentChat.data.id === newMsg.senderId) {
             setMessages(prev => {
-              // 替换掉临时消息（temp id）
+              // 替换临时消息
               const tempIndex = prev.findIndex(m => m.id?.startsWith('temp-') && m.senderId === userId && m.content === newMsg.content);
               if (tempIndex !== -1) {
                 const next = [...prev];
@@ -224,20 +252,17 @@ export default function Chat() {
               if (prev.find(m => m.id === newMsg.id)) return prev;
               return [...prev, newMsg];
             });
-            shouldScrollRef.current = true;
+            shouldAutoScroll.current = true;
             fetch(`${API}/messages/read`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
               body: JSON.stringify({ senderId: newMsg.senderId })
             });
           } else {
-            // 非当前聊天，只更新会话和缓存
             MessageSound?.play();
             updateSessionInCache(newMsg);
           }
-          // 更新缓存
-          const cacheKey = `friend-${newMsg.senderId}`;
-          addToCache(cacheKey, newMsg);
+          addToCache(`friend-${newMsg.senderId}`, newMsg);
           loadSessions();
 
         } else if (msg.event === 'group-message:receive') {
@@ -253,12 +278,11 @@ export default function Chat() {
               if (prev.find(m => m.id === newMsg.id)) return prev;
               return [...prev, newMsg];
             });
-            shouldScrollRef.current = true;
+            shouldAutoScroll.current = true;
           } else {
             MessageSound?.play();
           }
-          const cacheKey = `group-${newMsg.groupId}`;
-          addToCache(cacheKey, newMsg);
+          addToCache(`group-${newMsg.groupId}`, newMsg);
           loadGroups();
 
         } else if (msg.event === 'call-offer') {
@@ -294,28 +318,46 @@ export default function Chat() {
     };
   }, [userId, loadSessions, loadGroups]);
 
-  // 缓存辅助函数（LRU 限制大小）
+  // 缓存操作（带 LRU 限制）
   const addToCache = (key: string, msg: any) => {
     const cache = messageCache.current;
-    const existing = cache.get(key) || [];
-    // 去重
-    if (existing.find(m => m.id === msg.id)) return;
-    const updated = [...existing, msg];
-    if (updated.length > MAX_CACHE_SIZE) {
-      updated.shift(); // 移除最早的消息
+    let existing = cache.get(key) || [];
+    if (existing.find((m: any) => m.id === msg.id)) return;
+    existing = [...existing, msg];
+    if (existing.length > MAX_CACHE_SIZE) {
+      existing = existing.slice(existing.length - MAX_CACHE_SIZE);
     }
-    cache.set(key, updated);
+    cache.set(key, existing);
   };
 
+  // 更新非当前聊天的 session 缓存（模拟最新消息）
   const updateSessionInCache = (newMsg: any) => {
-    // 简单更新 lastMessage 到 sessions，由 loadSessions 刷新，此处无需操作
+    setSessions(prev => {
+      const updated = prev.map(s => {
+        if (s.friend.id === newMsg.senderId) {
+          return {
+            ...s,
+            lastMessage: {
+              id: newMsg.id,
+              content: newMsg.content,
+              type: newMsg.type,
+              createdAt: newMsg.createdAt,
+              senderId: newMsg.senderId,
+            },
+            unreadCount: (s.unreadCount || 0) + 1,
+          };
+        }
+        return s;
+      });
+      return updated;
+    });
   };
 
   const selectChat = useCallback(async (type: string, data: any) => {
     setSelectedChat({ type, data });
     setReplyingTo(null);
     setMobileView('chat');
-    shouldScrollRef.current = false; // 切换会话不要自动滚到底部
+    shouldAutoScroll.current = false;   // 切换会话不自动滚到底
     const cacheKey = `${type}-${data.id}`;
     const cachedMessages = messageCache.current.get(cacheKey);
     if (cachedMessages && cachedMessages.length > 0) {
@@ -378,7 +420,7 @@ export default function Chat() {
     setLoadingMore(true);
     const container = scrollContainerRef.current;
     if (container) {
-      prevScrollHeightRef.current = container.scrollHeight;
+      prevScrollHeight.current = container.scrollHeight;
     }
     const cacheKey = `${selectedChat.type}-${selectedChat.data.id}`;
     const token = localStorage.getItem('token');
@@ -393,13 +435,14 @@ export default function Chat() {
         if (older.length < PAGE_SIZE) setHasMore(false);
         const updatedMessages = [...older, ...messages];
         setMessages(updatedMessages);
-        const cache = messageCache.current.get(cacheKey) || [];
-        messageCache.current.set(cacheKey, [...older, ...cache].slice(0, MAX_CACHE_SIZE));
+        // 更新缓存
+        const cached = messageCache.current.get(cacheKey) || [];
+        messageCache.current.set(cacheKey, [...older, ...cached].slice(0, MAX_CACHE_SIZE));
         // 恢复滚动位置
         requestAnimationFrame(() => {
           if (container) {
             const newScrollHeight = container.scrollHeight;
-            container.scrollTop = newScrollHeight - prevScrollHeightRef.current;
+            container.scrollTop = newScrollHeight - prevScrollHeight.current;
           }
         });
       }
@@ -445,7 +488,7 @@ export default function Chat() {
       payload.groupId = selectedChat.data.id;
     }
     ws.send(JSON.stringify({ event: 'message:send', data: payload }));
-    shouldScrollRef.current = true;
+    shouldAutoScroll.current = true;
   };
 
   const sendMessage = () => {
@@ -477,7 +520,7 @@ export default function Chat() {
     ws.send(JSON.stringify({ event: 'message:send', data: payload }));
     setInput('');
     setReplyingTo(null);
-    shouldScrollRef.current = true;
+    shouldAutoScroll.current = true;
   };
 
   const startRecording = async (clientY: number) => {
@@ -510,7 +553,7 @@ export default function Chat() {
               msgData.groupId = selectedChat.data.id;
             }
             ws.send(JSON.stringify({ event: 'message:send', data: msgData }));
-            shouldScrollRef.current = true;
+            shouldAutoScroll.current = true;
           }
         };
         reader.readAsDataURL(audioBlob);
@@ -579,7 +622,7 @@ export default function Chat() {
             payload.groupId = selectedChat.data.id;
           }
           ws.send(JSON.stringify({ event: 'message:send', data: payload }));
-          shouldScrollRef.current = true;
+          shouldAutoScroll.current = true;
         }, 'image/jpeg', 0.8);
       };
     };
@@ -677,14 +720,14 @@ export default function Chat() {
 
   const handleContextMenu = (e: React.MouseEvent, msg: any) => {
     e.preventDefault();
-    const x = Math.min(e.clientX, window.innerWidth - 200); // 防止右侧溢出
+    const x = Math.min(e.clientX, window.innerWidth - 200);
     const y = Math.min(e.clientY, window.innerHeight - 200);
     setContextMenu({ msg, x, y });
   };
 
   const handleTouchStart = (msg: any) => {
     longPressTimer.current = setTimeout(() => {
-      setContextMenu({ msg, x: 10, y: 10 }); // 移动端简单处理
+      setContextMenu({ msg, x: 10, y: 10 });
     }, 500);
   };
 
@@ -780,11 +823,11 @@ export default function Chat() {
     }
   };
 
+  // 控制滚动：只有 shouldAutoScroll 为 true 时才滚到底
   useEffect(() => {
-    // 只有新消息且需要滚动时才滚到底部
-    if (shouldScrollRef.current && messagesEndRef.current) {
+    if (shouldAutoScroll.current && messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
-      shouldScrollRef.current = false;
+      shouldAutoScroll.current = false;
     }
   }, [messages]);
 
@@ -813,6 +856,23 @@ export default function Chat() {
       lastTime: g.lastMessage?.createdAt || g.createdAt || 0,
     })),
   ].sort((a, b) => new Date(b.lastTime).getTime() - new Date(a.lastTime).getTime());
+
+  // ---------- 消息气泡样式（严格限制尺寸，防止撑破布局）----------
+  const bubbleStyle = {
+    maxWidth: '70%',
+    wordBreak: 'break-word' as const,
+    overflowWrap: 'anywhere' as const,
+    whiteSpace: 'pre-wrap' as const,
+    overflow: 'hidden' as const,
+  };
+
+  const imageStyle = {
+    maxWidth: '280px',
+    maxHeight: '320px',
+    objectFit: 'cover' as const,
+    display: 'block' as const,
+    borderRadius: '8px',
+  };
 
   return (
     <div
@@ -1021,7 +1081,7 @@ export default function Chat() {
               className="flex-1 min-h-0 overflow-y-auto chat-messages-bg p-4"
             >
               {replyingTo && (
-                <div className="sticky top-0 z-10 bg-gray-200 px-4 py-2 text-sm flex justify-between items-center rounded mb-2">
+                <div className="sticky top-0 z-10 bg-gray-200 px-4 py-2 text-sm flex justify-between items-center rounded mb-2" style={bubbleStyle}>
                   <span>回复 {(replyingTo.sender?.nickname || replyingTo.sender?.username || '用户')}：{replyingTo.content?.substring(0, 50)}</span>
                   <button onClick={() => setReplyingTo(null)} className="text-red-500">✕</button>
                 </div>
@@ -1062,7 +1122,7 @@ export default function Chat() {
                           </div>
                           <div className="flex flex-col min-w-0">
                             {msg.replyToId && (
-                              <div className="text-xs text-gray-400 bg-gray-100 rounded px-2 py-1 mb-1 border-l-2 border-blue-300 break-words">
+                              <div className="text-xs text-gray-400 bg-gray-100 rounded px-2 py-1 mb-1 border-l-2 border-blue-300" style={bubbleStyle}>
                                 回复：{msg.replyTo?.content?.substring(0, 30) || '消息'}
                               </div>
                             )}
@@ -1081,18 +1141,18 @@ export default function Chat() {
                                 <button onClick={submitEdit} className="text-blue-500 text-xs">保存</button>
                               </div>
                             ) : (
-                              <div className={`message-bubble px-3 py-2 rounded-2xl text-sm ${isMe ? 'bg-blue-500 text-white rounded-br-md' : 'bg-white text-gray-800 rounded-bl-md shadow'}`}>
+                              <div className={`px-3 py-2 rounded-2xl text-sm ${isMe ? 'bg-blue-500 text-white rounded-br-md' : 'bg-white text-gray-800 rounded-bl-md shadow'}`} style={bubbleStyle}>
                                 {msg.type === 'image' ? (
-                                  <img src={msg.content} alt="图片" className="max-w-[280px] max-h-[320px] object-cover rounded" loading="lazy" />
+                                  <img src={msg.content} alt="图片" style={imageStyle} loading="lazy" />
                                 ) : msg.type === 'voice' ? (
-                                  <audio controls className="max-w-[220px]">
+                                  <audio controls style={{ maxWidth: '220px' }}>
                                     <source src={msg.content} type="audio/webm" />
                                   </audio>
                                 ) : (
-                                  <div className="break-words overflow-hidden whitespace-pre-wrap">
+                                  <>
                                     {displayContent}
                                     {msg.edited && <span className="text-xs ml-1 opacity-60">(已编辑)</span>}
-                                  </div>
+                                  </>
                                 )}
                               </div>
                             )}
