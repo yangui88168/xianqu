@@ -240,7 +240,7 @@ export default function CommunityPage() {
   const [selectedCommunity, setSelectedCommunity] = useState<string | null>(null);
 
   return (
-    <div className="h-full flex flex-col bg-gray-50">
+    <div className="h-full overflow-y-auto bg-gray-50">
       <div className="p-3 border-b bg-white">
         <Link href="/zhihui" className="text-blue-500 text-sm">← 返回智慧星</Link>
       </div>
