@@ -744,7 +744,7 @@ export default function Chat() {
       onClick={() => { setContextMenu(null); setShowMentionList(false); }}
     >
       {/* 左侧栏 */}
-      <div className={`${mobileView === 'sidebar' ? 'block' : 'hidden'} md:block md:w-80 w-full border-r flex flex-col absolute md:relative z-10 h-full sidebar-bg`}>
+      <div className={`${mobileView === 'sidebar' ? 'block' : 'hidden'} md:block md:w-80 w-full border-r flex flex-col absolute md:relative z-10 h-full overflow-y-auto sidebar-bg`}>
         <div className="p-3 border-b">
           {/* 搜索框 + 加号按钮 同行 */}
           <div className="flex items-center gap-2">
@@ -849,49 +849,48 @@ export default function Chat() {
           </div>
         )}
 
-        <div className="flex-1 overflow-y-auto">
-          {allConversations.map((conv: any) => (
-            <div
-              key={conv.type + conv.data.id}
-              onClick={() => selectChat(conv.type, conv.data)}
-              className={`p-3 cursor-pointer hover:bg-gray-50 border-b ${
-                selectedChat?.data?.id === conv.data.id && selectedChat?.type === conv.type ? 'bg-blue-50' : ''
-              }`}
-            >
-              {conv.type === 'group' ? (
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-gray-300 rounded-full flex items-center justify-center text-white text-sm font-bold">#</div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex justify-between">
-                      <span className="font-medium text-sm truncate">{conv.data.name}</span>
-                      {conv.lastTime && <span className="text-xs text-gray-400">{new Date(conv.lastTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>}
-                    </div>
-                    <p className="text-xs text-gray-500 mt-0.5">群聊</p>
+        {/* 会话列表：改为普通文档流 */}
+        {allConversations.map((conv: any) => (
+          <div
+            key={conv.type + conv.data.id}
+            onClick={() => selectChat(conv.type, conv.data)}
+            className={`p-3 cursor-pointer hover:bg-gray-50 border-b ${
+              selectedChat?.data?.id === conv.data.id && selectedChat?.type === conv.type ? 'bg-blue-50' : ''
+            }`}
+          >
+            {conv.type === 'group' ? (
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-gray-300 rounded-full flex items-center justify-center text-white text-sm font-bold">#</div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex justify-between">
+                    <span className="font-medium text-sm truncate">{conv.data.name}</span>
+                    {conv.lastTime && <span className="text-xs text-gray-400">{new Date(conv.lastTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>}
                   </div>
+                  <p className="text-xs text-gray-500 mt-0.5">群聊</p>
                 </div>
-              ) : (
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold">
-                    {(conv.data.nickname || conv.data.username)[0]}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex justify-between">
-                      <span className="font-medium text-sm truncate">{conv.data.nickname || conv.data.username}</span>
-                      {conv.lastTime && <span className="text-xs text-gray-400">{new Date(conv.lastTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>}
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-xs text-gray-500 truncate">
-                        {conv.lastMessage?.type === 'image' ? '[图片]' : conv.lastMessage?.type === 'voice' ? '[语音]' : conv.lastMessage?.content || ''}
-                      </span>
-                      {conv.unreadCount > 0 && <span className="bg-red-500 text-white text-xs rounded-full px-1.5 py-0.5">{conv.unreadCount}</span>}
-                    </div>
-                    <p className="text-xs text-gray-500 mt-0.5">{getLastSeenText(conv.data)}</p>
-                  </div>
+              </div>
+            ) : (
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold">
+                  {(conv.data.nickname || conv.data.username)[0]}
                 </div>
-              )}
-            </div>
-          ))}
-        </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex justify-between">
+                    <span className="font-medium text-sm truncate">{conv.data.nickname || conv.data.username}</span>
+                    {conv.lastTime && <span className="text-xs text-gray-400">{new Date(conv.lastTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>}
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-xs text-gray-500 truncate">
+                      {conv.lastMessage?.type === 'image' ? '[图片]' : conv.lastMessage?.type === 'voice' ? '[语音]' : conv.lastMessage?.content || ''}
+                    </span>
+                    {conv.unreadCount > 0 && <span className="bg-red-500 text-white text-xs rounded-full px-1.5 py-0.5">{conv.unreadCount}</span>}
+                  </div>
+                  <p className="text-xs text-gray-500 mt-0.5">{getLastSeenText(conv.data)}</p>
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
       </div>
 
       {/* 右侧聊天窗：经典 Flex 三行布局 */}
@@ -950,7 +949,6 @@ export default function Chat() {
               onScroll={handleScroll}
               className="flex-1 min-h-0 overflow-y-auto chat-messages-bg p-4"
             >
-              {/* 消息渲染，省略以保持简洁，实际内容与之前完全一致 */}
               {replyingTo && (
                 <div className="sticky top-0 z-10 bg-gray-200 px-4 py-2 text-sm flex justify-between items-center rounded mb-2">
                   <span>回复 {(replyingTo.sender?.nickname || replyingTo.sender?.username || '用户')}：{replyingTo.content?.substring(0, 50)}</span>
