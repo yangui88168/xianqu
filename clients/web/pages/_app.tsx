@@ -27,6 +27,15 @@ export default function App({ Component, pageProps }: AppProps) {
     } catch (e) {}
   }, []);
 
+  // 监听背景透明度变化
+  useEffect(() => {
+    const handler = (e: CustomEvent) => {
+      setOverlayOpacity(e.detail);
+    };
+    window.addEventListener('bgOpacityChange', handler as EventListener);
+    return () => window.removeEventListener('bgOpacityChange', handler as EventListener);
+  }, []);
+
   if (router.pathname === '/') {
     return <Component {...pageProps} />;
   }
@@ -63,7 +72,7 @@ export default function App({ Component, pageProps }: AppProps) {
       />
 
       <div className="relative z-10 flex-1 flex flex-col min-h-0">
-        <div className="flex-1 min-h-0 relative">
+        <div className="flex-1 min-h-0 relative contain-strict">
           <Component {...pageProps} />
         </div>
         <nav className="flex-shrink-0 flex items-center justify-around bg-white/80 backdrop-blur-md border-t" style={{ height: '56px' }}>
