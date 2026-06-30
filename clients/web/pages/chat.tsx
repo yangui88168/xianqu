@@ -894,7 +894,7 @@ export default function Chat() {
         </div>
       </div>
 
-      {/* 右侧聊天窗 - Flex 三行布局 */}
+      {/* 右侧聊天窗 - Flex 三行布局（内联样式强制滚动） */}
       <div className={`${mobileView === 'chat' ? 'block' : 'hidden'} md:block flex-1 flex flex-col h-full`}>
         {selectedChat ? (
           <>
@@ -944,11 +944,12 @@ export default function Chat() {
               </div>
             </div>
 
-            {/* 第二块：聊天内容（弹性填充，内部滚动） */}
+            {/* 第二块：聊天内容（弹性填充 + 内部滚动，用内联样式强制生效） */}
             <div
               ref={scrollContainerRef}
               onScroll={handleScroll}
-              className="flex-1 min-h-0 overflow-y-auto chat-messages-bg p-4"
+              className="chat-messages-bg p-4"
+              style={{ flex: '1 1 0%', minHeight: '0', overflowY: 'auto' }}
             >
               {replyingTo && (
                 <div className="sticky top-0 z-10 bg-gray-200 px-4 py-2 text-sm flex justify-between items-center rounded mb-2">
