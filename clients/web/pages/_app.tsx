@@ -49,7 +49,7 @@ export default function App({ Component, pageProps }: AppProps) {
           className="absolute inset-0 z-0 bg-cover bg-center bg-fixed"
           style={{
             backgroundImage: `url(${customBg})`,
-            filter: 'blur(20px)',      // 增强模糊
+            filter: 'blur(20px)',
             transform: 'scale(1.1)',
           }}
         />
