@@ -11,23 +11,21 @@ body {
   margin: 0;
 }
 
-.rounded-card {
-  border-radius: 12px;
-}
-
 html, body, #__next {
   height: 100%;
   overflow: hidden;
 }
 
+/* 独立卡片样式，替代全局 bg-white 阴影 */
+.card-white {
+  background-color: #ffffff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  border-radius: 12px;
+}
+
 /* 基础元素圆润化 */
 input, textarea, select, button {
   border-radius: 0.5rem !important;
-}
-
-/* 卡片容器使用柔和阴影 */
-.bg-white {
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
 }
 
 /* 聊天消息气泡调整 */
@@ -46,7 +44,7 @@ body {
   background-attachment: fixed;
 }
 
-/* 统一主题色从蓝色改为温暖青色 */
+/* 统一主题色从蓝色改为温暖青色（保持） */
 .bg-blue-500 { background-color: #4a9e8f !important; }
 .bg-blue-600 { background-color: #3d8b7d !important; }
 .text-blue-500 { color: #4a9e8f !important; }
@@ -57,32 +55,27 @@ body {
 /* 导航栏选中态 */
 .text-blue-500 { color: #4a9e8f !important; }
 
-/* 背景透明化 - 强制覆盖 */
-body .bg-white,
-body .bg-gray-50,
-body .bg-gray-100,
-body .bg-gray-200,
-body .bg-blue-500,
-body .bg-green-500,
-body .bg-red-500 {
-  background-color: rgba(255, 255, 255, 0.7) !important;
+/* 透明背景样式 - 使用独立类名，不再污染全局 bg-* 工具类 */
+.glass-bg {
+  background-color: rgba(255, 255, 255, 0.7);
 }
-
-/* 消息气泡保留一定实色，但略微透出背景 */
-body .bg-blue-500 {
-  background-color: rgba(59, 130, 246, 0.85) !important;
+.glass-bg-light {
+  background-color: rgba(249, 250, 251, 0.6);
+}
+.glass-bg-lighter {
+  background-color: rgba(255, 255, 255, 0.7);
+}
+.glass-bg-blue {
+  background-color: rgba(59, 130, 246, 0.85);
 }
 
 /* 文字增强对比 */
-body .text-gray-800,
-body .text-gray-700,
-body .text-gray-600,
-body .text-gray-900 {
+.text-shadow-soft {
   text-shadow: 0 1px 2px rgba(255,255,255,0.8);
 }
 
 /* 卡片和列表项增加轻微模糊 */
-.shadow, .shadow-sm, .shadow-md, .shadow-lg, .shadow-xl, .shadow-2xl {
+.glass-blur {
   backdrop-filter: blur(4px);
 }
 
@@ -99,4 +92,9 @@ body .text-gray-900 {
 /* 左侧列表背景透明 */
 .sidebar-bg {
   background-color: rgba(255, 255, 255, 0.7) !important;
+}
+
+/* 消息气泡保持原有实色，但略微透出背景 */
+.message-bubble-self {
+  background-color: rgba(59, 130, 246, 0.85) !important;
 }
