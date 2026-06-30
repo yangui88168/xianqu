@@ -4,6 +4,7 @@ import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useRouter } from 'next/router';
 import CallModal from '../components/CallModal';
 
+// 动态加载提示音（仅客户端）
 let MessageSound: any = null;
 if (typeof window !== 'undefined') {
   import('../utils/sound').then(mod => { MessageSound = mod.MessageSound; });
@@ -665,13 +666,14 @@ export default function Chat() {
 
   return (
     <div className="flex-1 min-h-0 flex overflow-hidden relative bg-white">
-      {/* 左侧栏：桌面端正常显示，移动端用 translateX 隐藏 */}
+      {/* 左侧栏：桌面端始终可见，移动端用 translateX 控制 */}
       <div
         className={`w-full md:w-80 border-r flex flex-col min-h-0 absolute md:relative z-10 transition-transform duration-300 ${
           mobileView === 'sidebar' ? 'translate-x-0' : '-translate-x-full'
         } md:translate-x-0`}
         style={{ height: '100%' }}
       >
+        {/* 搜索与菜单 */}
         <div className="flex-shrink-0 p-3 border-b">
           <div className="flex items-center gap-2">
             {showSearch ? (
@@ -777,7 +779,7 @@ export default function Chat() {
         </div>
       </div>
 
-      {/* 右侧聊天区域：桌面端正常，移动端用 translateX */}
+      {/* 右侧聊天区域 */}
       <div
         className={`flex-1 flex flex-col min-h-0 overflow-hidden transition-transform duration-300 ${
           mobileView === 'chat' ? 'translate-x-0' : 'translate-x-full'
@@ -785,6 +787,7 @@ export default function Chat() {
       >
         {selectedChat ? (
           <>
+            {/* Header */}
             <div className="flex-shrink-0 bg-white border-b px-4 py-3 flex items-center gap-3" style={{ height: '56px' }}>
               <button onClick={goBack} className="md:hidden text-gray-500 mr-2">←</button>
               <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold">
@@ -816,6 +819,7 @@ export default function Chat() {
               </div>
             </div>
 
+            {/* ReplyBar（独立，不参与滚动） */}
             {replyingTo && (
               <div className="flex-shrink-0 bg-gray-200 px-4 py-2 text-sm flex justify-between items-center" style={bubbleStyle}>
                 <span>回复 {(replyingTo.sender?.nickname || replyingTo.sender?.username || '用户')}：{replyingTo.content?.substring(0, 50)}</span>
@@ -823,7 +827,9 @@ export default function Chat() {
               </div>
             )}
 
+            {/* ChatBody：唯一高度分配容器 */}
             <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
+              {/* MessageList：唯一滚动容器 */}
               <div
                 ref={scrollContainerRef}
                 onScroll={handleScroll}
@@ -863,6 +869,7 @@ export default function Chat() {
               </div>
             </div>
 
+            {/* Input：固定高度 */}
             <div className="flex-shrink-0 bg-white border-t p-3" style={{ minHeight: '64px', maxHeight: '64px' }}>
               <div className="flex items-center gap-2 h-full">
                 <button onClick={() => setInputMode(inputMode === 'text' ? 'voice' : 'text')} className="text-gray-400 hover:text-gray-600 p-2">
@@ -945,7 +952,8 @@ export default function Chat() {
         )}
       </div>
 
-      {/* 弹窗 */}
+      {/* ========== 弹窗部分 ========== */}
+      {/* 创建群聊弹窗 */}
       {showGroupModal && (
         <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
           <div className="bg-white p-5 rounded shadow-lg w-80 max-h-[70vh] flex flex-col">
@@ -969,6 +977,7 @@ export default function Chat() {
         </div>
       )}
 
+      {/* 群信息面板 */}
       {showGroupInfo && groupInfo && (
         <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50" onClick={() => setShowGroupInfo(false)}>
           <div className="bg-white rounded-xl shadow-xl w-96 max-h-[80vh] overflow-y-auto p-5" onClick={e => e.stopPropagation()}>
@@ -1020,6 +1029,7 @@ export default function Chat() {
         </div>
       )}
 
+      {/* 邀请好友弹窗 */}
       {inviteModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white p-5 rounded shadow-lg w-80 max-h-[70vh] flex flex-col">
@@ -1041,6 +1051,7 @@ export default function Chat() {
         </div>
       )}
 
+      {/* 消息操作菜单 */}
       {contextMenu && (
         <div className="fixed bg-white border rounded shadow-lg py-1 z-50" style={{ left: contextMenu.x, top: contextMenu.y }} onClick={() => setContextMenu(null)}>
           <button onClick={() => { copyToClipboard(contextMenu.msg.content); setContextMenu(null); }} className="block w-full text-left px-4 py-2 text-sm hover:bg-gray-100">复制</button>
@@ -1059,6 +1070,7 @@ export default function Chat() {
         </div>
       )}
 
+      {/* 被叫方接听/拒绝弹窗 */}
       {pendingCall && (() => {
         const friendSession = sessions.find(s => s.friend.id === pendingCall.friendId);
         const friendName = friendSession?.friend?.nickname || friendSession?.friend?.username || '好友';
@@ -1081,6 +1093,7 @@ export default function Chat() {
         );
       })()}
 
+      {/* 转发弹窗 */}
       {forwardModal && (
         <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50" onClick={() => setForwardModal(false)}>
           <div className="bg-white p-5 rounded shadow-lg w-80 max-h-[70vh] flex flex-col" onClick={e => e.stopPropagation()}>
@@ -1109,6 +1122,7 @@ export default function Chat() {
         </div>
       )}
 
+      {/* 通话弹窗 */}
       {callState && ws && (
         <CallModal ws={ws} userId={userId} friendId={callState.friendId} friendName={callState.friendName} type={callState.type} incoming={callState.incoming} accepted={callState.accepted} offerSdp={callState.offerSdp} onHangup={() => setCallState(null)} />
       )}
