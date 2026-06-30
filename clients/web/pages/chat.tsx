@@ -895,7 +895,7 @@ export default function Chat() {
       </div>
 
       {/* 右侧聊天窗 - 绝对定位方案，根除溢出 */}
-      <div className={`${mobileView === 'chat' ? 'block' : 'hidden'} md:block flex-1 relative`}>
+      <div className={`${mobileView === 'chat' ? 'block' : 'hidden'} md:block flex-1 relative h-full`}>
         {selectedChat ? (
           <>
             {/* 顶部栏：固定在顶部 */}
