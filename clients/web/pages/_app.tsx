@@ -70,9 +70,9 @@ export default function App({ Component, pageProps }: AppProps) {
         </>
       )}
 
-      {/* 主应用容器：严格高度，不包含背景 */}
-      <div className="max-w-5xl mx-auto h-dvh flex flex-col shadow-2xl bg-white/70 backdrop-blur-sm overflow-hidden relative z-10">
-        <div className="flex-1 min-h-0 relative">
+      {/* 主应用容器：全宽、固定高度，纯 Flex 列布局 */}
+      <div className="w-full h-dvh flex flex-col shadow-2xl bg-white/70 backdrop-blur-sm overflow-hidden relative z-10">
+        <div className="flex-1 min-h-0 relative flex">
           <Component {...pageProps} />
         </div>
         <nav className="flex-shrink-0 flex items-center justify-around bg-white/80 backdrop-blur-md border-t" style={{ height: '56px' }}>
