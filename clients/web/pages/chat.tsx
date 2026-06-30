@@ -740,7 +740,8 @@ export default function Chat() {
 
   return (
     <div
-      className="h-dvh w-full flex min-h-0 bg-transparent relative overflow-hidden"
+      className="flex bg-transparent relative overflow-hidden"
+      style={{ height: 'calc(100dvh - 56px)' }}
       onClick={() => { setContextMenu(null); setShowMentionList(false); }}
     >
       {/* 左侧栏 */}
@@ -894,11 +895,11 @@ export default function Chat() {
         </div>
       </div>
 
-      {/* 右侧聊天窗：纯 Flex 三行布局，修复版 */}
-      <div className={`${mobileView === 'chat' ? 'block' : 'hidden'} md:block flex-1 flex flex-col min-w-0 min-h-0`}>
+      {/* 右侧聊天窗：经典 Flex 三行布局 */}
+      <div className={`${mobileView === 'chat' ? 'block' : 'hidden'} md:block flex-1 flex flex-col h-full`}>
         {selectedChat ? (
           <>
-            {/* 顶部信息栏：固定高度 */}
+            {/* 头部：固定高度，不可压缩 */}
             <div className="flex-shrink-0 bg-white border-b px-4 py-3 flex items-center gap-3" style={{ height: '56px' }}>
               <button onClick={goBack} className="md:hidden text-gray-500 mr-2">←</button>
               <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold">
@@ -944,7 +945,7 @@ export default function Chat() {
               </div>
             </div>
 
-            {/* 消息列表：弹性填充，内部滚动（关键三连：flex-1 min-h-0 overflow-y-auto） */}
+            {/* 消息列表：弹性填充，关键三连 */}
             <div
               ref={scrollContainerRef}
               onScroll={handleScroll}
@@ -1051,7 +1052,7 @@ export default function Chat() {
               )}
             </div>
 
-            {/* 输入框：固定高度，仅选中聊天时显示 */}
+            {/* 输入框：固定高度，不可压缩 */}
             <div className="flex-shrink-0 bg-white border-t chat-input-bg p-3">
               <div className="flex items-center gap-2">
                 <button onClick={() => setInputMode(inputMode === 'text' ? 'voice' : 'text')} className="text-gray-400 hover:text-gray-600 p-2">
