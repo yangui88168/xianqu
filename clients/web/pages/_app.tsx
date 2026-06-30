@@ -72,7 +72,7 @@ export default function App({ Component, pageProps }: AppProps) {
       />
 
       <div className="relative z-10 flex-1 flex flex-col min-h-0">
-        <div className="flex-1 min-h-0 relative contain-strict">
+        <div className="flex-1 min-h-0 overflow-hidden relative">
           <Component {...pageProps} />
         </div>
         <nav className="flex-shrink-0 flex items-center justify-around bg-white/80 backdrop-blur-md border-t" style={{ height: '56px' }}>
