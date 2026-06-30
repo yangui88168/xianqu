@@ -54,7 +54,6 @@ class LRUCache {
   delete(key: string) { this.map.delete(key); this.order = this.order.filter(k => k !== key); }
 }
 
-// 消息气泡样式
 const bubbleStyle = {
   maxWidth: '70%',
   wordBreak: 'break-word' as const,
@@ -71,7 +70,6 @@ const imageStyle = {
   borderRadius: '8px',
 };
 
-// 消息项组件 (memo)
 const MessageItem = React.memo(({ msg, userId, selectedChat, onContextMenu, onTouchStart, onTouchEnd, onTouchMove, onReply, onRecall, onEdit, editingMessage, editInput, setEditInput, submitEdit }: any) => {
   const isMe = msg.senderId === userId || msg.sender?.id === userId;
   const isForwarded = msg.content?.startsWith('[转发]');
@@ -643,7 +641,6 @@ export default function Chat() {
     if (res.ok) { setShowGroupModal(false); setNewGroupName(''); setSelectedFriends([]); loadGroups(); } else alert('创建失败');
   };
 
-  // 滚动控制：直接设置 scrollTop，不用 scrollIntoView
   useEffect(() => {
     if (shouldAutoScroll.current && scrollContainerRef.current) {
       scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
@@ -660,7 +657,6 @@ export default function Chat() {
 
   return (
     <div className="h-screen flex flex-col overflow-hidden bg-white">
-      {/* 主内容区 */}
       <div className="flex-1 min-h-0 flex overflow-hidden relative">
         {/* 左侧栏 */}
         <div className={`${mobileView === 'sidebar' ? 'block' : 'hidden'} md:block md:w-80 w-full border-r flex flex-col min-h-0 absolute md:relative z-10 h-full md:h-auto`}>
@@ -773,7 +769,7 @@ export default function Chat() {
         <div className={`${mobileView === 'chat' ? 'block' : 'hidden'} md:block flex-1 flex flex-col min-h-0 overflow-hidden`}>
           {selectedChat ? (
             <>
-              {/* Header */}
+              {/* Header 固定高度 */}
               <div className="flex-shrink-0 bg-white border-b px-4 py-3 flex items-center gap-3" style={{ height: '56px' }}>
                 <button onClick={goBack} className="md:hidden text-gray-500 mr-2">←</button>
                 <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold">
@@ -805,7 +801,7 @@ export default function Chat() {
                 </div>
               </div>
 
-              {/* ReplyBar 独立固定 */}
+              {/* ReplyBar 独立固定，不参与滚动 */}
               {replyingTo && (
                 <div className="flex-shrink-0 bg-gray-200 px-4 py-2 text-sm flex justify-between items-center" style={bubbleStyle}>
                   <span>回复 {(replyingTo.sender?.nickname || replyingTo.sender?.username || '用户')}：{replyingTo.content?.substring(0, 50)}</span>
@@ -813,44 +809,50 @@ export default function Chat() {
                 </div>
               )}
 
-              {/* 消息列表：唯一滚动容器 */}
-              <div ref={scrollContainerRef} onScroll={handleScroll}
-                className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-4" style={{ height: 0 }}>
-                {isLoadingChat ? (
-                  <div className="flex items-center justify-center h-full">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mb-2"></div>
-                    <span className="text-gray-400 text-sm">加载中...</span>
-                  </div>
-                ) : (
-                  <>
-                    {loadingMore && <div className="text-center text-gray-400 text-xs py-2">加载中...</div>}
-                    {!hasMore && messages.length > 0 && <div className="text-center text-gray-400 text-xs py-2">没有更多消息了</div>}
-                    {messages.map((msg: any, i: number) => (
-                      <MessageItem
-                        key={msg.id || i}
-                        msg={msg}
-                        userId={userId}
-                        selectedChat={selectedChat}
-                        onContextMenu={(e: any) => handleContextMenu(e, msg)}
-                        onTouchStart={() => handleTouchStart(msg)}
-                        onTouchEnd={handleTouchEnd}
-                        onTouchMove={handleTouchEnd}
-                        onReply={setReplyingTo}
-                        onRecall={recallMessage}
-                        onEdit={setEditingMessage}
-                        editingMessage={editingMessage}
-                        editInput={editInput}
-                        setEditInput={setEditInput}
-                        submitEdit={submitEdit}
-                      />
-                    ))}
-                  </>
-                )}
+              {/* Body 容器，唯一滚动区域归属 */}
+              <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
+                <div
+                  ref={scrollContainerRef}
+                  onScroll={handleScroll}
+                  className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-4"
+                  style={{ height: 0 }}
+                >
+                  {isLoadingChat ? (
+                    <div className="flex items-center justify-center h-full">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mb-2"></div>
+                      <span className="text-gray-400 text-sm">加载中...</span>
+                    </div>
+                  ) : (
+                    <>
+                      {loadingMore && <div className="text-center text-gray-400 text-xs py-2">加载中...</div>}
+                      {!hasMore && messages.length > 0 && <div className="text-center text-gray-400 text-xs py-2">没有更多消息了</div>}
+                      {messages.map((msg: any, i: number) => (
+                        <MessageItem
+                          key={msg.id || i}
+                          msg={msg}
+                          userId={userId}
+                          selectedChat={selectedChat}
+                          onContextMenu={(e: any) => handleContextMenu(e, msg)}
+                          onTouchStart={() => handleTouchStart(msg)}
+                          onTouchEnd={handleTouchEnd}
+                          onTouchMove={handleTouchEnd}
+                          onReply={setReplyingTo}
+                          onRecall={recallMessage}
+                          onEdit={setEditingMessage}
+                          editingMessage={editingMessage}
+                          editInput={editInput}
+                          setEditInput={setEditInput}
+                          submitEdit={submitEdit}
+                        />
+                      ))}
+                    </>
+                  )}
+                </div>
               </div>
 
               {/* Input 区域固定高度 */}
-              <div className="flex-shrink-0 bg-white border-t p-3" style={{ minHeight: '64px' }}>
-                <div className="flex items-center gap-2">
+              <div className="flex-shrink-0 bg-white border-t p-3" style={{ minHeight: '64px', maxHeight: '64px' }}>
+                <div className="flex items-center gap-2 h-full">
                   <button onClick={() => setInputMode(inputMode === 'text' ? 'voice' : 'text')} className="text-gray-400 hover:text-gray-600 p-2">
                     {inputMode === 'text' ? (
                       <svg className="w-5 h-5 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" /></svg>
@@ -932,7 +934,7 @@ export default function Chat() {
         </div>
       </div>
 
-      {/* 弹窗部分保持不变，仅展示关键弹窗 */}
+      {/* 弹窗部分 */}
       {showGroupModal && (
         <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
           <div className="bg-white p-5 rounded shadow-lg w-80 max-h-[70vh] flex flex-col">
