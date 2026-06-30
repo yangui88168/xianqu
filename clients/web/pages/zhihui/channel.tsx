@@ -114,7 +114,7 @@ function ChannelList({ onSelect }: { onSelect: (id: string) => void }) {
   );
 }
 
-// 频道详情组件（无改动）
+// 频道详情组件（已调整为普通文档流，无内部滚动）
 function ChannelDetail({ channelId, onBack }: { channelId: string; onBack: () => void }) {
   const [channel, setChannel] = useState<any>(null);
   const [posts, setPosts] = useState<any[]>([]);
@@ -190,7 +190,7 @@ function ChannelDetail({ channelId, onBack }: { channelId: string; onBack: () =>
   };
 
   return (
-    <div className="h-full flex flex-col">
+    <div>
       <div className="p-3 border-b bg-white flex items-center justify-between">
         <button onClick={onBack} className="text-blue-500 text-sm">← 返回</button>
         <h2 className="font-bold text-lg">{channel?.name}</h2>
@@ -226,7 +226,8 @@ function ChannelDetail({ channelId, onBack }: { channelId: string; onBack: () =>
         )}
       </div>
 
-      <div className="flex-1 overflow-y-auto">
+      {/* 帖子列表：普通文档流，不再限制高度 */}
+      <div>
         {posts.map((post: any) => (
           <div key={post.id} className={`bg-white p-4 border-b ${post.pinned ? 'bg-yellow-50' : ''}`}>
             {post.pinned && <div className="text-xs text-yellow-600 mb-1">📌 置顶</div>}
@@ -278,7 +279,7 @@ export default function ChannelPage() {
   const [selectedChannel, setSelectedChannel] = useState<string | null>(null);
 
   return (
-    <div className="h-full flex flex-col bg-gray-50">
+    <div className="h-full overflow-y-auto bg-gray-50">
       <div className="p-3 border-b bg-white">
         <Link href="/zhihui" className="text-blue-500 text-sm">← 返回智慧星</Link>
       </div>
