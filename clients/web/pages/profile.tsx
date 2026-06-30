@@ -71,7 +71,7 @@ export default function Profile() {
     if (saved) setOverlayOpacity(parseFloat(saved));
   }, []);
 
-  // 初始化 Cloudinary Widget（根据 uploadPurpose 切换回调）
+  // 初始化 Cloudinary Widget
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const script = document.createElement('script');
@@ -403,7 +403,6 @@ export default function Profile() {
             onChange={(e) => {
               const val = parseFloat(e.target.value);
               localStorage.setItem('bgOpacity', val.toString());
-              // 立即刷新页面使 _app.tsx 重新读取透明度
               window.location.reload();
             }}
             className="flex-1"
