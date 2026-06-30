@@ -337,7 +337,7 @@ export default function Profile() {
 
       {/* 设置中心 */}
       <div className="bg-white mt-3">
-        {/* 新增：我的动态 */}
+        {/* 我的动态 */}
         <button onClick={() => router.push('/zhihui/space')} className="w-full flex items-center justify-between px-5 py-3 border-b border-gray-100 hover:bg-gray-50">
           <div className="flex items-center gap-3">
             <span className="text-lg">📝</span>
@@ -346,7 +346,7 @@ export default function Profile() {
           <svg className="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" /></svg>
         </button>
 
-        {/* 新增：我的频道 */}
+        {/* 我的频道 */}
         <button onClick={() => router.push('/zhihui/channel')} className="w-full flex items-center justify-between px-5 py-3 border-b border-gray-100 hover:bg-gray-50">
           <div className="flex items-center gap-3">
             <span className="text-lg">📺</span>
@@ -355,7 +355,7 @@ export default function Profile() {
           <svg className="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" /></svg>
         </button>
 
-        {/* 新增：我的社区 */}
+        {/* 我的社区 */}
         <button onClick={() => router.push('/zhihui/community')} className="w-full flex items-center justify-between px-5 py-3 border-b border-gray-100 hover:bg-gray-50">
           <div className="flex items-center gap-3">
             <span className="text-lg">🏘️</span>
@@ -403,7 +403,10 @@ export default function Profile() {
             onChange={(e) => {
               const val = parseFloat(e.target.value);
               localStorage.setItem('bgOpacity', val.toString());
-              window.location.reload();
+              // 延迟刷新，等待背景层重新计算
+              setTimeout(() => {
+                window.location.reload();
+              }, 200);
             }}
             className="flex-1"
           />
