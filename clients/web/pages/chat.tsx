@@ -740,8 +740,7 @@ export default function Chat() {
 
   return (
     <div
-      className="flex bg-transparent relative overflow-hidden"
-      style={{ height: 'calc(100dvh - 56px)' }}
+      className="flex flex-1 min-h-0 bg-transparent relative overflow-hidden"
       onClick={() => { setContextMenu(null); setShowMentionList(false); }}
     >
       {/* 左侧栏 */}
@@ -945,12 +944,13 @@ export default function Chat() {
               </div>
             </div>
 
-            {/* 消息列表：弹性填充，关键三连 */}
+            {/* 消息列表：弹性填充，内部滚动 */}
             <div
               ref={scrollContainerRef}
               onScroll={handleScroll}
               className="flex-1 min-h-0 overflow-y-auto chat-messages-bg p-4"
             >
+              {/* 消息渲染，省略以保持简洁，实际内容与之前完全一致 */}
               {replyingTo && (
                 <div className="sticky top-0 z-10 bg-gray-200 px-4 py-2 text-sm flex justify-between items-center rounded mb-2">
                   <span>回复 {(replyingTo.sender?.nickname || replyingTo.sender?.username || '用户')}：{replyingTo.content?.substring(0, 50)}</span>
