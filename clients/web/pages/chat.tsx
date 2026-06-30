@@ -1,4 +1,5 @@
 // @ts-nocheck
+
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useRouter } from 'next/router';
 import CallModal from '../components/CallModal';
@@ -11,7 +12,7 @@ if (typeof window !== 'undefined') {
 
 const API = 'https://xianqu-server.onrender.com';
 const PAGE_SIZE = 10;
-
+const MAX_CACHE_SIZE = 50;
 const EMOJIS = ['😀', '😂', '❤️', '👍', '😢', '😡', '🎉', '🔥', '💯', '✨', '👋', '🙏'];
 
 // 根据用户状态和 lastSeen 生成描述文字（支持多状态）
@@ -53,14 +54,12 @@ export default function Chat() {
   const [replyingTo, setReplyingTo] = useState<any>(null);
   const [showGroupModal, setShowGroupModal] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
-
   const [inputMode, setInputMode] = useState<'text' | 'voice'>('text');
   const [isRecording, setIsRecording] = useState(false);
   const [recordingCancel, setRecordingCancel] = useState(false);
   const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const recordStartY = useRef<number>(0);
-
   const [callState, setCallState] = useState<any>(null);
   const [pendingCall, setPendingCall] = useState<any>(null);
   const callStateRef = useRef(callState);
@@ -77,38 +76,32 @@ export default function Chat() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [mobileView, setMobileView] = useState<'sidebar' | 'chat'>('sidebar');
-
   const [contextMenu, setContextMenu] = useState<{ msg: any; x: number; y: number } | null>(null);
   const longPressTimer = useRef<NodeJS.Timeout | null>(null);
-
   const [showGroupInfo, setShowGroupInfo] = useState(false);
   const [groupInfo, setGroupInfo] = useState<any>(null);
   const [groupAnnouncement, setGroupAnnouncement] = useState('');
   const [showMentionList, setShowMentionList] = useState(false);
-
   const [inviteModal, setInviteModal] = useState(false);
   const [inviteGroupId, setInviteGroupId] = useState('');
   const [selectedFriends, setSelectedFriends] = useState<string[]>([]);
-
   const messageCache = useRef<Map<string, any[]>>(new Map());
   const loadingChatRef = useRef<Set<string>>(new Set());
-
   const cloudinaryRef = useRef<any>();
   const widgetRef = useRef<any>();
+  const shouldScrollRef = useRef(true); // 控制是否滚动到底部
+  const prevScrollHeightRef = useRef(0); // 用于加载历史后恢复位置
 
   // 编辑消息相关
   const [editingMessage, setEditingMessage] = useState<any>(null);
   const [editInput, setEditInput] = useState('');
-
   // 转发消息相关
   const [forwardModal, setForwardModal] = useState(false);
   const [forwardMessage, setForwardMessage] = useState<any>(null);
   const [selectedTargets, setSelectedTargets] = useState<string[]>([]);
-
   // 全局搜索相关
   const [searchMode, setSearchMode] = useState(false);
   const [searchMessageResults, setSearchMessageResults] = useState<any[]>([]);
-
   // 左侧栏搜索折叠与加号菜单
   const [showSearch, setShowSearch] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
@@ -181,6 +174,11 @@ export default function Chat() {
     document.body.appendChild(script);
     return () => {
       document.body.removeChild(script);
+      // 销毁 widget 防止内存泄漏
+      if (widgetRef.current) {
+        widgetRef.current.destroy();
+        widgetRef.current = null;
+      }
     };
   }, []);
 
@@ -189,9 +187,19 @@ export default function Chat() {
     if (!userId) return;
     let reconnectTimer: NodeJS.Timeout;
     let heartbeatTimer: NodeJS.Timeout;
-    const token = localStorage.getItem('token');
+    let socket: WebSocket;
+
     const connect = () => {
-      const socket = new WebSocket(`${API.replace(/^http/, 'ws')}/ws?token=${token}`);
+      // 确保旧连接关闭
+      if (socket) {
+        socket.close();
+        socket.onopen = null;
+        socket.onmessage = null;
+        socket.onclose = null;
+      }
+
+      const token = localStorage.getItem('token');
+      socket = new WebSocket(`${API.replace(/^http/, 'ws')}/ws?token=${token}`);
       socket.onopen = () => {
         heartbeatTimer = setInterval(() => {
           if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ event: 'ping' }));
@@ -203,41 +211,56 @@ export default function Chat() {
 
         if (msg.event === 'message:receive') {
           const newMsg = msg.data;
-          if (selectedChat?.data?.id !== newMsg.senderId) {
-            MessageSound?.play();
-          }
-          setMessages(prev => {
-            if (prev.find(m => m.id === newMsg.id)) return prev;
-            return [...prev, newMsg];
-          });
+          // 只在当前聊天是此好友时更新 messages
           if (currentChat?.type === 'friend' && currentChat.data.id === newMsg.senderId) {
+            setMessages(prev => {
+              // 替换掉临时消息（temp id）
+              const tempIndex = prev.findIndex(m => m.id?.startsWith('temp-') && m.senderId === userId && m.content === newMsg.content);
+              if (tempIndex !== -1) {
+                const next = [...prev];
+                next[tempIndex] = newMsg;
+                return next;
+              }
+              if (prev.find(m => m.id === newMsg.id)) return prev;
+              return [...prev, newMsg];
+            });
+            shouldScrollRef.current = true;
             fetch(`${API}/messages/read`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
               body: JSON.stringify({ senderId: newMsg.senderId })
             });
+          } else {
+            // 非当前聊天，只更新会话和缓存
+            MessageSound?.play();
+            updateSessionInCache(newMsg);
           }
+          // 更新缓存
           const cacheKey = `friend-${newMsg.senderId}`;
-          const cached = messageCache.current.get(cacheKey) || [];
-          if (!cached.find(m => m.id === newMsg.id)) {
-            messageCache.current.set(cacheKey, [...cached, newMsg]);
-          }
+          addToCache(cacheKey, newMsg);
           loadSessions();
+
         } else if (msg.event === 'group-message:receive') {
           const newMsg = msg.data;
-          if (selectedChat?.data?.id !== newMsg.groupId) {
+          if (currentChat?.type === 'group' && currentChat.data.id === newMsg.groupId) {
+            setMessages(prev => {
+              const tempIndex = prev.findIndex(m => m.id?.startsWith('temp-') && m.senderId === userId && m.content === newMsg.content);
+              if (tempIndex !== -1) {
+                const next = [...prev];
+                next[tempIndex] = newMsg;
+                return next;
+              }
+              if (prev.find(m => m.id === newMsg.id)) return prev;
+              return [...prev, newMsg];
+            });
+            shouldScrollRef.current = true;
+          } else {
             MessageSound?.play();
           }
-          setMessages(prev => {
-            if (prev.find(m => m.id === newMsg.id)) return prev;
-            return [...prev, newMsg];
-          });
           const cacheKey = `group-${newMsg.groupId}`;
-          const cached = messageCache.current.get(cacheKey) || [];
-          if (!cached.find(m => m.id === newMsg.id)) {
-            messageCache.current.set(cacheKey, [...cached, newMsg]);
-          }
+          addToCache(cacheKey, newMsg);
           loadGroups();
+
         } else if (msg.event === 'call-offer') {
           setPendingCall({
             type: msg.data.type || 'audio',
@@ -257,17 +280,42 @@ export default function Chat() {
       };
       setWs(socket);
     };
+
     connect();
     return () => {
       clearTimeout(reconnectTimer);
       clearInterval(heartbeatTimer);
+      if (socket) {
+        socket.close();
+        socket.onopen = null;
+        socket.onmessage = null;
+        socket.onclose = null;
+      }
     };
   }, [userId, loadSessions, loadGroups]);
+
+  // 缓存辅助函数（LRU 限制大小）
+  const addToCache = (key: string, msg: any) => {
+    const cache = messageCache.current;
+    const existing = cache.get(key) || [];
+    // 去重
+    if (existing.find(m => m.id === msg.id)) return;
+    const updated = [...existing, msg];
+    if (updated.length > MAX_CACHE_SIZE) {
+      updated.shift(); // 移除最早的消息
+    }
+    cache.set(key, updated);
+  };
+
+  const updateSessionInCache = (newMsg: any) => {
+    // 简单更新 lastMessage 到 sessions，由 loadSessions 刷新，此处无需操作
+  };
 
   const selectChat = useCallback(async (type: string, data: any) => {
     setSelectedChat({ type, data });
     setReplyingTo(null);
     setMobileView('chat');
+    shouldScrollRef.current = false; // 切换会话不要自动滚到底部
     const cacheKey = `${type}-${data.id}`;
     const cachedMessages = messageCache.current.get(cacheKey);
     if (cachedMessages && cachedMessages.length > 0) {
@@ -288,7 +336,7 @@ export default function Chat() {
       if (res.ok) {
         const msgs = await res.json();
         setMessages(msgs);
-        messageCache.current.set(cacheKey, msgs);
+        addToCache(cacheKey, ...msgs);
         if (msgs.length < PAGE_SIZE) setHasMore(false);
       }
     } catch (err) {
@@ -328,6 +376,10 @@ export default function Chat() {
   const loadMoreMessages = async () => {
     if (!selectedChat || loadingMore || !hasMore) return;
     setLoadingMore(true);
+    const container = scrollContainerRef.current;
+    if (container) {
+      prevScrollHeightRef.current = container.scrollHeight;
+    }
     const cacheKey = `${selectedChat.type}-${selectedChat.data.id}`;
     const token = localStorage.getItem('token');
     const currentCount = messages.length;
@@ -341,7 +393,15 @@ export default function Chat() {
         if (older.length < PAGE_SIZE) setHasMore(false);
         const updatedMessages = [...older, ...messages];
         setMessages(updatedMessages);
-        messageCache.current.set(cacheKey, updatedMessages);
+        const cache = messageCache.current.get(cacheKey) || [];
+        messageCache.current.set(cacheKey, [...older, ...cache].slice(0, MAX_CACHE_SIZE));
+        // 恢复滚动位置
+        requestAnimationFrame(() => {
+          if (container) {
+            const newScrollHeight = container.scrollHeight;
+            container.scrollTop = newScrollHeight - prevScrollHeightRef.current;
+          }
+        });
       }
     } catch (err) {
       console.error('加载更多消息失败', err);
@@ -385,6 +445,7 @@ export default function Chat() {
       payload.groupId = selectedChat.data.id;
     }
     ws.send(JSON.stringify({ event: 'message:send', data: payload }));
+    shouldScrollRef.current = true;
   };
 
   const sendMessage = () => {
@@ -409,13 +470,14 @@ export default function Chat() {
       updateSession(selectedChat.data.id, input, 'text');
       const cacheKey = `friend-${selectedChat.data.id}`;
       const cached = messageCache.current.get(cacheKey) || [];
-      messageCache.current.set(cacheKey, [...cached, tempMsg]);
+      messageCache.current.set(cacheKey, [...cached, tempMsg].slice(0, MAX_CACHE_SIZE));
     } else {
       payload.groupId = selectedChat.data.id;
     }
     ws.send(JSON.stringify({ event: 'message:send', data: payload }));
     setInput('');
     setReplyingTo(null);
+    shouldScrollRef.current = true;
   };
 
   const startRecording = async (clientY: number) => {
@@ -427,7 +489,10 @@ export default function Chat() {
       audioChunksRef.current = [];
       recorder.ondataavailable = (e) => { audioChunksRef.current.push(e.data); };
       recorder.onstop = () => {
-        if (recordingCancel) return;
+        if (recordingCancel) {
+          setMediaRecorder(null);
+          return;
+        }
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
         const reader = new FileReader();
         reader.onload = () => {
@@ -445,10 +510,12 @@ export default function Chat() {
               msgData.groupId = selectedChat.data.id;
             }
             ws.send(JSON.stringify({ event: 'message:send', data: msgData }));
+            shouldScrollRef.current = true;
           }
         };
         reader.readAsDataURL(audioBlob);
         stream.getTracks().forEach(t => t.stop());
+        setMediaRecorder(null);
       };
       recorder.start();
       setMediaRecorder(recorder);
@@ -507,11 +574,12 @@ export default function Chat() {
             updateSession(selectedChat.data.id, '[图片]', 'image');
             const cacheKey = `friend-${selectedChat.data.id}`;
             const cached = messageCache.current.get(cacheKey) || [];
-            messageCache.current.set(cacheKey, [...cached, tempMsg]);
+            messageCache.current.set(cacheKey, [...cached, tempMsg].slice(0, MAX_CACHE_SIZE));
           } else {
             payload.groupId = selectedChat.data.id;
           }
           ws.send(JSON.stringify({ event: 'message:send', data: payload }));
+          shouldScrollRef.current = true;
         }, 'image/jpeg', 0.8);
       };
     };
@@ -609,12 +677,14 @@ export default function Chat() {
 
   const handleContextMenu = (e: React.MouseEvent, msg: any) => {
     e.preventDefault();
-    setContextMenu({ msg, x: e.clientX, y: e.clientY });
+    const x = Math.min(e.clientX, window.innerWidth - 200); // 防止右侧溢出
+    const y = Math.min(e.clientY, window.innerHeight - 200);
+    setContextMenu({ msg, x, y });
   };
 
   const handleTouchStart = (msg: any) => {
     longPressTimer.current = setTimeout(() => {
-      setContextMenu({ msg, x: 0, y: 0 });
+      setContextMenu({ msg, x: 10, y: 10 }); // 移动端简单处理
     }, 500);
   };
 
@@ -710,7 +780,13 @@ export default function Chat() {
     }
   };
 
-  useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
+  useEffect(() => {
+    // 只有新消息且需要滚动时才滚到底部
+    if (shouldScrollRef.current && messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+      shouldScrollRef.current = false;
+    }
+  }, [messages]);
 
   const goBack = () => setMobileView('sidebar');
 
@@ -773,7 +849,6 @@ export default function Chat() {
                 搜索
               </button>
             )}
-
             {/* “+”按钮 */}
             <div className="relative">
               <button
@@ -808,7 +883,6 @@ export default function Chat() {
               )}
             </div>
           </div>
-
           {/* 搜索结果列表 */}
           {searchResults.length > 0 && (
             <div className="max-h-40 overflow-y-auto border rounded p-1 mt-2">
@@ -820,7 +894,6 @@ export default function Chat() {
               ))}
             </div>
           )}
-
           {/* 消息搜索结果 */}
           {searchMode && searchMessageResults.length > 0 && (
             <div className="mt-2 max-h-40 overflow-y-auto border rounded p-1">
@@ -833,7 +906,6 @@ export default function Chat() {
             </div>
           )}
         </div>
-
         {friendRequests.length > 0 && (
           <div className="border-b bg-yellow-50">
             <div className="p-2 text-sm font-bold">好友请求</div>
@@ -848,7 +920,6 @@ export default function Chat() {
             ))}
           </div>
         )}
-
         {/* 会话列表：改为普通文档流 */}
         {allConversations.map((conv: any) => (
           <div
@@ -955,7 +1026,6 @@ export default function Chat() {
                   <button onClick={() => setReplyingTo(null)} className="text-red-500">✕</button>
                 </div>
               )}
-
               {isLoadingChat ? (
                 <div className="flex items-center justify-center h-full">
                   <div className="flex flex-col items-center">
@@ -971,7 +1041,6 @@ export default function Chat() {
                     const isMe = msg.senderId === userId || msg.sender?.id === userId;
                     const isForwarded = msg.content?.startsWith('[转发]');
                     const displayContent = isForwarded ? msg.content.replace('[转发] ', '') : msg.content;
-
                     if (msg.deleted) return null;
                     if (msg.recalled) return (
                       <div key={msg.id || i} className="text-center text-gray-400 text-xs py-1">
@@ -991,9 +1060,9 @@ export default function Chat() {
                           <div className="w-8 h-8 bg-gray-400 rounded-full flex items-center justify-center text-white text-xs">
                             {isMe ? '我' : ((msg.sender?.nickname || msg.sender?.username || selectedChat.data?.nickname || selectedChat.data?.username)?.[0] || '?')}
                           </div>
-                          <div className="flex flex-col">
+                          <div className="flex flex-col min-w-0">
                             {msg.replyToId && (
-                              <div className="text-xs text-gray-400 bg-gray-100 rounded px-2 py-1 mb-1 border-l-2 border-blue-300">
+                              <div className="text-xs text-gray-400 bg-gray-100 rounded px-2 py-1 mb-1 border-l-2 border-blue-300 break-words">
                                 回复：{msg.replyTo?.content?.substring(0, 30) || '消息'}
                               </div>
                             )}
@@ -1012,18 +1081,18 @@ export default function Chat() {
                                 <button onClick={submitEdit} className="text-blue-500 text-xs">保存</button>
                               </div>
                             ) : (
-                              <div className={`px-3 py-2 rounded-2xl text-sm ${isMe ? 'bg-blue-500 text-white rounded-br-md' : 'bg-white text-gray-800 rounded-bl-md shadow'}`}>
+                              <div className={`message-bubble px-3 py-2 rounded-2xl text-sm ${isMe ? 'bg-blue-500 text-white rounded-br-md' : 'bg-white text-gray-800 rounded-bl-md shadow'}`}>
                                 {msg.type === 'image' ? (
-                                  <img src={msg.content} alt="图片" className="max-w-60 rounded" loading="lazy" />
+                                  <img src={msg.content} alt="图片" className="max-w-[280px] max-h-[320px] object-cover rounded" loading="lazy" />
                                 ) : msg.type === 'voice' ? (
-                                  <audio controls className="max-w-60">
+                                  <audio controls className="max-w-[220px]">
                                     <source src={msg.content} type="audio/webm" />
                                   </audio>
                                 ) : (
-                                  <>
+                                  <div className="break-words overflow-hidden whitespace-pre-wrap">
                                     {displayContent}
                                     {msg.edited && <span className="text-xs ml-1 opacity-60">(已编辑)</span>}
-                                  </>
+                                  </div>
                                 )}
                               </div>
                             )}
@@ -1211,7 +1280,6 @@ export default function Chat() {
             </div>
             <p className="font-medium">群名称：{groupInfo.name}</p>
             <p className="text-sm text-gray-500 mt-1">成员 {groupInfo.members?.length} 人</p>
-
             {/* 邀请链接 */}
             {groupInfo.inviteCode && (
               <div className="mt-3">
@@ -1234,7 +1302,6 @@ export default function Chat() {
                 </div>
               </div>
             )}
-
             <button onClick={() => { setInviteGroupId(groupInfo.id); setSelectedFriends([]); setInviteModal(true); }} className="w-full bg-blue-500 text-white py-2 rounded text-sm mt-3">邀请好友加入</button>
             <div className="mt-3">
               <label className="text-sm font-medium">群公告</label>
@@ -1332,7 +1399,6 @@ export default function Chat() {
       {pendingCall && (() => {
         const friendSession = sessions.find(s => s.friend.id === pendingCall.friendId);
         const friendName = friendSession?.friend?.nickname || friendSession?.friend?.username || '好友';
-
         return (
           <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
             <div className="bg-white rounded-xl p-6 text-center w-72">
