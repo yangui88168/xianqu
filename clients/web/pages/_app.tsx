@@ -1,7 +1,6 @@
 import '../styles/globals.css';
 import type { AppProps } from 'next/app';
 import { useRouter } from 'next/router';
-import Head from 'next/head';
 import { useEffect, useState } from 'react';
 
 const tabs = [
@@ -27,54 +26,37 @@ export default function App({ Component, pageProps }: AppProps) {
     } catch (e) {}
   }, []);
 
-  // 监听透明度变化（profile 页面会触发）
   useEffect(() => {
     const handler = (e: CustomEvent) => setOverlayOpacity(e.detail);
     window.addEventListener('bgOpacityChange', handler as EventListener);
     return () => window.removeEventListener('bgOpacityChange', handler as EventListener);
   }, []);
 
-  if (router.pathname === '/') {
-    return <Component {...pageProps} />;
-  }
-
-  if (!mounted) {
-    return (
-      <div className="h-dvh flex items-center justify-center bg-gray-50">
-        <p className="text-gray-400">加载中...</p>
-      </div>
-    );
-  }
+  if (router.pathname === '/') return <Component {...pageProps} />;
+  if (!mounted) return <div className="h-dvh flex items-center justify-center bg-gray-50"><p>加载中...</p></div>;
 
   const isActive = (path: string) => router.pathname.startsWith(path);
 
   return (
     <>
-      {/* 独立背景层（完全不干扰布局） */}
+      {/* 独立背景层，不影响布局 */}
       {customBg && (
         <>
-          <div
-            className="fixed inset-0 z-0 pointer-events-none"
-            style={{
-              backgroundImage: `url(${customBg})`,
-              backgroundSize: 'cover',
-              backgroundPosition: 'center',
-              backgroundAttachment: 'fixed',
-              filter: 'blur(20px)',
-            }}
-          />
-          <div
-            className="fixed inset-0 z-[1] pointer-events-none"
-            style={{ backgroundColor: `rgba(255,255,255,${overlayOpacity})` }}
-          />
+          <div className="fixed inset-0 z-0 pointer-events-none bg-cover bg-center bg-fixed"
+               style={{ backgroundImage: `url(${customBg})`, filter: 'blur(20px)' }} />
+          <div className="fixed inset-0 z-[1] pointer-events-none"
+               style={{ backgroundColor: `rgba(255,255,255,${overlayOpacity})` }} />
         </>
       )}
 
-      {/* 主应用容器：全宽、固定高度，纯 Flex 列布局 */}
-      <div className="w-full h-dvh flex flex-col shadow-2xl bg-white/70 backdrop-blur-sm overflow-hidden relative z-10">
-        <div className="flex-1 min-h-0 relative flex">
+      {/* 应用主容器：全屏高度，弹性列布局，禁止溢出 */}
+      <div className="max-w-5xl mx-auto h-dvh flex flex-col shadow-2xl bg-white/70 backdrop-blur-sm overflow-hidden relative z-10">
+        {/* 唯一内容区域：弹性填充，高度受控，不可撑开 */}
+        <div className="flex-1 min-h-0">
           <Component {...pageProps} />
         </div>
+
+        {/* 底部导航栏：固定高度，绝不滚动 */}
         <nav className="flex-shrink-0 flex items-center justify-around bg-white/80 backdrop-blur-md border-t" style={{ height: '56px' }}>
           {tabs.map((tab) => (
             <button
