@@ -31,7 +31,7 @@ export async function groupRoutes(fastify: FastifyInstance) {
       data: {
         name,
         ownerId: userId,
-        inviteCode, // 邀请码
+        inviteCode,
         members: {
           create: initialMembers.map((id: string) => ({
             userId: id,
@@ -45,6 +45,25 @@ export async function groupRoutes(fastify: FastifyInstance) {
     checkBadges(userId);
 
     reply.send(group);
+  });
+
+  // 删除群聊（仅群主）
+  fastify.delete('/:groupId', { preHandler: authMiddleware }, async (request, reply) => {
+    const userId = (request as any).userId;
+    const { groupId } = request.params as any;
+
+    const group = await prisma.groupChat.findUnique({ where: { id: groupId } });
+    if (!group) return reply.status(404).send({ error: '群聊不存在' });
+    if (group.ownerId !== userId) return reply.status(403).send({ error: '仅群主可删除群聊' });
+
+    // 级联删除：群消息、群成员记录、群本身
+    await prisma.$transaction([
+      prisma.groupMessage.deleteMany({ where: { groupId } }),
+      prisma.groupMember.deleteMany({ where: { groupId } }),
+      prisma.groupChat.delete({ where: { id: groupId } }),
+    ]);
+
+    reply.send({ success: true });
   });
 
   // 邀请好友加入群（群主/管理员）
@@ -100,17 +119,14 @@ export async function groupRoutes(fastify: FastifyInstance) {
     const { inviteCode } = request.body as any;
     if (!inviteCode) return reply.status(400).send({ error: '缺少邀请码' });
 
-    // 查找群
     const group = await prisma.groupChat.findUnique({ where: { inviteCode } });
     if (!group) return reply.status(404).send({ error: '无效的邀请码' });
 
-    // 检查是否已加入
     const existing = await prisma.groupMember.findUnique({
       where: { groupId_userId: { groupId: group.id, userId } },
     });
     if (existing) return reply.status(400).send({ error: '你已经在群中' });
 
-    // 加入群
     await prisma.groupMember.create({ data: { groupId: group.id, userId } });
     reply.send({ success: true, groupId: group.id, groupName: group.name });
   });
