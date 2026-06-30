@@ -113,6 +113,21 @@ export default function Chat() {
   const [showSearch, setShowSearch] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
 
+  // 新增动态高度 ref
+  const chatContainerRef = useRef<HTMLDivElement>(null);
+
+  // 动态设置聊天页面精确高度，防止任何溢出
+  useEffect(() => {
+    const setHeight = () => {
+      if (chatContainerRef.current) {
+        chatContainerRef.current.style.height = `${window.innerHeight - 56}px`;
+      }
+    };
+    setHeight();
+    window.addEventListener('resize', setHeight);
+    return () => window.removeEventListener('resize', setHeight);
+  }, []);
+
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (!token) { router.push('/'); return; }
@@ -740,7 +755,8 @@ export default function Chat() {
 
   return (
     <div
-      className="flex flex-1 min-h-0 bg-transparent relative overflow-hidden"
+      ref={chatContainerRef}
+      className="flex bg-transparent relative overflow-hidden"
       onClick={() => { setContextMenu(null); setShowMentionList(false); }}
     >
       {/* 左侧栏 */}
@@ -950,7 +966,7 @@ export default function Chat() {
             <div
               ref={scrollContainerRef}
               onScroll={handleScroll}
-              className="overflow-y-auto chat-messages-bg p-4"
+              className="min-h-0 overflow-y-auto chat-messages-bg p-4"
             >
               {/* 回复引用栏 - sticky 在顶部 */}
               {replyingTo && (
