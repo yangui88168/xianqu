@@ -72,7 +72,7 @@ export default function Chat() {
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [isLoadingChat, setIsLoadingChat] = useState(false);
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const messageAreaRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -351,7 +351,7 @@ export default function Chat() {
   };
 
   const handleScroll = () => {
-    if (scrollContainerRef.current?.scrollTop === 0 && hasMore && !loadingMore) {
+    if (messageAreaRef.current?.scrollTop === 0 && hasMore && !loadingMore) {
       loadMoreMessages();
     }
   };
@@ -710,6 +710,23 @@ export default function Chat() {
     }
   };
 
+  // 动态计算消息区域高度
+  useEffect(() => {
+    const setHeight = () => {
+      if (messageAreaRef.current) {
+        const windowHeight = window.innerHeight;
+        const navHeight = 56;      // 底部导航栏
+        const topBar = 56;        // 顶部信息栏
+        const inputBar = 64;      // 输入框（含内边距）
+        const targetHeight = windowHeight - navHeight - topBar - inputBar;
+        messageAreaRef.current.style.height = `${targetHeight}px`;
+      }
+    };
+    setHeight();
+    window.addEventListener('resize', setHeight);
+    return () => window.removeEventListener('resize', setHeight);
+  }, []);
+
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
   const goBack = () => setMobileView('sidebar');
@@ -894,11 +911,12 @@ export default function Chat() {
         </div>
       </div>
 
-      {/* 右侧聊天窗 - Flex 三行布局 */}
-      <div className={`${mobileView === 'chat' ? 'block' : 'hidden'} md:block flex-1 flex flex-col h-full`}>
+      {/* 右侧聊天窗：绝对定位三分家 */}
+      <div className={`${mobileView === 'chat' ? 'block' : 'hidden'} md:block flex-1 relative`}>
         {selectedChat ? (
           <>
-            <div className="flex-shrink-0 bg-white border-b px-4 py-3 flex items-center gap-3" style={{ height: '56px' }}>
+            {/* 顶部信息栏：绝对定位在最上方 */}
+            <div className="absolute top-0 left-0 right-0 z-10 bg-white border-b px-4 py-3 flex items-center gap-3" style={{ height: '56px' }}>
               <button onClick={goBack} className="md:hidden text-gray-500 mr-2">←</button>
               <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold">
                 {selectedChat.type === 'group' ? '#' : (selectedChat.data.nickname || selectedChat.data.username)[0]}
@@ -942,10 +960,13 @@ export default function Chat() {
                 </button>
               </div>
             </div>
+
+            {/* 消息列表：绝对定位，JS 控制高度 */}
             <div
-              ref={scrollContainerRef}
+              ref={messageAreaRef}
               onScroll={handleScroll}
-              className="flex-1 min-h-0 overflow-y-auto chat-messages-bg p-4"
+              className="absolute left-0 right-0 overflow-y-auto chat-messages-bg p-4"
+              style={{ top: '56px' }}
             >
               {replyingTo && (
                 <div className="sticky top-0 z-10 bg-gray-200 px-4 py-2 text-sm flex justify-between items-center rounded mb-2">
@@ -1047,7 +1068,9 @@ export default function Chat() {
                 </>
               )}
             </div>
-            <div className="flex-shrink-0 bg-white border-t chat-input-bg p-3">
+
+            {/* 输入框：绝对定位在最下方，仅选中聊天时显示 */}
+            <div className="absolute bottom-0 left-0 right-0 z-10 bg-white border-t chat-input-bg p-3">
               <div className="flex items-center gap-2">
                 <button onClick={() => setInputMode(inputMode === 'text' ? 'voice' : 'text')} className="text-gray-400 hover:text-gray-600 p-2">
                   {inputMode === 'text' ? (
