@@ -664,14 +664,14 @@ export default function Chat() {
 
   const goBack = () => setMobileView('sidebar');
 
+  // 布局重构：消息列表独立滚动，Header/Input 固定，左侧栏高度继承
   return (
     <div className="flex-1 min-h-0 flex overflow-hidden relative bg-white">
       {/* 左侧栏：桌面端始终可见，移动端用 translateX 控制 */}
       <div
-        className={`w-full md:w-80 border-r flex flex-col min-h-0 absolute md:relative z-10 transition-transform duration-300 ${
+        className={`w-full md:w-80 border-r flex flex-col h-full absolute md:relative z-10 transition-transform duration-300 ${
           mobileView === 'sidebar' ? 'translate-x-0' : '-translate-x-full'
         } md:translate-x-0`}
-        style={{ height: '100%' }}
       >
         {/* 搜索与菜单 */}
         <div className="flex-shrink-0 p-3 border-b">
@@ -779,7 +779,7 @@ export default function Chat() {
         </div>
       </div>
 
-      {/* 右侧聊天区域 */}
+      {/* 右侧聊天区域：标准三段式 Flex */}
       <div
         className={`flex-1 flex flex-col min-h-0 overflow-hidden transition-transform duration-300 ${
           mobileView === 'chat' ? 'translate-x-0' : 'translate-x-full'
@@ -787,7 +787,7 @@ export default function Chat() {
       >
         {selectedChat ? (
           <>
-            {/* Header */}
+            {/* 1. 顶部信息栏：固定高度 */}
             <div className="flex-shrink-0 bg-white border-b px-4 py-3 flex items-center gap-3" style={{ height: '56px' }}>
               <button onClick={goBack} className="md:hidden text-gray-500 mr-2">←</button>
               <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold">
@@ -819,7 +819,7 @@ export default function Chat() {
               </div>
             </div>
 
-            {/* ReplyBar（独立，不参与滚动） */}
+            {/* 2. 引用回复条（固定高度，暂存于头部下方） */}
             {replyingTo && (
               <div className="flex-shrink-0 bg-gray-200 px-4 py-2 text-sm flex justify-between items-center" style={bubbleStyle}>
                 <span>回复 {(replyingTo.sender?.nickname || replyingTo.sender?.username || '用户')}：{replyingTo.content?.substring(0, 50)}</span>
@@ -827,49 +827,45 @@ export default function Chat() {
               </div>
             )}
 
-            {/* ChatBody：唯一高度分配容器 */}
-            <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
-              {/* MessageList：唯一滚动容器 */}
-              <div
-                ref={scrollContainerRef}
-                onScroll={handleScroll}
-                className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-4"
-                style={{ height: 0 }}
-              >
-                {isLoadingChat ? (
-                  <div className="flex items-center justify-center h-full">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mb-2"></div>
-                    <span className="text-gray-400 text-sm">加载中...</span>
-                  </div>
-                ) : (
-                  <>
-                    {loadingMore && <div className="text-center text-gray-400 text-xs py-2">加载中...</div>}
-                    {!hasMore && messages.length > 0 && <div className="text-center text-gray-400 text-xs py-2">没有更多消息了</div>}
-                    {messages.map((msg: any, i: number) => (
-                      <MessageItem
-                        key={msg.id || i}
-                        msg={msg}
-                        userId={userId}
-                        selectedChat={selectedChat}
-                        onContextMenu={(e: any) => handleContextMenu(e, msg)}
-                        onTouchStart={() => handleTouchStart(msg)}
-                        onTouchEnd={handleTouchEnd}
-                        onTouchMove={handleTouchEnd}
-                        onReply={setReplyingTo}
-                        onRecall={recallMessage}
-                        onEdit={setEditingMessage}
-                        editingMessage={editingMessage}
-                        editInput={editInput}
-                        setEditInput={setEditInput}
-                        submitEdit={submitEdit}
-                      />
-                    ))}
-                  </>
-                )}
-              </div>
+            {/* 3. 消息列表：弹性填充，唯一可滚动区域 */}
+            <div
+              ref={scrollContainerRef}
+              onScroll={handleScroll}
+              className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-4"
+            >
+              {isLoadingChat ? (
+                <div className="flex items-center justify-center h-full">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mb-2"></div>
+                  <span className="text-gray-400 text-sm">加载中...</span>
+                </div>
+              ) : (
+                <>
+                  {loadingMore && <div className="text-center text-gray-400 text-xs py-2">加载中...</div>}
+                  {!hasMore && messages.length > 0 && <div className="text-center text-gray-400 text-xs py-2">没有更多消息了</div>}
+                  {messages.map((msg: any, i: number) => (
+                    <MessageItem
+                      key={msg.id || i}
+                      msg={msg}
+                      userId={userId}
+                      selectedChat={selectedChat}
+                      onContextMenu={(e: any) => handleContextMenu(e, msg)}
+                      onTouchStart={() => handleTouchStart(msg)}
+                      onTouchEnd={handleTouchEnd}
+                      onTouchMove={handleTouchEnd}
+                      onReply={setReplyingTo}
+                      onRecall={recallMessage}
+                      onEdit={setEditingMessage}
+                      editingMessage={editingMessage}
+                      editInput={editInput}
+                      setEditInput={setEditInput}
+                      submitEdit={submitEdit}
+                    />
+                  ))}
+                </>
+              )}
             </div>
 
-            {/* Input：固定高度 */}
+            {/* 4. 输入框：固定高度 */}
             <div className="flex-shrink-0 bg-white border-t p-3" style={{ minHeight: '64px', maxHeight: '64px' }}>
               <div className="flex items-center gap-2 h-full">
                 <button onClick={() => setInputMode(inputMode === 'text' ? 'voice' : 'text')} className="text-gray-400 hover:text-gray-600 p-2">
