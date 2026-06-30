@@ -641,9 +641,11 @@ export default function Chat() {
     if (res.ok) { setShowGroupModal(false); setNewGroupName(''); setSelectedFriends([]); loadGroups(); } else alert('创建失败');
   };
 
+  // 滚动逻辑：直接操作 scrollTop，不使用 scrollIntoView
   useEffect(() => {
-    if (shouldAutoScroll.current && scrollContainerRef.current) {
-      scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
+    const container = scrollContainerRef.current;
+    if (shouldAutoScroll.current && container) {
+      container.scrollTop = container.scrollHeight;
       shouldAutoScroll.current = false;
     }
   }, [messages]);
@@ -769,7 +771,7 @@ export default function Chat() {
         <div className={`${mobileView === 'chat' ? 'block' : 'hidden'} md:block flex-1 flex flex-col min-h-0 overflow-hidden`}>
           {selectedChat ? (
             <>
-              {/* Header 固定高度 */}
+              {/* Header */}
               <div className="flex-shrink-0 bg-white border-b px-4 py-3 flex items-center gap-3" style={{ height: '56px' }}>
                 <button onClick={goBack} className="md:hidden text-gray-500 mr-2">←</button>
                 <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold">
@@ -801,7 +803,7 @@ export default function Chat() {
                 </div>
               </div>
 
-              {/* ReplyBar 独立固定，不参与滚动 */}
+              {/* ReplyBar 独立固定 */}
               {replyingTo && (
                 <div className="flex-shrink-0 bg-gray-200 px-4 py-2 text-sm flex justify-between items-center" style={bubbleStyle}>
                   <span>回复 {(replyingTo.sender?.nickname || replyingTo.sender?.username || '用户')}：{replyingTo.content?.substring(0, 50)}</span>
@@ -809,7 +811,7 @@ export default function Chat() {
                 </div>
               )}
 
-              {/* Body 容器，唯一滚动区域归属 */}
+              {/* Body：唯一滚动容器 */}
               <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
                 <div
                   ref={scrollContainerRef}
@@ -850,7 +852,7 @@ export default function Chat() {
                 </div>
               </div>
 
-              {/* Input 区域固定高度 */}
+              {/* Input 固定高度 */}
               <div className="flex-shrink-0 bg-white border-t p-3" style={{ minHeight: '64px', maxHeight: '64px' }}>
                 <div className="flex items-center gap-2 h-full">
                   <button onClick={() => setInputMode(inputMode === 'text' ? 'voice' : 'text')} className="text-gray-400 hover:text-gray-600 p-2">
@@ -934,7 +936,7 @@ export default function Chat() {
         </div>
       </div>
 
-      {/* 弹窗部分 */}
+      {/* 弹窗部分保持不变 */}
       {showGroupModal && (
         <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
           <div className="bg-white p-5 rounded shadow-lg w-80 max-h-[70vh] flex flex-col">
