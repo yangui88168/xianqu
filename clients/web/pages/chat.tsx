@@ -894,12 +894,12 @@ export default function Chat() {
         </div>
       </div>
 
-      {/* 右侧聊天窗 - CSS Grid 布局 */}
-      <div className={`${mobileView === 'chat' ? 'block' : 'hidden'} md:block flex-1`}>
+      {/* 右侧聊天窗 - 绝对定位方案，根除溢出 */}
+      <div className={`${mobileView === 'chat' ? 'block' : 'hidden'} md:block flex-1 relative`}>
         {selectedChat ? (
-          <div className="h-full grid grid-rows-[56px_1fr_60px] overflow-hidden">
-            {/* 第一行：顶部信息栏 */}
-            <div className="bg-white border-b px-4 py-3 flex items-center gap-3">
+          <>
+            {/* 顶部栏：固定在顶部 */}
+            <div className="absolute top-0 left-0 right-0 z-10 bg-white border-b px-4 py-3 flex items-center gap-3" style={{ height: '56px' }}>
               <button onClick={goBack} className="md:hidden text-gray-500 mr-2">←</button>
               <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold">
                 {selectedChat.type === 'group' ? '#' : (selectedChat.data.nickname || selectedChat.data.username)[0]}
@@ -946,11 +946,12 @@ export default function Chat() {
               </div>
             </div>
 
-            {/* 第二行：消息列表（包含回复栏，可滚动） */}
+            {/* 消息列表：绝对定位在顶部和底部之间，内部滚动 */}
             <div
               ref={scrollContainerRef}
               onScroll={handleScroll}
-              className="min-h-0 overflow-y-auto chat-messages-bg p-4"
+              className="absolute left-0 right-0 overflow-y-auto chat-messages-bg p-4"
+              style={{ top: '56px', bottom: '60px' }}
             >
               {/* 回复引用栏 - sticky 在顶部 */}
               {replyingTo && (
@@ -1054,8 +1055,8 @@ export default function Chat() {
               )}
             </div>
 
-            {/* 第三行：输入框 */}
-            <div className="chat-input-bg border-t p-3 flex items-center gap-2">
+            {/* 输入框：固定在底部 */}
+            <div className="absolute bottom-0 left-0 right-0 z-10 bg-white border-t chat-input-bg flex items-center gap-2 px-3" style={{ height: '60px' }}>
               <button onClick={() => setInputMode(inputMode === 'text' ? 'voice' : 'text')} className="text-gray-400 hover:text-gray-600 p-2">
                 {inputMode === 'text' ? (
                   <svg className="w-5 h-5 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1170,9 +1171,9 @@ export default function Chat() {
                 <div className="absolute -top-6 left-0 right-0 text-center text-xs text-gray-400">上滑取消</div>
               )}
             </div>
-          </div>
+          </>
         ) : (
-          <div className="h-full flex items-center justify-center text-gray-400">
+          <div className="flex items-center justify-center h-full text-gray-400">
             <div className="text-center">
               <div className="text-6xl mb-4">💬</div>
               <p className="text-lg">选择一个会话开始聊天</p>
