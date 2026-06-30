@@ -664,7 +664,6 @@ export default function Chat() {
 
   const goBack = () => setMobileView('sidebar');
 
-  // 布局重构：消息列表独立滚动，Header/Input 固定，左侧栏高度继承
   return (
     <div className="flex-1 min-h-0 flex overflow-hidden relative bg-white">
       {/* 左侧栏：桌面端始终可见，移动端用 translateX 控制 */}
@@ -779,16 +778,16 @@ export default function Chat() {
         </div>
       </div>
 
-      {/* 右侧聊天区域：标准三段式 Flex */}
+      {/* 右侧聊天区域：Grid 布局，Header + ReplyBar（auto） + 消息列表（1fr） + Input（固定） */}
       <div
-        className={`flex-1 flex flex-col min-h-0 overflow-hidden transition-transform duration-300 ${
+        className={`flex-1 min-h-0 overflow-hidden transition-transform duration-300 ${
           mobileView === 'chat' ? 'translate-x-0' : 'translate-x-full'
         } md:translate-x-0`}
       >
         {selectedChat ? (
-          <>
-            {/* 1. 顶部信息栏：固定高度 */}
-            <div className="flex-shrink-0 bg-white border-b px-4 py-3 flex items-center gap-3" style={{ height: '56px' }}>
+          <div className="h-full grid grid-rows-[56px_auto_1fr_64px] overflow-hidden">
+            {/* 1. Header：固定高度 56px */}
+            <div className="bg-white border-b px-4 py-3 flex items-center gap-3" style={{ height: '56px' }}>
               <button onClick={goBack} className="md:hidden text-gray-500 mr-2">←</button>
               <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold">
                 {selectedChat.type === 'group' ? '#' : (selectedChat.data.nickname || selectedChat.data.username)[0]}
@@ -819,19 +818,20 @@ export default function Chat() {
               </div>
             </div>
 
-            {/* 2. 引用回复条（固定高度，暂存于头部下方） */}
+            {/* 2. 引用回复条：有则显示，无则占 0 高度（auto 行） */}
             {replyingTo && (
-              <div className="flex-shrink-0 bg-gray-200 px-4 py-2 text-sm flex justify-between items-center" style={bubbleStyle}>
+              <div className="bg-gray-200 px-4 py-2 text-sm flex justify-between items-center" style={bubbleStyle}>
                 <span>回复 {(replyingTo.sender?.nickname || replyingTo.sender?.username || '用户')}：{replyingTo.content?.substring(0, 50)}</span>
                 <button onClick={() => setReplyingTo(null)} className="text-red-500">✕</button>
               </div>
             )}
 
-            {/* 3. 消息列表：弹性填充，唯一可滚动区域 */}
+            {/* 3. 消息列表：占据剩余空间，唯一可滚动区域 */}
             <div
               ref={scrollContainerRef}
               onScroll={handleScroll}
-              className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-4"
+              className="overflow-y-auto p-4 min-h-0"
+              style={{ gridRow: 3 }}
             >
               {isLoadingChat ? (
                 <div className="flex items-center justify-center h-full">
@@ -865,81 +865,79 @@ export default function Chat() {
               )}
             </div>
 
-            {/* 4. 输入框：固定高度 */}
-            <div className="flex-shrink-0 bg-white border-t p-3" style={{ minHeight: '64px', maxHeight: '64px' }}>
-              <div className="flex items-center gap-2 h-full">
-                <button onClick={() => setInputMode(inputMode === 'text' ? 'voice' : 'text')} className="text-gray-400 hover:text-gray-600 p-2">
-                  {inputMode === 'text' ? (
-                    <svg className="w-5 h-5 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" /></svg>
-                  ) : (
-                    <svg className="w-5 h-5 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" /></svg>
-                  )}
-                </button>
+            {/* 4. Input：固定高度 64px */}
+            <div className="bg-white border-t p-3 flex items-center gap-2" style={{ minHeight: '64px', maxHeight: '64px', gridRow: 4 }}>
+              <button onClick={() => setInputMode(inputMode === 'text' ? 'voice' : 'text')} className="text-gray-400 hover:text-gray-600 p-2">
                 {inputMode === 'text' ? (
-                  <>
-                    <button onClick={() => widgetRef.current?.open()} className="text-gray-400 hover:text-gray-600 p-2">
-                      <svg className="w-5 h-5 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                    </button>
-                    <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
-                    <button onClick={() => fileInputRef.current?.click()} className="text-gray-400 hover:text-gray-600 p-2">
-                      <svg className="w-5 h-5 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                    </button>
-                    {selectedChat?.type === 'group' && (
-                      <div className="relative">
-                        <button onClick={async () => { if (!groupInfo) await loadGroupInfo(); setShowMentionList(!showMentionList); }} className="text-gray-400 hover:text-gray-600 p-2">@</button>
-                        {showMentionList && (
-                          <div className="absolute bottom-10 left-0 bg-white border rounded shadow p-2 z-10 min-w-[120px]">
-                            <button onClick={() => { setInput(prev => prev + '@all '); setShowMentionList(false); }} className="block w-full text-left text-sm hover:bg-gray-100 px-2 py-1 rounded">@全体成员</button>
-                            {groupInfo?.members?.filter((m: any) => m.userId !== userId).map((m: any) => (
-                              <button key={m.userId} onClick={() => { setInput(prev => prev + `@${m.user?.nickname || m.user?.username} `); setShowMentionList(false); }} className="block w-full text-left text-sm hover:bg-gray-100 px-2 py-1 rounded">{m.user?.nickname || m.user?.username}</button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )}
+                  <svg className="w-5 h-5 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" /></svg>
+                ) : (
+                  <svg className="w-5 h-5 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" /></svg>
+                )}
+              </button>
+              {inputMode === 'text' ? (
+                <>
+                  <button onClick={() => widgetRef.current?.open()} className="text-gray-400 hover:text-gray-600 p-2">
+                    <svg className="w-5 h-5 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                  </button>
+                  <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
+                  <button onClick={() => fileInputRef.current?.click()} className="text-gray-400 hover:text-gray-600 p-2">
+                    <svg className="w-5 h-5 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                  </button>
+                  {selectedChat?.type === 'group' && (
                     <div className="relative">
-                      <button onClick={() => setShowEmoji(!showEmoji)} className="text-gray-400 hover:text-gray-600 p-2" type="button">
-                        <svg className="w-5 h-5 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                      </button>
-                      {showEmoji && (
-                        <div className="absolute bottom-10 left-0 bg-white border rounded-xl shadow-lg p-2 grid grid-cols-6 gap-1 w-56 z-50">
-                          {EMOJIS.map((emoji: string) => (
-                            <button key={emoji} onClick={() => { setInput((prev: string) => prev + emoji); setShowEmoji(false); }} className="text-xl hover:bg-gray-100 p-1 rounded">{emoji}</button>
+                      <button onClick={async () => { if (!groupInfo) await loadGroupInfo(); setShowMentionList(!showMentionList); }} className="text-gray-400 hover:text-gray-600 p-2">@</button>
+                      {showMentionList && (
+                        <div className="absolute bottom-10 left-0 bg-white border rounded shadow p-2 z-10 min-w-[120px]">
+                          <button onClick={() => { setInput(prev => prev + '@all '); setShowMentionList(false); }} className="block w-full text-left text-sm hover:bg-gray-100 px-2 py-1 rounded">@全体成员</button>
+                          {groupInfo?.members?.filter((m: any) => m.userId !== userId).map((m: any) => (
+                            <button key={m.userId} onClick={() => { setInput(prev => prev + `@${m.user?.nickname || m.user?.username} `); setShowMentionList(false); }} className="block w-full text-left text-sm hover:bg-gray-100 px-2 py-1 rounded">{m.user?.nickname || m.user?.username}</button>
                           ))}
                         </div>
                       )}
                     </div>
-                    <input
-                      className="flex-1 p-2 border rounded-full focus:outline-none focus:ring-2 focus:ring-blue-300 text-sm"
-                      value={input}
-                      onChange={e => setInput(e.target.value)}
-                      onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
-                      placeholder="输入消息..."
-                    />
-                    <button onClick={sendMessage} className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-full text-sm">发送</button>
-                  </>
-                ) : (
-                  <div className="flex-1 flex justify-center">
-                    <button
-                      onMouseDown={e => { e.preventDefault(); startRecording(e.clientY); }}
-                      onMouseMove={e => { if (isRecording) setRecordingCancel(recordStartY.current - e.clientY > 50); }}
-                      onMouseUp={e => { e.preventDefault(); stopRecording(); }}
-                      onMouseLeave={e => { if (isRecording) stopRecording(); }}
-                      onTouchStart={e => { e.preventDefault(); startRecording(e.touches[0].clientY); }}
-                      onTouchMove={e => { if (isRecording) setRecordingCancel(recordStartY.current - e.touches[0].clientY > 50); }}
-                      onTouchEnd={e => { e.preventDefault(); stopRecording(); }}
-                      className={`w-full py-3 rounded-full text-center font-medium select-none ${isRecording ? (recordingCancel ? 'bg-red-500 text-white' : 'bg-blue-600 text-white') : 'bg-gray-200 text-gray-600 hover:bg-gray-300'}`}
-                    >
-                      {isRecording ? (recordingCancel ? '松开取消' : '正在录音...') : '按住说话'}
+                  )}
+                  <div className="relative">
+                    <button onClick={() => setShowEmoji(!showEmoji)} className="text-gray-400 hover:text-gray-600 p-2" type="button">
+                      <svg className="w-5 h-5 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                     </button>
+                    {showEmoji && (
+                      <div className="absolute bottom-10 left-0 bg-white border rounded-xl shadow-lg p-2 grid grid-cols-6 gap-1 w-56 z-50">
+                        {EMOJIS.map((emoji: string) => (
+                          <button key={emoji} onClick={() => { setInput((prev: string) => prev + emoji); setShowEmoji(false); }} className="text-xl hover:bg-gray-100 p-1 rounded">{emoji}</button>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                )}
-                {isRecording && !recordingCancel && <div className="absolute -top-6 left-0 right-0 text-center text-xs text-gray-400">上滑取消</div>}
-              </div>
+                  <input
+                    className="flex-1 p-2 border rounded-full focus:outline-none focus:ring-2 focus:ring-blue-300 text-sm"
+                    value={input}
+                    onChange={e => setInput(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
+                    placeholder="输入消息..."
+                  />
+                  <button onClick={sendMessage} className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-full text-sm">发送</button>
+                </>
+              ) : (
+                <div className="flex-1 flex justify-center">
+                  <button
+                    onMouseDown={e => { e.preventDefault(); startRecording(e.clientY); }}
+                    onMouseMove={e => { if (isRecording) setRecordingCancel(recordStartY.current - e.clientY > 50); }}
+                    onMouseUp={e => { e.preventDefault(); stopRecording(); }}
+                    onMouseLeave={e => { if (isRecording) stopRecording(); }}
+                    onTouchStart={e => { e.preventDefault(); startRecording(e.touches[0].clientY); }}
+                    onTouchMove={e => { if (isRecording) setRecordingCancel(recordStartY.current - e.touches[0].clientY > 50); }}
+                    onTouchEnd={e => { e.preventDefault(); stopRecording(); }}
+                    className={`w-full py-3 rounded-full text-center font-medium select-none ${isRecording ? (recordingCancel ? 'bg-red-500 text-white' : 'bg-blue-600 text-white') : 'bg-gray-200 text-gray-600 hover:bg-gray-300'}`}
+                  >
+                    {isRecording ? (recordingCancel ? '松开取消' : '正在录音...') : '按住说话'}
+                  </button>
+                </div>
+              )}
+              {isRecording && !recordingCancel && <div className="absolute -top-6 left-0 right-0 text-center text-xs text-gray-400">上滑取消</div>}
             </div>
-          </>
+          </div>
         ) : (
-          <div className="flex-1 flex items-center justify-center text-gray-400">
+          <div className="h-full flex items-center justify-center text-gray-400">
             <div className="text-center">
               <div className="text-6xl mb-4">💬</div>
               <p className="text-lg">选择一个会话开始聊天</p>
