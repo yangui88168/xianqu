@@ -113,6 +113,8 @@ export default function Chat() {
   const [showSearch, setShowSearch] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
 
+  // 已删除 chatContainerRef 和相关的动态高度 useEffect
+
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (!token) { router.push('/'); return; }
@@ -894,12 +896,12 @@ export default function Chat() {
         </div>
       </div>
 
-      {/* 右侧聊天窗 - Flex 三行布局 */}
-      <div className={`${mobileView === 'chat' ? 'block' : 'hidden'} md:block flex-1 flex flex-col h-full`}>
+      {/* 右侧聊天窗 - Grid 布局 + contain */}
+      <div className={`${mobileView === 'chat' ? 'block' : 'hidden'} md:block flex-1 h-full contain-strict`}>
         {selectedChat ? (
-          <>
-            {/* 顶部栏：固定高度 */}
-            <div className="flex-shrink-0 bg-white border-b px-4 py-3 flex items-center gap-3" style={{ height: '56px' }}>
+          <div className="h-full grid grid-rows-[56px_1fr_60px]">
+            {/* 第一行：顶部栏 */}
+            <div className="bg-white border-b px-4 py-3 flex items-center gap-3">
               <button onClick={goBack} className="md:hidden text-gray-500 mr-2">←</button>
               <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold">
                 {selectedChat.type === 'group' ? '#' : (selectedChat.data.nickname || selectedChat.data.username)[0]}
@@ -911,7 +913,6 @@ export default function Chat() {
               <div className="flex items-center gap-1">
                 {selectedChat.type === 'friend' && (
                   <>
-                    {/* 语音通话按钮 */}
                     <button onClick={() => {
                       if (!ws) return;
                       setCallState({ type: 'audio', friendId: selectedChat.data.id, friendName: selectedChat.data.nickname || selectedChat.data.username, incoming: false });
@@ -920,7 +921,6 @@ export default function Chat() {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
                       </svg>
                     </button>
-                    {/* 视频通话按钮 */}
                     <button onClick={() => {
                       if (!ws) return;
                       setCallState({ type: 'video', friendId: selectedChat.data.id, friendName: selectedChat.data.nickname || selectedChat.data.username, incoming: false });
@@ -946,13 +946,12 @@ export default function Chat() {
               </div>
             </div>
 
-            {/* 消息列表：弹性填充，内部滚动 */}
+            {/* 第二行：消息列表（滚动容器） */}
             <div
               ref={scrollContainerRef}
               onScroll={handleScroll}
-              className="flex-1 min-h-0 overflow-y-auto chat-messages-bg p-4"
+              className="overflow-y-auto chat-messages-bg p-4"
             >
-              {/* 回复引用栏 - sticky 在顶部 */}
               {replyingTo && (
                 <div className="sticky top-0 z-10 bg-gray-200 px-4 py-2 text-sm flex justify-between items-center rounded mb-2">
                   <span>回复 {(replyingTo.sender?.nickname || replyingTo.sender?.username || '用户')}：{replyingTo.content?.substring(0, 50)}</span>
@@ -1054,8 +1053,8 @@ export default function Chat() {
               )}
             </div>
 
-            {/* 输入框：固定高度 */}
-            <div className="flex-shrink-0 bg-white border-t chat-input-bg p-3">
+            {/* 第三行：输入框 */}
+            <div className="bg-white border-t chat-input-bg p-3">
               <div className="flex items-center gap-2">
                 <button onClick={() => setInputMode(inputMode === 'text' ? 'voice' : 'text')} className="text-gray-400 hover:text-gray-600 p-2">
                   {inputMode === 'text' ? (
@@ -1081,7 +1080,6 @@ export default function Chat() {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                       </svg>
                     </button>
-                    {/* 群聊 @ 按钮 */}
                     {selectedChat?.type === 'group' && (
                       <div className="relative">
                         <button
@@ -1114,7 +1112,6 @@ export default function Chat() {
                         )}
                       </div>
                     )}
-                    {/* 表情按钮 */}
                     <div className="relative">
                       <button
                         onClick={() => setShowEmoji(!showEmoji)}
@@ -1172,9 +1169,9 @@ export default function Chat() {
                 )}
               </div>
             </div>
-          </>
+          </div>
         ) : (
-          <div className="flex-1 flex items-center justify-center text-gray-400">
+          <div className="h-full flex items-center justify-center text-gray-400">
             <div className="text-center">
               <div className="text-6xl mb-4">💬</div>
               <p className="text-lg">选择一个会话开始聊天</p>
