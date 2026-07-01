@@ -322,6 +322,12 @@ export default function Chat() {
           if (callStateRef.current && callStateRef.current.friendId === msg.data.from && !callStateRef.current.incoming) {
             setCallState((prev: any) => prev ? { ...prev, accepted: true } : null);
           }
+        } else if (msg.event === 'call-hangup') {
+          // 清除可能残留的接听弹窗
+          if (pendingCall?.friendId === msg.data.from) {
+            setPendingCall(null);
+          }
+          // 如果当前通话窗口正在显示，也会被 CallModal 内部的 hangup 处理
         }
       };
       socket.onclose = () => {
