@@ -71,7 +71,7 @@ const imageStyle = {
   borderRadius: '8px',
 };
 
-const MessageItem = React.memo(({ msg, userId, selectedChat, onContextMenu, onTouchStart, onTouchEnd, onTouchMove, onReply, onRecall, onEdit, editingMessage, editInput, setEditInput, submitEdit }: any) => {
+const MessageItem = ({ msg, userId, selectedChat, onContextMenu, onTouchStart, onTouchEnd, onTouchMove, onReply, onRecall, onEdit, editingMessage, editInput, setEditInput, submitEdit }: any) => {
   const isMe = msg.senderId === userId || msg.sender?.id === userId;
   const isForwarded = msg.content?.startsWith('[转发]');
   const displayContent = isForwarded ? msg.content.replace('[转发] ', '') : msg.content;
@@ -146,7 +146,7 @@ const MessageItem = React.memo(({ msg, userId, selectedChat, onContextMenu, onTo
       </div>
     </div>
   );
-});
+};
 
 export default function Chat() {
   const [ws, setWs] = useState<WebSocket | null>(null);
