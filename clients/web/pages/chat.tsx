@@ -1018,6 +1018,34 @@ export default function Chat() {
                 </div>
               ))}
             </div>
+            {groupInfo.ownerId === userId && (
+              <div className="mt-4 pt-4 border-t">
+                <button
+                  onClick={async () => {
+                    if (confirm('确定删除此群聊吗？所有消息和成员将被清除')) {
+                      const token = localStorage.getItem('token');
+                      const res = await fetch(`${API}/groups/${groupInfo.id}`, {
+                        method: 'DELETE',
+                        headers: { Authorization: `Bearer ${token}` },
+                      });
+                      if (res.ok) {
+                        alert('群聊已删除');
+                        setShowGroupInfo(false);
+                        loadGroups();
+                        setSelectedChat(null);
+                        setMessages([]);
+                      } else {
+                        const err = await res.json();
+                        alert(err.error || '删除失败');
+                      }
+                    }
+                  }}
+                  className="w-full bg-red-500 text-white py-2 rounded text-sm hover:bg-red-600"
+                >
+                  删除群聊
+                </button>
+              </div>
+            )}
             <button onClick={() => setShowGroupInfo(false)} className="mt-4 w-full bg-gray-200 py-2 rounded">关闭</button>
           </div>
         </div>
