@@ -18,46 +18,43 @@ html, body, #__next {
   overflow: hidden;
 }
 
-/* 强制所有常见的背景色变为半透明，让底层背景透出 */
+/* 强制所有主要背景色更透明（从 0.65 降至 0.4） */
 .bg-white,
 .bg-gray-50,
 .bg-gray-100,
 .bg-gray-200 {
-  background-color: rgba(255, 255, 255, 0.65) !important;
+  background-color: rgba(255, 255, 255, 0.4) !important;
 }
 
-/* 导航栏和头部可以稍微更实一些，保证可读性 */
+/* 导航栏和头部稍微实一点，保证可读性 */
 .bg-white\/80,
 .bg-white\/70 {
-  background-color: rgba(255, 255, 255, 0.85) !important;
+  background-color: rgba(255, 255, 255, 0.6) !important;
 }
 
-/* 消息气泡保留一定实色（主题青色半透明） */
+/* 消息气泡保持原有实色，但略微透出背景 */
 .bg-blue-500 {
-  background-color: rgba(74, 158, 143, 0.85) !important;
+  background-color: rgba(74, 158, 143, 0.8) !important;
 }
 
-/* 文字增强对比，确保清晰 */
+/* 文字阴影稍微加重，确保清晰 */
 .text-gray-800,
 .text-gray-700,
 .text-gray-900,
-.text-gray-600 {
-  text-shadow: 0 0 2px rgba(255, 255, 255, 0.8);
+.text-gray-600,
+.text-gray-500 {
+  text-shadow: 0 0 4px rgba(255, 255, 255, 0.9);
 }
 
-/* 聊天消息区域背景透明 */
+/* 聊天消息区域背景更透 */
 .chat-messages-bg {
-  background-color: rgba(249, 250, 251, 0.55) !important;
+  background-color: rgba(249, 250, 251, 0.35) !important;
 }
 
-/* 输入框区域背景透明 */
-.chat-input-bg {
-  background-color: rgba(255, 255, 255, 0.75) !important;
-}
-
-/* 左侧列表背景透明 */
+/* 输入框和左侧列表背景稍实 */
+.chat-input-bg,
 .sidebar-bg {
-  background-color: rgba(255, 255, 255, 0.75) !important;
+  background-color: rgba(255, 255, 255, 0.6) !important;
 }
 
 /* 独立卡片样式 */
