@@ -68,7 +68,6 @@ export default function CallModal({
     localStreamRef.current?.getTracks().forEach(t => t.stop());
     remoteStreamRef.current?.getTracks().forEach(t => t.stop());
     if (pcRef.current) {
-      // 先清理所有 sender/receiver，再关闭连接
       pcRef.current.getSenders().forEach(s => s.replaceTrack(null).catch(() => {}));
       pcRef.current.close();
       pcRef.current = null;
@@ -99,7 +98,6 @@ export default function CallModal({
     onHangup();
   }, [commonCleanup, onHangup]);
 
-  // 启动媒体健康检测（在 init 中调用）
   const startStatsMonitor = useCallback(() => {
     if (statsIntervalRef.current) return;
     statsIntervalRef.current = setInterval(async () => {
@@ -139,7 +137,6 @@ export default function CallModal({
   const lastCheckRef = useRef<{ videoBytes: number; audioBytes: number; time: number }>({ videoBytes: -1, audioBytes: -1, time: 0 });
   const noDataCountRef = useRef(0);
 
-  // 统一协商入口
   const runNegotiation = useCallback(async (options?: { iceRestart?: boolean }) => {
     const pc = pcRef.current;
     if (!pc || isClosedRef.current || makingOffer.current || pc.signalingState !== 'stable') return;
@@ -156,7 +153,6 @@ export default function CallModal({
     }
   }, [safeSend, friendId, type]);
 
-  // ICE重启
   const restartIce = useCallback(async () => {
     const pc = pcRef.current;
     if (!pc || isClosedRef.current || restartingIceRef.current || iceRestartCountRef.current >= 3) {
@@ -188,14 +184,20 @@ export default function CallModal({
   const bindRemoteMedia = useCallback((stream: MediaStream) => {
     if (isClosedRef.current) return;
     const tryPlay = (el: HTMLMediaElement) => {
-      if (!el || !audioUnlockedRef.current) return; // 等待解锁
+      if (!el) return;
       el.srcObject = stream;
-      el.onloadeddata = () => el.play().catch(() => {});
-      el.oncanplay = () => el.play().catch(() => {});
-      el.play().catch(() => {});
+      el.play().catch(() => {
+        el.muted = true;
+        el.play().catch(() => {});
+        setAudioUnlocked(false);
+      });
     };
-    if (type === 'video' && remoteVideoRef.current) tryPlay(remoteVideoRef.current);
-    else if (type === 'audio' && remoteAudioRef.current) tryPlay(remoteAudioRef.current);
+    if (type === 'video' && remoteVideoRef.current) {
+      remoteVideoRef.current.muted = false;
+      tryPlay(remoteVideoRef.current);
+    } else if (type === 'audio' && remoteAudioRef.current) {
+      tryPlay(remoteAudioRef.current);
+    }
   }, [type]);
 
   const markConnected = useCallback(() => {
@@ -224,7 +226,7 @@ export default function CallModal({
     track.onended = () => {
       if (stream.getTracks().includes(track)) {
         stream.removeTrack(track);
-        track.stop(); // Safari 兼容
+        track.stop();
       }
       bindRemoteMedia(stream);
     };
@@ -247,9 +249,15 @@ export default function CallModal({
       if (desc) {
         const sdp = new RTCSessionDescription(desc);
         if (sdp.type === 'answer') {
-          // 防止重复 answer
-          if (pc.currentRemoteDescription || pc.signalingState !== 'have-local-offer') return;
-          await pc.setRemoteDescription(sdp);
+          if (pc.currentRemoteDescription) return;
+          if (pc.signalingState !== 'have-local-offer') {
+            console.warn('answer received but signaling state is', pc.signalingState);
+          }
+          try {
+            await pc.setRemoteDescription(sdp);
+          } catch (e) {
+            console.error('setRemoteDescription for answer failed', e);
+          }
           remoteUfragRef.current = getUfrag(pc.remoteDescription?.sdp);
           const gen = iceGenerationRef.current;
           const cands = pendingCandidatesRef.current.get(gen);
@@ -261,14 +269,15 @@ export default function CallModal({
           iceRestartCountRef.current = 0;
           if (iceRestartTimeoutRef.current) { clearTimeout(iceRestartTimeoutRef.current); iceRestartTimeoutRef.current = null; }
         } else if (sdp.type === 'offer') {
-          const offerCollision = makingOffer.current || pc.signalingState !== 'stable';
-          ignoreOffer.current = !politeRef.current && offerCollision;
-          if (ignoreOffer.current) return;
+          if (!politeRef.current) return;
 
-          if (offerCollision && politeRef.current && pc.signalingState === 'have-local-offer') {
-            await pc.setLocalDescription({ type: 'rollback' });
-            waitingForAnswerRef.current = false;
-            iceRestartCountRef.current = 0;
+          const offerCollision = makingOffer.current || pc.signalingState !== 'stable';
+          if (offerCollision) {
+            if (pc.signalingState === 'have-local-offer') {
+              await pc.setLocalDescription({ type: 'rollback' });
+              waitingForAnswerRef.current = false;
+              iceRestartCountRef.current = 0;
+            }
           }
 
           if (makingAnswerRef.current) return;
@@ -276,12 +285,6 @@ export default function CallModal({
           try {
             await pc.setRemoteDescription(sdp);
             remoteUfragRef.current = getUfrag(pc.remoteDescription?.sdp);
-            const gen = iceGenerationRef.current;
-            const cands = pendingCandidatesRef.current.get(gen);
-            if (cands) {
-              for (const c of cands) await pc.addIceCandidate(c);
-              pendingCandidatesRef.current.delete(gen);
-            }
             const answer = await pc.createAnswer();
             await pc.setLocalDescription(answer);
             safeSend({ event: 'call-answer', data: { targetId: friendId, sdp: answer } });
@@ -315,7 +318,6 @@ export default function CallModal({
         if (AudioCtx) audioContextRef.current = new AudioCtx();
       }
       audioContextRef.current?.resume().catch(() => {});
-      // 解锁后绑定并播放
       if (remoteStreamRef.current) bindRemoteMedia(remoteStreamRef.current);
     };
     tryPlay();
@@ -349,14 +351,12 @@ export default function CallModal({
               newTrack.enabled = true;
               const oldTrack = sender.track;
               await sender.replaceTrack(newTrack);
-              // 停止旧轨道释放资源
               if (oldTrack) oldTrack.stop();
               const params = sender.getParameters();
               if (!params.encodings) params.encodings = [{}];
               params.encodings[0].maxBitrate = 1200000;
               sender.setParameters(params).catch(() => {});
               if (localVideoRef.current) localVideoRef.current.srcObject = newStream;
-              // 更新本地流
               if (localStreamRef.current) {
                 const oldVideo = localStreamRef.current.getVideoTracks()[0];
                 if (oldVideo) { localStreamRef.current.removeTrack(oldVideo); oldVideo.stop(); }
@@ -375,7 +375,6 @@ export default function CallModal({
     setIsSpeakerOn(prev => !prev);
   }, [unlockAudio]);
 
-  // 页面生命周期
   useEffect(() => {
     const handleVisibility = () => {
       if (document.visibilityState === 'visible') {
@@ -393,7 +392,6 @@ export default function CallModal({
     return () => document.removeEventListener('visibilitychange', handleVisibility);
   }, []);
 
-  // 主初始化
   useEffect(() => {
     let cancelled = false;
     isClosedRef.current = false;
@@ -447,7 +445,6 @@ export default function CallModal({
           }
         }
 
-        // 启动Stats监控（确保在pc创建之后）
         startStatsMonitor();
 
         pc.ontrack = handleRemoteTrack;
@@ -521,10 +518,10 @@ export default function CallModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black" onClick={unlockAudio}>
       <div className="relative flex flex-col items-center w-full h-full max-w-3xl mx-auto">
-        {type === 'audio' && <audio ref={remoteAudioRef} autoPlay playsInline muted={!isSpeakerOn} className="hidden" />}
+        {type === 'audio' && <audio ref={remoteAudioRef} autoPlay playsInline muted={false} className="hidden" />}
         <div className="relative w-full h-full flex items-center justify-center bg-gray-900">
           {type === 'video' ? (
-            <video ref={remoteVideoRef} autoPlay playsInline muted={!isSpeakerOn} className="w-full h-full object-cover" />
+            <video ref={remoteVideoRef} autoPlay playsInline muted={false} className="w-full h-full object-cover" />
           ) : (
             <div className="flex flex-col items-center justify-center h-full text-white">
               <div className="text-8xl mb-4">🎤</div>
