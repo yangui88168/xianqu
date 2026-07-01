@@ -14,7 +14,7 @@ export default function App({ Component, pageProps }: AppProps) {
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
   const [customBg, setCustomBg] = useState('');
-  const [overlayOpacity, setOverlayOpacity] = useState(0.15); // 从 0.25 调整为 0.15
+  const [overlayOpacity, setOverlayOpacity] = useState(0.15);
 
   useEffect(() => {
     setMounted(true);
@@ -39,7 +39,6 @@ export default function App({ Component, pageProps }: AppProps) {
 
   return (
     <>
-      {/* 独立背景层，不影响布局 */}
       {customBg && (
         <>
           <div className="fixed inset-0 z-0 pointer-events-none bg-cover bg-center bg-fixed"
@@ -49,14 +48,11 @@ export default function App({ Component, pageProps }: AppProps) {
         </>
       )}
 
-      {/* 应用主容器：全屏高度，弹性列布局，禁止溢出 */}
-      <div className="w-full max-w-5xl mx-auto h-dvh flex flex-col shadow-2xl bg-white/30 backdrop-blur-sm overflow-hidden relative z-10">
-        {/* 唯一内容区域：弹性填充，高度受控，不可撑开 */}
+      <div className="w-full max-w-5xl mx-auto h-dvh flex flex-col shadow-2xl bg-white/20 backdrop-blur-sm overflow-hidden relative z-10">
         <div className="flex-1 min-h-0 overflow-hidden">
           <Component {...pageProps} />
         </div>
 
-        {/* 底部导航栏：固定高度，绝不滚动，始终在最前 */}
         <nav className="z-50 flex-shrink-0 flex items-center justify-around bg-white/80 backdrop-blur-md border-t" style={{ height: '56px' }}>
           {tabs.map((tab) => (
             <button
