@@ -14,7 +14,7 @@ export default function App({ Component, pageProps }: AppProps) {
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
   const [customBg, setCustomBg] = useState('');
-  const [overlayOpacity, setOverlayOpacity] = useState(0.25);
+  const [overlayOpacity, setOverlayOpacity] = useState(0.15); // 从 0.25 调整为 0.15
 
   useEffect(() => {
     setMounted(true);
