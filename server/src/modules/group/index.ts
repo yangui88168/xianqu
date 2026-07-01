@@ -234,6 +234,20 @@ export async function groupRoutes(fastify: FastifyInstance) {
     reply.send({ success: true });
   });
 
+  // 切换群免打扰
+  fastify.put('/:groupId/muteNotifications', { preHandler: authMiddleware }, async (request, reply) => {
+    const userId = (request as any).userId;
+    const { groupId } = request.params as any;
+    const { mute } = request.body as any;
+
+    await prisma.groupMember.update({
+      where: { groupId_userId: { groupId, userId } },
+      data: { muteNotifications: mute },
+    });
+
+    reply.send({ success: true, mute });
+  });
+
   // 发送群消息（包含 @all 检测）
   fastify.post('/message', { preHandler: authMiddleware }, async (request, reply) => {
     const userId = (request as any).userId;
