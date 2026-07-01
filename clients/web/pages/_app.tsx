@@ -50,7 +50,7 @@ export default function App({ Component, pageProps }: AppProps) {
       )}
 
       {/* 应用主容器：全屏高度，弹性列布局，禁止溢出 */}
-      <div className="w-full max-w-5xl mx-auto h-dvh flex flex-col shadow-2xl bg-white/70 backdrop-blur-sm overflow-hidden relative z-10">
+      <div className="w-full max-w-5xl mx-auto h-dvh flex flex-col shadow-2xl bg-white/30 backdrop-blur-sm overflow-hidden relative z-10">
         {/* 唯一内容区域：弹性填充，高度受控，不可撑开 */}
         <div className="flex-1 min-h-0 overflow-hidden">
           <Component {...pageProps} />
