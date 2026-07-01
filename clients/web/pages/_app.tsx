@@ -42,7 +42,7 @@ export default function App({ Component, pageProps }: AppProps) {
       {customBg && (
         <>
           <div className="fixed inset-0 z-0 pointer-events-none bg-cover bg-center bg-fixed"
-               style={{ backgroundImage: `url(${customBg})`, filter: 'blur(20px)' }} />
+               style={{ backgroundImage: `url(${customBg})` }} />
           <div className="fixed inset-0 z-[1] pointer-events-none"
                style={{ backgroundColor: `rgba(255,255,255,${overlayOpacity})` }} />
         </>
