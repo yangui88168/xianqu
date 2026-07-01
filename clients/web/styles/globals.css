@@ -9,6 +9,8 @@ html {
 body {
   -webkit-font-smoothing: antialiased;
   margin: 0;
+  /* 移除原有的渐变背景，让自定义背景层显示 */
+  background: transparent !important;
 }
 
 html, body, #__next {
@@ -16,7 +18,49 @@ html, body, #__next {
   overflow: hidden;
 }
 
-/* 独立卡片样式，替代全局 bg-white 阴影 */
+/* 强制所有常见的背景色变为半透明，让底层背景透出 */
+.bg-white,
+.bg-gray-50,
+.bg-gray-100,
+.bg-gray-200 {
+  background-color: rgba(255, 255, 255, 0.65) !important;
+}
+
+/* 导航栏和头部可以稍微更实一些，保证可读性 */
+.bg-white\/80,
+.bg-white\/70 {
+  background-color: rgba(255, 255, 255, 0.85) !important;
+}
+
+/* 消息气泡保留一定实色（主题青色半透明） */
+.bg-blue-500 {
+  background-color: rgba(74, 158, 143, 0.85) !important;
+}
+
+/* 文字增强对比，确保清晰 */
+.text-gray-800,
+.text-gray-700,
+.text-gray-900,
+.text-gray-600 {
+  text-shadow: 0 0 2px rgba(255, 255, 255, 0.8);
+}
+
+/* 聊天消息区域背景透明 */
+.chat-messages-bg {
+  background-color: rgba(249, 250, 251, 0.55) !important;
+}
+
+/* 输入框区域背景透明 */
+.chat-input-bg {
+  background-color: rgba(255, 255, 255, 0.75) !important;
+}
+
+/* 左侧列表背景透明 */
+.sidebar-bg {
+  background-color: rgba(255, 255, 255, 0.75) !important;
+}
+
+/* 独立卡片样式 */
 .card-white {
   background-color: #ffffff;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
@@ -28,34 +72,30 @@ input, textarea, select, button {
   border-radius: 0.5rem !important;
 }
 
-/* 聊天消息气泡调整 */
 .rounded-2xl {
   border-radius: 1rem;
 }
 
-/* 输入框聚焦时使用更柔和的环 */
+/* 输入框聚焦柔和环 */
 .focus\:ring-2:focus {
   --tw-ring-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2) !important;
 }
 
-/* 整体背景柔和渐变 */
-body {
-  background: linear-gradient(135deg, #f5f7fa 0%, #e4e9f2 100%);
-  background-attachment: fixed;
+/* 统一主题色（文本、边框、悬停等保留实色） */
+.text-blue-500 {
+  color: #4a9e8f !important;
+}
+.border-blue-500 {
+  border-color: #4a9e8f !important;
+}
+.hover\:bg-blue-600:hover {
+  background-color: #3d8b7d !important;
+}
+.ring-blue-300 {
+  --tw-ring-color: rgba(74, 158, 143, 0.3) !important;
 }
 
-/* 统一主题色从蓝色改为温暖青色（保持） */
-.bg-blue-500 { background-color: #4a9e8f !important; }
-.bg-blue-600 { background-color: #3d8b7d !important; }
-.text-blue-500 { color: #4a9e8f !important; }
-.border-blue-500 { border-color: #4a9e8f !important; }
-.hover\:bg-blue-600:hover { background-color: #3d8b7d !important; }
-.ring-blue-300 { --tw-ring-color: rgba(74, 158, 143, 0.3) !important; }
-
-/* 导航栏选中态 */
-.text-blue-500 { color: #4a9e8f !important; }
-
-/* 透明背景样式 - 使用独立类名，不再污染全局 bg-* 工具类 */
+/* 透明背景独立类 */
 .glass-bg {
   background-color: rgba(255, 255, 255, 0.7);
 }
@@ -69,32 +109,14 @@ body {
   background-color: rgba(59, 130, 246, 0.85);
 }
 
-/* 文字增强对比 */
 .text-shadow-soft {
   text-shadow: 0 1px 2px rgba(255,255,255,0.8);
 }
 
-/* 卡片和列表项增加轻微模糊 */
 .glass-blur {
   backdrop-filter: blur(4px);
 }
 
-/* 聊天消息区域背景透明 */
-.chat-messages-bg {
-  background-color: rgba(249, 250, 251, 0.6) !important;
-}
-
-/* 输入框区域背景透明 */
-.chat-input-bg {
-  background-color: rgba(255, 255, 255, 0.7) !important;
-}
-
-/* 左侧列表背景透明 */
-.sidebar-bg {
-  background-color: rgba(255, 255, 255, 0.7) !important;
-}
-
-/* 消息气泡保持原有实色，但略微透出背景 */
 .message-bubble-self {
   background-color: rgba(59, 130, 246, 0.85) !important;
 }
