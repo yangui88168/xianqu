@@ -2,120 +2,48 @@
 @tailwind components;
 @tailwind utilities;
 
-html {
-  font-size: 14px;
-}
+html { font-size: 14px; }
+body { -webkit-font-smoothing: antialiased; margin: 0; background: transparent !important; }
+html, body, #__next { height: 100%; overflow: hidden; }
 
-body {
-  -webkit-font-smoothing: antialiased;
-  margin: 0;
-  /* 移除原有的渐变背景，让自定义背景层显示 */
-  background: transparent !important;
-}
-
-html, body, #__next {
-  height: 100%;
-  overflow: hidden;
-}
-
-/* ========== 强制所有背景色透明（属性选择器，100% 生效） ========== */
-[class*="bg-white"] {
-  background-color: rgba(255, 255, 255, 0.35) !important;
-}
+/* ========== 强制所有白色/灰色背景极度透明 ========== */
+[class*="bg-white"],
 [class*="bg-gray-"] {
-  background-color: rgba(249, 250, 251, 0.35) !important;
+  background-color: rgba(255, 255, 255, 0.2) !important;
 }
-
-/* 导航栏和头部稍实，保证可读性 */
-[class*="bg-white/80"],
-[class*="bg-white/70"] {
-  background-color: rgba(255, 255, 255, 0.55) !important;
-}
-
-/* 消息气泡保留品牌色 */
-.bg-blue-500,
-[class*="bg-blue-500"] {
-  background-color: rgba(74, 158, 143, 0.8) !important;
-}
-
-/* 文字阴影增强对比 */
-.text-gray-800,
-.text-gray-700,
-.text-gray-900,
-.text-gray-600,
-.text-gray-500,
-.text-gray-400 {
-  text-shadow: 0 0 4px rgba(255, 255, 255, 0.9);
-}
-
-/* 聊天消息区域更透 */
-.chat-messages-bg {
-  background-color: rgba(249, 250, 251, 0.25) !important;
-}
-
-/* 输入框和左侧列表稍实 */
+/* 导航栏和输入框等需要稍实的区域 */
+nav[class*="bg-white"],
 .chat-input-bg,
 .sidebar-bg {
-  background-color: rgba(255, 255, 255, 0.55) !important;
+  background-color: rgba(255, 255, 255, 0.5) !important;
 }
-
-/* 独立卡片样式 */
-.card-white {
-  background-color: #ffffff;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
-  border-radius: 12px;
+/* 消息列表更透 */
+.chat-messages-bg {
+  background-color: rgba(249, 250, 251, 0.15) !important;
 }
-
-/* 基础元素圆润化 */
-input, textarea, select, button {
-  border-radius: 0.5rem !important;
+/* 消息气泡保留品牌色，但略透 */
+.bg-blue-500 {
+  background-color: rgba(74, 158, 143, 0.85) !important;
 }
-
-.rounded-2xl {
-  border-radius: 1rem;
+/* 文字清晰度增强 */
+.text-gray-800, .text-gray-700, .text-gray-900, .text-gray-600, .text-gray-500, .text-gray-400 {
+  text-shadow: 0 0 5px rgba(255, 255, 255, 0.95);
 }
-
-/* 输入框聚焦柔和环 */
-.focus\:ring-2:focus {
-  --tw-ring-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2) !important;
-}
-
-/* 统一主题色（文本、边框、悬停等保留实色） */
-.text-blue-500 {
-  color: #4a9e8f !important;
-}
-.border-blue-500 {
-  border-color: #4a9e8f !important;
-}
-.hover\:bg-blue-600:hover {
-  background-color: #3d8b7d !important;
-}
-.ring-blue-300 {
-  --tw-ring-color: rgba(74, 158, 143, 0.3) !important;
-}
-
-/* 透明背景独立类 */
-.glass-bg {
-  background-color: rgba(255, 255, 255, 0.7);
-}
-.glass-bg-light {
-  background-color: rgba(249, 250, 251, 0.6);
-}
-.glass-bg-lighter {
-  background-color: rgba(255, 255, 255, 0.7);
-}
-.glass-bg-blue {
-  background-color: rgba(59, 130, 246, 0.85);
-}
-
-.text-shadow-soft {
-  text-shadow: 0 1px 2px rgba(255,255,255,0.8);
-}
-
-.glass-blur {
-  backdrop-filter: blur(4px);
-}
-
-.message-bubble-self {
-  background-color: rgba(59, 130, 246, 0.85) !important;
-}
+/* 保留其他原有样式 */
+.card-white { background-color: #ffffff; box-shadow: 0 1px 3px rgba(0,0,0,0.04); border-radius: 12px; }
+input, textarea, select, button { border-radius: 0.5rem !important; }
+.rounded-2xl { border-radius: 1rem; }
+.focus\:ring-2:focus { --tw-ring-shadow: 0 0 0 2px rgba(59,130,246,0.2) !important; }
+.bg-blue-500 { background-color: #4a9e8f !important; }
+.bg-blue-600 { background-color: #3d8b7d !important; }
+.text-blue-500 { color: #4a9e8f !important; }
+.border-blue-500 { border-color: #4a9e8f !important; }
+.hover\:bg-blue-600:hover { background-color: #3d8b7d !important; }
+.ring-blue-300 { --tw-ring-color: rgba(74,158,143,0.3) !important; }
+.glass-bg { background-color: rgba(255,255,255,0.7); }
+.glass-bg-light { background-color: rgba(249,250,251,0.6); }
+.glass-bg-lighter { background-color: rgba(255,255,255,0.7); }
+.glass-bg-blue { background-color: rgba(59,130,246,0.85); }
+.text-shadow-soft { text-shadow: 0 1px 2px rgba(255,255,255,0.8); }
+.glass-blur { backdrop-filter: blur(4px); }
+.message-bubble-self { background-color: rgba(59,130,246,0.85) !important; }
