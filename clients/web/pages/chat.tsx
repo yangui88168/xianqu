@@ -601,7 +601,10 @@ export default function Chat() {
 
   const handleContextMenu = (e: React.MouseEvent, msg: any) => {
     e.preventDefault();
-    setContextMenu({ msg, x: Math.min(e.clientX, window.innerWidth - 200), y: Math.min(e.clientY, window.innerHeight - 200) });
+    // 确保菜单位置不超出视口
+    const x = Math.min(e.clientX, window.innerWidth - 220);
+    const y = Math.min(e.clientY, window.innerHeight - 200);
+    setContextMenu({ msg, x: Math.max(10, x), y: Math.max(10, y) });
   };
   const handleTouchStart = (msg: any) => { longPressTimer.current = setTimeout(() => setContextMenu({ msg, x: 10, y: 10 }), 500); };
   const handleTouchEnd = () => { if (longPressTimer.current) clearTimeout(longPressTimer.current); };
@@ -1100,7 +1103,11 @@ export default function Chat() {
 
       {/* 消息操作菜单 */}
       {contextMenu && (
-        <div className="fixed bg-white border rounded shadow-lg py-1 z-50" style={{ left: contextMenu.x, top: contextMenu.y }} onClick={() => setContextMenu(null)}>
+        <div
+          className="fixed bg-white border rounded-xl shadow-2xl py-1 z-[9999]"
+          style={{ left: contextMenu.x, top: contextMenu.y, minWidth: '150px' }}
+          onClick={() => setContextMenu(null)}
+        >
           <button onClick={() => { copyToClipboard(contextMenu.msg.content); setContextMenu(null); }} className="block w-full text-left px-4 py-2 text-sm hover:bg-gray-100">复制</button>
           <button onClick={() => { setReplyingTo(contextMenu.msg); setContextMenu(null); }} className="block w-full text-left px-4 py-2 text-sm hover:bg-gray-100">引用回复</button>
           <button onClick={() => { setForwardMessage(contextMenu.msg); setForwardModal(true); setContextMenu(null); }} className="block w-full text-left px-4 py-2 text-sm hover:bg-gray-100">转发</button>
