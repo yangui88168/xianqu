@@ -323,11 +323,9 @@ export default function Chat() {
             setCallState((prev: any) => prev ? { ...prev, accepted: true } : null);
           }
         } else if (msg.event === 'call-hangup') {
-          // 清除可能残留的接听弹窗
           if (pendingCall?.friendId === msg.data.from) {
             setPendingCall(null);
           }
-          // 如果当前通话窗口正在显示，也会被 CallModal 内部的 hangup 处理
         }
       };
       socket.onclose = () => {
@@ -671,7 +669,7 @@ export default function Chat() {
   const goBack = () => setMobileView('sidebar');
 
   return (
-    <div className="flex-1 min-h-0 flex overflow-hidden relative bg-white h-full">
+    <div className="flex-1 min-h-0 flex overflow-hidden relative h-full">
       {/* 左侧栏：桌面端始终可见，移动端用 translateX 控制 */}
       <div
         className={`w-full md:w-80 border-r flex flex-col h-full absolute md:relative z-10 transition-transform duration-300 ${
@@ -793,7 +791,7 @@ export default function Chat() {
         {selectedChat ? (
           <div className="h-full grid grid-rows-[56px_auto_1fr_64px] overflow-hidden">
             {/* 1. Header：固定高度 56px */}
-            <div className="bg-white border-b px-4 py-3 flex items-center gap-3" style={{ height: '56px' }}>
+            <div className="flex-shrink-0 border-b px-4 py-3 flex items-center gap-3" style={{ backgroundColor: 'rgba(255,255,255,0.5)', height: '56px' }}>
               <button onClick={goBack} className="md:hidden text-gray-500 mr-2">←</button>
               <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold">
                 {selectedChat.type === 'group' ? '#' : (selectedChat.data.nickname || selectedChat.data.username)[0]}
