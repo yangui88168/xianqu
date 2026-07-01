@@ -978,6 +978,27 @@ export default function Chat() {
             <div className="flex justify-between items-center mb-4"><h3 className="text-lg font-bold">群信息</h3><button onClick={() => setShowGroupInfo(false)} className="text-gray-500">✕</button></div>
             <p className="font-medium">群名称：{groupInfo.name}</p>
             <p className="text-sm text-gray-500 mt-1">成员 {groupInfo.members?.length} 人</p>
+
+            {/* 消息免打扰开关 */}
+            <div className="mt-3 flex items-center justify-between">
+              <span className="text-sm text-gray-700">消息免打扰</span>
+              <button
+                onClick={async () => {
+                  const token = localStorage.getItem('token');
+                  const newMute = !groupInfo.isMuted;
+                  await fetch(`${API}/groups/${groupInfo.id}/muteNotifications`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                    body: JSON.stringify({ mute: newMute }),
+                  });
+                  setGroupInfo((prev: any) => ({ ...prev, isMuted: newMute }));
+                }}
+                className={`w-10 h-5 rounded-full ${groupInfo.isMuted ? 'bg-gray-300' : 'bg-blue-500'}`}
+              >
+                <div className={`w-4 h-4 bg-white rounded-full shadow transform mx-0.5 ${groupInfo.isMuted ? '' : 'translate-x-5'}`}></div>
+              </button>
+            </div>
+
             {groupInfo.inviteCode && (
               <div className="mt-3">
                 <label className="text-sm font-medium">群邀请链接</label>
