@@ -72,6 +72,7 @@ const imageStyle = {
 };
 
 const MessageItem = ({ msg, userId, selectedChat, onContextMenu, onTouchStart, onTouchEnd, onTouchMove, onReply, onRecall, onEdit, editingMessage, editInput, setEditInput, submitEdit }: any) => {
+  const msgRef = useRef<HTMLDivElement>(null);
   const isMe = msg.senderId === userId || msg.sender?.id === userId;
   const isForwarded = msg.content?.startsWith('[转发]');
   const displayContent = isForwarded ? msg.content.replace('[转发] ', '') : msg.content;
@@ -83,9 +84,10 @@ const MessageItem = ({ msg, userId, selectedChat, onContextMenu, onTouchStart, o
   );
   return (
     <div
+      ref={msgRef}
       className={`mb-4 flex ${isMe ? 'justify-end' : 'justify-start'}`}
-      onContextMenu={onContextMenu}
-      onTouchStart={onTouchStart}
+      onContextMenu={(e) => onContextMenu(e, msg, msgRef)}
+      onTouchStart={(e) => onTouchStart(e, msg, msgRef)}
       onTouchEnd={onTouchEnd}
       onTouchMove={onTouchEnd}
     >
@@ -599,15 +601,55 @@ export default function Chat() {
 
   const copyToClipboard = (text: string) => { navigator.clipboard.writeText(text); alert('已复制'); };
 
-  const handleContextMenu = (e: React.MouseEvent, msg: any) => {
-    e.preventDefault();
-    // 确保菜单位置不超出视口
-    const x = Math.min(e.clientX, window.innerWidth - 220);
-    const y = Math.min(e.clientY, window.innerHeight - 200);
-    setContextMenu({ msg, x: Math.max(10, x), y: Math.max(10, y) });
+  // 根据消息元素 rect 和视口大小，返回修正后的 left, top
+  const calcMenuPosition = (rect: DOMRect, preferX?: number, preferY?: number) => {
+    const menuWidth = 180;
+    const menuHeight = 250;
+    const gap = 8;
+
+    let left = preferX ?? rect.right;
+    let top = preferY ?? rect.top - gap;
+
+    // 水平溢出 → 放到元素左边
+    if (left + menuWidth > window.innerWidth - 10) {
+      left = Math.max(10, rect.left - menuWidth - gap);
+    }
+    // 垂直溢出 → 放到元素上方或视口内
+    if (top + menuHeight > window.innerHeight - 10) {
+      top = Math.max(10, window.innerHeight - menuHeight - 10);
+    }
+    if (top < 10) top = 10;
+
+    return { left, top };
   };
-  const handleTouchStart = (msg: any) => { longPressTimer.current = setTimeout(() => setContextMenu({ msg, x: 10, y: 10 }), 500); };
-  const handleTouchEnd = () => { if (longPressTimer.current) clearTimeout(longPressTimer.current); };
+
+  // 右键（桌面端）
+  const handleContextMenu = (e: React.MouseEvent, msg: any, msgRef: React.RefObject<HTMLDivElement>) => {
+    e.preventDefault();
+    const rect = msgRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const { left, top } = calcMenuPosition(rect, e.clientX, e.clientY);
+    setContextMenu({ msg, x: left, y: top });
+  };
+
+  // 长按（移动端）
+  const handleTouchStart = (e: React.TouchEvent, msg: any, msgRef: React.RefObject<HTMLDivElement>) => {
+    const touch = e.touches[0];
+    longPressTimer.current = setTimeout(() => {
+      const rect = msgRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      const { left, top } = calcMenuPosition(rect, touch.clientX, touch.clientY);
+      setContextMenu({ msg, x: left, y: top });
+    }, 500);
+  };
+
+  // 清除长按定时器
+  const handleTouchEnd = () => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  };
 
   const searchUsers = async () => {
     if (!searchQuery.trim()) return;
@@ -855,8 +897,8 @@ export default function Chat() {
                       msg={msg}
                       userId={userId}
                       selectedChat={selectedChat}
-                      onContextMenu={(e: any) => handleContextMenu(e, msg)}
-                      onTouchStart={() => handleTouchStart(msg)}
+                      onContextMenu={handleContextMenu}
+                      onTouchStart={handleTouchStart}
                       onTouchEnd={handleTouchEnd}
                       onTouchMove={handleTouchEnd}
                       onReply={setReplyingTo}
