@@ -10,6 +10,41 @@ const tabs = [
   { name: '主页', path: '/profile' },
 ];
 
+const THEMES: Record<string, any> = {
+  default: {
+    name: '默认青',
+    primary: '#4a9e8f',
+    primaryLight: '#6bb5a8',
+    primaryDark: '#3d8b7d',
+    bubbleSelfBg: 'rgba(74,158,143,0.85)',
+    bubbleSelfText: '#ffffff',
+  },
+  stargazing: {
+    name: '星游记',
+    primary: '#6366f1',
+    primaryLight: '#818cf8',
+    primaryDark: '#4f46e5',
+    bubbleSelfBg: 'rgba(99,102,241,0.85)',
+    bubbleSelfText: '#ffffff',
+  },
+  doraemon: {
+    name: '哆啦A梦',
+    primary: '#3b82f6',
+    primaryLight: '#60a5fa',
+    primaryDark: '#2563eb',
+    bubbleSelfBg: 'rgba(59,130,246,0.85)',
+    bubbleSelfText: '#ffffff',
+  },
+  sakura: {
+    name: '樱花',
+    primary: '#ec4899',
+    primaryLight: '#f472b6',
+    primaryDark: '#db2777',
+    bubbleSelfBg: 'rgba(236,72,153,0.85)',
+    bubbleSelfText: '#ffffff',
+  },
+};
+
 export default function App({ Component, pageProps }: AppProps) {
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
@@ -30,6 +65,26 @@ export default function App({ Component, pageProps }: AppProps) {
     const handler = (e: CustomEvent) => setOverlayOpacity(e.detail);
     window.addEventListener('bgOpacityChange', handler as EventListener);
     return () => window.removeEventListener('bgOpacityChange', handler as EventListener);
+  }, []);
+
+  useEffect(() => {
+    // 1. 读取保存的主题名，默认为 'default'
+    const savedTheme = localStorage.getItem('theme') || 'default';
+    const theme = THEMES[savedTheme] || THEMES.default;
+    
+    // 2. 应用主题颜色到根元素变量
+    const root = document.documentElement;
+    root.style.setProperty('--theme-primary', theme.primary);
+    root.style.setProperty('--theme-primary-light', theme.primaryLight);
+    root.style.setProperty('--theme-primary-dark', theme.primaryDark);
+    root.style.setProperty('--bubble-self-bg', theme.bubbleSelfBg);
+    root.style.setProperty('--bubble-self-text', theme.bubbleSelfText);
+    
+    // 3. 如果用户自定义了气泡颜色，覆盖预设
+    const customBubble = localStorage.getItem('customBubbleColor');
+    if (customBubble) {
+      root.style.setProperty('--bubble-self-bg', customBubble);
+    }
   }, []);
 
   if (router.pathname === '/') return <Component {...pageProps} />;
