@@ -3,6 +3,13 @@ import { useRouter } from 'next/router';
 
 const API = 'https://xianqu-server.onrender.com';
 
+const THEMES = [
+  { key: 'default', name: '默认青', primary: '#4a9e8f', primaryLight: '#6bb5a8', primaryDark: '#3d8b7d', bubbleSelfBg: 'rgba(74,158,143,0.85)', bubbleSelfText: '#ffffff' },
+  { key: 'stargazing', name: '星游记', primary: '#6366f1', primaryLight: '#818cf8', primaryDark: '#4f46e5', bubbleSelfBg: 'rgba(99,102,241,0.85)', bubbleSelfText: '#ffffff' },
+  { key: 'doraemon', name: '哆啦A梦', primary: '#3b82f6', primaryLight: '#60a5fa', primaryDark: '#2563eb', bubbleSelfBg: 'rgba(59,130,246,0.85)', bubbleSelfText: '#ffffff' },
+  { key: 'sakura', name: '樱花', primary: '#ec4899', primaryLight: '#f472b6', primaryDark: '#db2777', bubbleSelfBg: 'rgba(236,72,153,0.85)', bubbleSelfText: '#ffffff' },
+];
+
 export default function Profile() {
   const [user, setUser] = useState<any>(null);
   const [editing, setEditing] = useState(false);
@@ -37,6 +44,9 @@ export default function Profile() {
   // 背景透明度状态
   const [overlayOpacity, setOverlayOpacity] = useState(0.25);
 
+  // 主题相关
+  const [currentTheme, setCurrentTheme] = useState('default');
+
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (!token) { router.push('/'); return; }
@@ -70,6 +80,24 @@ export default function Profile() {
     const saved = localStorage.getItem('bgOpacity');
     if (saved) setOverlayOpacity(parseFloat(saved));
   }, []);
+
+  // 读取当前主题
+  useEffect(() => {
+    const saved = localStorage.getItem('theme') || 'default';
+    setCurrentTheme(saved);
+  }, []);
+
+  const applyTheme = (key: string) => {
+    const theme = THEMES.find(t => t.key === key) || THEMES[0];
+    const root = document.documentElement;
+    root.style.setProperty('--theme-primary', theme.primary);
+    root.style.setProperty('--theme-primary-light', theme.primaryLight);
+    root.style.setProperty('--theme-primary-dark', theme.primaryDark);
+    root.style.setProperty('--bubble-self-bg', theme.bubbleSelfBg);
+    root.style.setProperty('--bubble-self-text', theme.bubbleSelfText);
+    localStorage.setItem('theme', key);
+    setCurrentTheme(key);
+  };
 
   // 初始化 Cloudinary Widget
   useEffect(() => {
@@ -409,6 +437,40 @@ export default function Profile() {
             className="flex-1"
           />
           <span className="text-xs text-gray-500">{Math.round(overlayOpacity * 100)}%</span>
+        </div>
+
+        {/* 主题风格选择 */}
+        <div className="px-5 py-3 border-b border-gray-100">
+          <h3 className="text-sm font-bold mb-3 text-gray-700">主题风格</h3>
+          <div className="flex gap-3 flex-wrap mb-3">
+            {THEMES.map((t) => (
+              <button
+                key={t.key}
+                onClick={() => applyTheme(t.key)}
+                className="flex flex-col items-center gap-1"
+              >
+                <div
+                  className={`w-10 h-10 rounded-full border-2 ${currentTheme === t.key ? 'border-gray-700 ring-2 ring-offset-1 ring-gray-400' : 'border-transparent hover:border-gray-400'}`}
+                  style={{ backgroundColor: t.primary }}
+                />
+                <span className={`text-xs ${currentTheme === t.key ? 'font-bold text-gray-800' : 'text-gray-600'}`}>{t.name}</span>
+              </button>
+            ))}
+          </div>
+          
+          {/* 自定义气泡颜色 */}
+          <div className="flex items-center gap-2">
+            <label className="text-sm text-gray-600">自定义聊天气泡颜色</label>
+            <input
+              type="color"
+              onChange={(e) => {
+                const color = e.target.value;
+                localStorage.setItem('customBubbleColor', color);
+                document.documentElement.style.setProperty('--bubble-self-bg', color);
+              }}
+              className="w-8 h-8 rounded border"
+            />
+          </div>
         </div>
 
         <button onClick={() => alert('隐私设置开发中')} className="w-full flex items-center justify-between px-5 py-3 border-b border-gray-100 hover:bg-gray-50">
