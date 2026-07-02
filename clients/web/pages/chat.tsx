@@ -116,7 +116,7 @@ const MessageItem = ({ msg, userId, selectedChat, onContextMenu, onTouchStart, o
               <button onClick={submitEdit} className="text-blue-500 text-xs">保存</button>
             </div>
           ) : (
-            <div className={`px-3 py-2 rounded-2xl text-sm ${isMe ? 'bg-blue-500 text-white rounded-br-md' : 'bg-white text-gray-800 rounded-bl-md shadow'}`} style={bubbleStyle}>
+            <div className={`px-3 py-2 rounded-2xl text-sm ${isMe ? 'message-bubble-self rounded-br-md' : 'message-bubble-other rounded-bl-md shadow'}`} style={bubbleStyle}>
               {msg.type === 'image' ? (
                 <img src={msg.content} alt="图片" style={imageStyle} loading="lazy" />
               ) : msg.type === 'voice' ? (
