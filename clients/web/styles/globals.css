@@ -2,6 +2,24 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  /* 主色系 */
+  --theme-primary: #4a9e8f;
+  --theme-primary-light: #6bb5a8;
+  --theme-primary-dark: #3d8b7d;
+
+  /* 消息气泡 */
+  --bubble-self-bg: rgba(74, 158, 143, 0.85);
+  --bubble-self-text: #ffffff;
+  --bubble-other-bg: #ffffff;
+  --bubble-other-text: #1f2937;
+
+  /* 通用圆角 */
+  --radius-sm: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+}
+
 html { font-size: 14px; }
 body { -webkit-font-smoothing: antialiased; margin: 0; background: transparent !important; }
 html, body, #__next { height: 100%; overflow: hidden; }
@@ -34,16 +52,26 @@ nav[class*="bg-white"],
 input, textarea, select, button { border-radius: 0.5rem !important; }
 .rounded-2xl { border-radius: 1rem; }
 .focus\:ring-2:focus { --tw-ring-shadow: 0 0 0 2px rgba(59,130,246,0.2) !important; }
-.bg-blue-500 { background-color: #4a9e8f !important; }
-.bg-blue-600 { background-color: #3d8b7d !important; }
-.text-blue-500 { color: #4a9e8f !important; }
-.border-blue-500 { border-color: #4a9e8f !important; }
-.hover\:bg-blue-600:hover { background-color: #3d8b7d !important; }
-.ring-blue-300 { --tw-ring-color: rgba(74,158,143,0.3) !important; }
+.bg-blue-500 { background-color: var(--theme-primary) !important; }
+.bg-blue-600 { background-color: var(--theme-primary-dark) !important; }
+.text-blue-500 { color: var(--theme-primary) !important; }
+.border-blue-500 { border-color: var(--theme-primary) !important; }
+.hover\:bg-blue-600:hover { background-color: var(--theme-primary-dark) !important; }
+.ring-blue-300 { --tw-ring-color: var(--theme-primary-light) !important; opacity: 0.3; }
 .glass-bg { background-color: rgba(255,255,255,0.7); }
 .glass-bg-light { background-color: rgba(249,250,251,0.6); }
 .glass-bg-lighter { background-color: rgba(255,255,255,0.7); }
-.glass-bg-blue { background-color: rgba(59,130,246,0.85); }
+.glass-bg-blue { background-color: var(--theme-primary); opacity: 0.85; }
 .text-shadow-soft { text-shadow: 0 1px 2px rgba(255,255,255,0.8); }
 .glass-blur { backdrop-filter: blur(4px); }
 .message-bubble-self { background-color: rgba(59,130,246,0.85) !important; }
+
+/* 消息气泡专用类（使用变量） */
+.message-bubble-self {
+  background-color: var(--bubble-self-bg) !important;
+  color: var(--bubble-self-text) !important;
+}
+.message-bubble-other {
+  background-color: var(--bubble-other-bg) !important;
+  color: var(--bubble-other-text) !important;
+}
